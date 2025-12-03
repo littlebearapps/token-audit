@@ -2,19 +2,27 @@
 """
 CodexCLIAdapter - Platform adapter for Codex CLI tracking
 
-Implements BaseTracker for Codex CLI's output format.
+Implements BaseTracker for Codex CLI's session JSONL format.
+Supports both file-based reading and subprocess wrapper modes.
+
+Session files are stored at: ~/.codex/sessions/YYYY/MM/DD/*.jsonl
 """
 
 import json
 import subprocess
+import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .base_tracker import BaseTracker
 from .pricing_config import PricingConfig
 
-# Human-readable model names for OpenAI models (AC #15)
+# Human-readable model names for OpenAI models
 MODEL_DISPLAY_NAMES: Dict[str, str] = {
+    # Codex-specific models
+    "gpt-5.1-codex-max": "GPT-5.1 Codex Max",
+    "gpt-5-codex": "GPT-5 Codex",
     # GPT-5 Series
     "gpt-5.1": "GPT-5.1",
     "gpt-5-mini": "GPT-5 Mini",
@@ -42,36 +50,204 @@ class CodexCLIAdapter(BaseTracker):
     """
     Codex CLI platform adapter.
 
-    Wraps the `codex` command as a subprocess and monitors stdout/stderr
-    for MCP tool usage events. Uses process wrapper approach.
+    Supports two modes:
+    1. File-based: Reads session JSONL files from ~/.codex/sessions/
+    2. Subprocess: Wraps `codex` command and monitors stdout (legacy)
+
+    Usage:
+        # File-based mode (recommended)
+        adapter = CodexCLIAdapter(project="my-project")
+        adapter.start_tracking()  # Monitors latest session file
+
+        # Process specific session file
+        adapter = CodexCLIAdapter(project="my-project")
+        adapter.process_session_file_batch(Path("~/.codex/sessions/..."))
+
+        # Subprocess mode (legacy)
+        adapter = CodexCLIAdapter(project="my-project", subprocess_mode=True)
+        adapter.start_tracking()  # Launches codex as subprocess
     """
 
-    def __init__(self, project: str, codex_args: list[str] | None = None):
+    def __init__(
+        self,
+        project: str,
+        codex_dir: Optional[Path] = None,
+        session_file: Optional[Path] = None,
+        subprocess_mode: bool = False,
+        codex_args: list[str] | None = None,
+    ):
         """
         Initialize Codex CLI adapter.
 
         Args:
             project: Project name (e.g., "mcp-audit")
-            codex_args: Additional arguments to pass to codex command
+            codex_dir: Codex config directory (default: ~/.codex)
+            session_file: Specific session file to read (overrides auto-detection)
+            subprocess_mode: Use subprocess wrapper instead of file reading
+            codex_args: Additional arguments to pass to codex command (subprocess mode only)
         """
         super().__init__(project=project, platform="codex-cli")
 
+        self.codex_dir = codex_dir or Path.home() / ".codex"
+        self._session_file = session_file
+        self.subprocess_mode = subprocess_mode
         self.codex_args = codex_args or []
+
         self.detected_model: Optional[str] = None
         self.model_name: str = "Unknown Model"
         self.process: Optional[subprocess.Popen[str]] = None
 
-        # Initialize pricing config for cost calculation (AC #1, #2)
+        # Initialize pricing config for cost calculation
         self._pricing_config = PricingConfig()
         self._usd_to_aud = DEFAULT_USD_TO_AUD
         if self._pricing_config.loaded:
             rates = self._pricing_config.metadata.get("exchange_rates", {})
             self._usd_to_aud = rates.get("USD_to_AUD", DEFAULT_USD_TO_AUD)
 
-        # Source tracking (task-50)
-        # Codex CLI uses process wrapper approach, not file watching.
-        # Track "codex:stdout" as source when events are received.
+        # File monitoring state
+        self._processed_lines: int = 0
+        self._last_file_mtime: float = 0.0
         self._has_received_events: bool = False
+
+        # Session metadata from session_meta event
+        self.session_cwd: Optional[str] = None
+        self.cli_version: Optional[str] = None
+        self.git_info: Optional[Dict[str, Any]] = None
+
+    # ========================================================================
+    # Session File Discovery (Task 60.9)
+    # ========================================================================
+
+    def get_sessions_directory(self) -> Path:
+        """Get the base sessions directory."""
+        return self.codex_dir / "sessions"
+
+    def get_session_files(
+        self,
+        since: Optional[datetime] = None,
+        until: Optional[datetime] = None,
+    ) -> List[Path]:
+        """
+        Get all session files, optionally filtered by date range.
+
+        Args:
+            since: Only include sessions after this datetime
+            until: Only include sessions before this datetime
+
+        Returns:
+            List of session file paths sorted by modification time (newest first)
+        """
+        sessions_dir = self.get_sessions_directory()
+        if not sessions_dir.exists():
+            return []
+
+        session_files = []
+
+        # Walk the YYYY/MM/DD directory structure
+        for year_dir in sessions_dir.iterdir():
+            if not year_dir.is_dir() or not year_dir.name.isdigit():
+                continue
+
+            for month_dir in year_dir.iterdir():
+                if not month_dir.is_dir() or not month_dir.name.isdigit():
+                    continue
+
+                for day_dir in month_dir.iterdir():
+                    if not day_dir.is_dir() or not day_dir.name.isdigit():
+                        continue
+
+                    # Apply date filter if specified
+                    if since or until:
+                        try:
+                            dir_date = datetime(
+                                int(year_dir.name),
+                                int(month_dir.name),
+                                int(day_dir.name),
+                            )
+                            if since and dir_date.date() < since.date():
+                                continue
+                            if until and dir_date.date() > until.date():
+                                continue
+                        except ValueError:
+                            continue
+
+                    # Collect JSONL files
+                    for jsonl_file in day_dir.glob("*.jsonl"):
+                        session_files.append(jsonl_file)
+
+        # Sort by modification time (newest first)
+        session_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return session_files
+
+    def get_latest_session_file(self) -> Optional[Path]:
+        """Get the most recently modified session file."""
+        if self._session_file:
+            return self._session_file
+
+        session_files = self.get_session_files()
+        return session_files[0] if session_files else None
+
+    def list_sessions(
+        self,
+        limit: int = 10,
+        since: Optional[datetime] = None,
+        until: Optional[datetime] = None,
+    ) -> List[Tuple[Path, datetime, Optional[str]]]:
+        """
+        List available sessions with metadata.
+
+        Args:
+            limit: Maximum number of sessions to return
+            since: Only include sessions after this datetime
+            until: Only include sessions before this datetime
+
+        Returns:
+            List of (path, mtime, session_id) tuples
+        """
+        session_files = self.get_session_files(since=since, until=until)[:limit]
+
+        results = []
+        for path in session_files:
+            mtime = datetime.fromtimestamp(path.stat().st_mtime)
+
+            # Try to extract session ID from first line
+            session_id = None
+            try:
+                with open(path) as f:
+                    first_line = f.readline()
+                    if first_line:
+                        data = json.loads(first_line)
+                        if data.get("type") == "session_meta":
+                            session_id = data.get("payload", {}).get("id")
+            except (json.JSONDecodeError, OSError):
+                pass
+
+            results.append((path, mtime, session_id))
+
+        return results
+
+    # ========================================================================
+    # Session Parsing
+    # ========================================================================
+
+    def iter_session_events(self, file_path: Path) -> Iterator[Dict[str, Any]]:
+        """
+        Iterate over events in a session JSONL file.
+
+        Args:
+            file_path: Path to session JSONL file
+
+        Yields:
+            Parsed JSON event dictionaries
+        """
+        with open(file_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        yield json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
     # ========================================================================
     # Abstract Method Implementations
@@ -81,8 +257,47 @@ class CodexCLIAdapter(BaseTracker):
         """
         Start tracking Codex CLI session.
 
-        Launches codex as subprocess and monitors output.
+        Uses file-based monitoring by default, or subprocess mode if enabled.
         """
+        if self.subprocess_mode:
+            self._start_subprocess_tracking()
+        else:
+            self._start_file_tracking()
+
+    def _start_file_tracking(self) -> None:
+        """Start file-based session monitoring."""
+        print(f"[Codex CLI] Initializing tracker for: {self.project}")
+
+        # Find session file
+        session_file = self.get_latest_session_file()
+        if not session_file:
+            print("[Codex CLI] No session files found.")
+            print(f"[Codex CLI] Expected at: {self.codex_dir}/sessions/YYYY/MM/DD/")
+
+            # List recent sessions if any exist
+            recent = self.list_sessions(limit=5)
+            if recent:
+                print("[Codex CLI] Available sessions:")
+                for path, mtime, _sid in recent:
+                    print(f"  - {path.name} ({mtime.strftime('%Y-%m-%d %H:%M')})")
+            return
+
+        print(f"[Codex CLI] Monitoring: {session_file}")
+        self.session.source_files = [session_file.name]
+
+        print("[Codex CLI] Tracking started. Press Ctrl+C to stop.")
+
+        # Main monitoring loop
+        while True:
+            try:
+                self._process_session_file(session_file)
+                time.sleep(0.5)
+            except KeyboardInterrupt:
+                print("\n[Codex CLI] Stopping tracker...")
+                break
+
+    def _start_subprocess_tracking(self) -> None:
+        """Start subprocess-based session monitoring (legacy mode)."""
         print(f"[Codex CLI] Starting tracker for project: {self.project}")
         print(f"[Codex CLI] Launching codex with args: {self.codex_args}")
 
@@ -92,7 +307,7 @@ class CodexCLIAdapter(BaseTracker):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1,  # Line buffered
+            bufsize=1,
             universal_newlines=True,
         )
 
@@ -102,25 +317,20 @@ class CodexCLIAdapter(BaseTracker):
         try:
             assert self.process.stdout is not None, "Process stdout is None"
             while True:
-                # Read from stdout
                 line = self.process.stdout.readline()
                 if not line:
-                    # Process ended - populate source_files before exit (task-50)
                     if self._has_received_events:
                         self.session.source_files = ["codex:stdout"]
                     break
 
-                # Parse event
                 result = self.parse_event(line)
                 if result:
-                    # Track that we received events from stdout (task-50)
                     self._has_received_events = True
                     tool_name, usage = result
                     self._process_tool_call(tool_name, usage)
 
         except KeyboardInterrupt:
             print("\n[Codex CLI] Stopping tracker...")
-            # Populate source_files before exit (task-50)
             if self._has_received_events:
                 self.session.source_files = ["codex:stdout"]
             if self.process:
@@ -132,27 +342,36 @@ class CodexCLIAdapter(BaseTracker):
         Parse Codex CLI output event.
 
         Codex CLI outputs JSONL with event types:
+        - session_meta: Session metadata
         - turn_context: Contains model information
         - event_msg with payload.type="token_count": Token usage
         - response_item with payload.type="function_call": Tool calls (including MCP)
 
         Args:
-            event_data: Text line from codex stdout/stderr or session JSONL
+            event_data: Text line from codex stdout/stderr or session JSONL,
+                       or pre-parsed dict from file iteration
 
         Returns:
             Tuple of (tool_name, usage_dict) for MCP tool calls, or
             Tuple of ("__session__", usage_dict) for token usage events
         """
         try:
-            # Codex CLI outputs JSON events
-            line = str(event_data).strip()
-            if not line:
-                return None
+            # Handle both string input and pre-parsed dict
+            if isinstance(event_data, dict):
+                data = event_data
+            else:
+                line = str(event_data).strip()
+                if not line:
+                    return None
+                data = json.loads(line)
 
-            # Try to parse as JSON
-            data = json.loads(line)
             event_type = data.get("type", "")
             payload = data.get("payload", {})
+
+            # Handle session_meta events
+            if event_type == "session_meta":
+                self._parse_session_meta(payload)
+                return None
 
             # Handle turn_context events for model detection
             if event_type == "turn_context":
@@ -173,6 +392,16 @@ class CodexCLIAdapter(BaseTracker):
             self.handle_unrecognized_line(f"Parse error: {e}")
             return None
 
+    def _parse_session_meta(self, payload: Dict[str, Any]) -> None:
+        """Parse session_meta event for session metadata."""
+        self.session_cwd = payload.get("cwd")
+        self.cli_version = payload.get("cli_version")
+        self.git_info = payload.get("git")
+
+        # Update session working directory
+        if self.session_cwd:
+            self.session.working_directory = self.session_cwd
+
     def _parse_turn_context(self, payload: Dict[str, Any]) -> None:
         """
         Parse turn_context event for model detection.
@@ -186,9 +415,7 @@ class CodexCLIAdapter(BaseTracker):
         model_id = payload.get("model")
         if model_id:
             self.detected_model = model_id
-            # Map to human-readable name (AC #15)
             self.model_name = MODEL_DISPLAY_NAMES.get(model_id, model_id)
-            # Set on session object for persistence
             self.session.model = model_id
 
         return None
@@ -271,18 +498,60 @@ class CodexCLIAdapter(BaseTracker):
         return (tool_name, usage_dict)
 
     def get_platform_metadata(self) -> Dict[str, Any]:
-        """
-        Get Codex CLI platform metadata.
-
-        Returns:
-            Dictionary with platform-specific data
-        """
+        """Get Codex CLI platform metadata."""
         return {
             "model": self.detected_model,
             "model_name": self.model_name,
+            "codex_dir": str(self.codex_dir),
             "codex_args": self.codex_args,
             "process_id": self.process.pid if self.process else None,
+            "cli_version": self.cli_version,
+            "session_cwd": self.session_cwd,
+            "git_info": self.git_info,
         }
+
+    # ========================================================================
+    # File Monitoring (Task 60.8)
+    # ========================================================================
+
+    def _process_session_file(self, file_path: Path) -> None:
+        """Read and process session file for new events."""
+        if not file_path.exists():
+            return
+
+        # Check if file was modified
+        current_mtime = file_path.stat().st_mtime
+        if current_mtime == self._last_file_mtime:
+            return
+
+        self._last_file_mtime = current_mtime
+
+        try:
+            with open(file_path) as f:
+                # Skip already processed lines
+                for _ in range(self._processed_lines):
+                    f.readline()
+
+                # Process new lines
+                line_count = self._processed_lines
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            event = json.loads(line)
+                            result = self.parse_event(event)
+                            if result:
+                                self._has_received_events = True
+                                tool_name, usage = result
+                                self._process_tool_call(tool_name, usage)
+                        except json.JSONDecodeError:
+                            pass
+                    line_count += 1
+
+                self._processed_lines = line_count
+
+        except OSError as e:
+            self.handle_unrecognized_line(f"Error reading session file: {e}")
 
     # ========================================================================
     # Helper Methods
@@ -305,14 +574,13 @@ class CodexCLIAdapter(BaseTracker):
 
         # Handle session-level token tracking (non-MCP events)
         if tool_name == "__session__":
-            # Update session token usage directly (don't record as tool call)
             self.session.token_usage.input_tokens += usage["input_tokens"]
             self.session.token_usage.output_tokens += usage["output_tokens"]
             self.session.token_usage.cache_created_tokens += usage["cache_created_tokens"]
             self.session.token_usage.cache_read_tokens += usage["cache_read_tokens"]
             self.session.token_usage.total_tokens += total_tokens
 
-            # Recalculate cache efficiency: percentage of INPUT tokens served from cache
+            # Recalculate cache efficiency
             total_input = (
                 self.session.token_usage.input_tokens
                 + self.session.token_usage.cache_created_tokens
@@ -334,7 +602,6 @@ class CodexCLIAdapter(BaseTracker):
         platform_data = {"model": self.detected_model, "model_name": self.model_name}
 
         # Record tool call using BaseTracker
-        # BaseTracker will normalize the tool name (strip -mcp suffix)
         self.record_tool_call(
             tool_name=tool_name,
             input_tokens=usage["input_tokens"],
@@ -346,6 +613,32 @@ class CodexCLIAdapter(BaseTracker):
             platform_data=platform_data,
         )
 
+    # ========================================================================
+    # Batch Processing (for report generation)
+    # ========================================================================
+
+    def process_session_file_batch(self, file_path: Path) -> None:
+        """
+        Process a complete session file in batch mode (no live monitoring).
+
+        Used for generating reports from existing session files.
+
+        Args:
+            file_path: Path to session JSONL file
+        """
+        self.session.source_files = [file_path.name]
+
+        # Get file timestamps (use timezone-aware datetime for consistency)
+        stat = file_path.stat()
+        self.session.timestamp = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+
+        # Process all events
+        for event in self.iter_session_events(file_path):
+            result = self.parse_event(event)
+            if result:
+                tool_name, usage = result
+                self._process_tool_call(tool_name, usage)
+
 
 # ============================================================================
 # Standalone Execution
@@ -353,46 +646,132 @@ class CodexCLIAdapter(BaseTracker):
 
 
 def main() -> int:
-    """Main entry point for standalone execution"""
+    """Main entry point for standalone execution."""
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Codex CLI MCP Tracker (BaseTracker Adapter)",
-        epilog="All arguments after -- are passed to codex command",
+        description="Codex CLI MCP Tracker",
+        epilog="All arguments after -- are passed to codex command (subprocess mode)",
     )
     parser.add_argument("--project", default="mcp-audit", help="Project name")
+    parser.add_argument(
+        "--codex-dir",
+        type=Path,
+        default=None,
+        help="Codex config directory (default: ~/.codex)",
+    )
+    parser.add_argument(
+        "--session-file",
+        type=Path,
+        default=None,
+        help="Specific session file to process",
+    )
     parser.add_argument(
         "--output",
         default=str(Path.home() / ".mcp-audit" / "sessions"),
         help="Output directory for session logs (default: ~/.mcp-audit/sessions)",
     )
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Process session file in batch mode (no live monitoring)",
+    )
+    parser.add_argument(
+        "--subprocess",
+        action="store_true",
+        help="Use subprocess wrapper mode instead of file reading",
+    )
+    parser.add_argument(
+        "--latest",
+        action="store_true",
+        help="Auto-select the most recent session file",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available sessions and exit",
+    )
+    parser.add_argument(
+        "--since",
+        type=str,
+        default=None,
+        help="Only include sessions after this date (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--until",
+        type=str,
+        default=None,
+        help="Only include sessions before this date (YYYY-MM-DD)",
+    )
 
     # Parse known args, rest go to codex
     args, codex_args = parser.parse_known_args()
 
-    # Create adapter
-    print(f"Starting Codex CLI tracker for project: {args.project}")
-    print(f"Codex arguments: {codex_args}")
+    # Parse date filters
+    since = None
+    until = None
+    if args.since:
+        since = datetime.strptime(args.since, "%Y-%m-%d")
+    if args.until:
+        until = datetime.strptime(args.until, "%Y-%m-%d")
 
-    adapter = CodexCLIAdapter(project=args.project, codex_args=codex_args)
+    # Create adapter
+    adapter = CodexCLIAdapter(
+        project=args.project,
+        codex_dir=args.codex_dir,
+        session_file=args.session_file,
+        subprocess_mode=args.subprocess,
+        codex_args=codex_args,
+    )
+
+    # List mode
+    if args.list:
+        print("Available Codex CLI sessions:")
+        print("-" * 80)
+        sessions = adapter.list_sessions(limit=20, since=since, until=until)
+        if not sessions:
+            print("  No sessions found")
+        else:
+            for path, mtime, sid in sessions:
+                sid_str = f" ({sid[:8]}...)" if sid else ""
+                print(f"  {mtime.strftime('%Y-%m-%d %H:%M:%S')}{sid_str}")
+                print(f"    {path}")
+        return 0
+
+    print(f"Starting Codex CLI tracker for project: {args.project}")
 
     try:
-        # Start tracking
-        adapter.start_tracking()
+        if args.batch and args.session_file:
+            # Batch mode - process file without monitoring
+            adapter.process_session_file_batch(args.session_file)
+            session = adapter.finalize_session()
+        elif args.batch and args.latest:
+            # Batch mode with latest file
+            latest = adapter.get_latest_session_file()
+            if latest:
+                adapter.process_session_file_batch(latest)
+                session = adapter.finalize_session()
+            else:
+                print("No session files found")
+                return 1
+        else:
+            # Live monitoring mode
+            adapter.start_tracking()
+            session = adapter.finalize_session()
     except KeyboardInterrupt:
         print("\nStopping tracker...")
-    finally:
-        # Finalize session
         session = adapter.finalize_session()
 
-        # Save session data
-        output_dir = Path(args.output)
-        adapter.save_session(output_dir)
+    # Save session data
+    output_dir = Path(args.output)
+    adapter.save_session(output_dir)
 
-        print(f"\nSession saved to: {adapter.session_dir}")
-        print(f"Total tokens: {session.token_usage.total_tokens:,}")
-        print(f"MCP calls: {session.mcp_tool_calls.total_calls}")
-        print(f"Cache efficiency: {session.token_usage.cache_efficiency:.1%}")
+    print(f"\nSession saved to: {adapter.session_dir}")
+    print(f"Total tokens: {session.token_usage.total_tokens:,}")
+    print(f"MCP calls: {session.mcp_tool_calls.total_calls}")
+    print(f"Cache efficiency: {session.token_usage.cache_efficiency:.1%}")
+    if adapter.detected_model:
+        print(f"Model: {adapter.model_name}")
 
     return 0
 

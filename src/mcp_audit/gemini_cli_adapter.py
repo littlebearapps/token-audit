@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 """
-GeminiCLIAdapter - Platform adapter for Gemini CLI tracking
+GeminiCLIAdapter - Platform adapter for Gemini CLI session tracking
 
-Implements BaseTracker using Gemini CLI's OpenTelemetry telemetry export.
-Monitors ~/.gemini/telemetry.log for MCP tool usage and token counts.
+Parses Gemini CLI session JSON files from ~/.gemini/tmp/<project_hash>/chats/
+to extract MCP tool usage and token counts.
+
+This adapter reads native Gemini CLI session files - NO OpenTelemetry required.
 """
 
+import hashlib
 import json
-import os
 import time
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .base_tracker import BaseTracker
 from .pricing_config import PricingConfig
 
-# Human-readable model names for Gemini models (AC #15)
+# Human-readable model names for Gemini models
 MODEL_DISPLAY_NAMES: Dict[str, str] = {
     # Gemini 3 Series
     "gemini-3-pro-preview": "Gemini 3 Pro Preview",
@@ -34,38 +38,126 @@ MODEL_DISPLAY_NAMES: Dict[str, str] = {
 DEFAULT_USD_TO_AUD = 1.54
 
 
+@dataclass
+class GeminiMessage:
+    """Parsed Gemini CLI message."""
+
+    id: str
+    timestamp: datetime
+    message_type: str  # "user" or "gemini"
+    content: str
+    model: Optional[str] = None
+    thoughts: Optional[List[Dict[str, Any]]] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tokens: Optional[Dict[str, int]] = None
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "GeminiMessage":
+        """Parse message from JSON."""
+        # Parse timestamp
+        timestamp_str = data.get("timestamp", "")
+        try:
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except ValueError:
+            timestamp = datetime.now()
+
+        # Extract token data
+        tokens = data.get("tokens")
+        if tokens:
+            tokens = {
+                "input": tokens.get("input", 0),
+                "output": tokens.get("output", 0),
+                "cached": tokens.get("cached", 0),
+                "thoughts": tokens.get("thoughts", 0),
+                "tool": tokens.get("tool", 0),
+                "total": tokens.get("total", 0),
+            }
+
+        return cls(
+            id=data.get("id", ""),
+            timestamp=timestamp,
+            message_type=data.get("type", "unknown"),
+            content=data.get("content", ""),
+            model=data.get("model"),
+            thoughts=data.get("thoughts"),
+            tool_calls=data.get("toolCalls"),
+            tokens=tokens,
+        )
+
+
+@dataclass
+class GeminiSession:
+    """Parsed Gemini CLI session."""
+
+    session_id: str
+    project_hash: str
+    start_time: datetime
+    last_updated: datetime
+    messages: List[GeminiMessage]
+    source_file: str
+
+    @classmethod
+    def from_file(cls, file_path: Path) -> "GeminiSession":
+        """Parse session from JSON file."""
+        with open(file_path) as f:
+            data = json.load(f)
+
+        # Parse timestamps
+        start_time_str = data.get("startTime", "")
+        last_updated_str = data.get("lastUpdated", "")
+
+        try:
+            start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+        except ValueError:
+            start_time = datetime.now()
+
+        try:
+            last_updated = datetime.fromisoformat(last_updated_str.replace("Z", "+00:00"))
+        except ValueError:
+            last_updated = datetime.now()
+
+        # Parse messages
+        messages = []
+        for msg_data in data.get("messages", []):
+            messages.append(GeminiMessage.from_json(msg_data))
+
+        return cls(
+            session_id=data.get("sessionId", ""),
+            project_hash=data.get("projectHash", ""),
+            start_time=start_time,
+            last_updated=last_updated,
+            messages=messages,
+            source_file=file_path.name,
+        )
+
+
 class GeminiCLIAdapter(BaseTracker):
     """
     Gemini CLI platform adapter.
 
-    Monitors OpenTelemetry telemetry file for MCP tool usage
-    and token counts. Uses file watcher approach similar to
-    Claude Code adapter.
+    Reads native Gemini CLI session JSON files from:
+    ~/.gemini/tmp/<project_hash>/chats/session-*.json
 
-    Telemetry must be enabled in Gemini CLI:
-        export GEMINI_TELEMETRY_ENABLED=true
-        export GEMINI_TELEMETRY_OUTFILE=~/.gemini/telemetry.log
+    NO OpenTelemetry required - directly parses Gemini's session format.
 
-    Or add to ~/.gemini/settings.json:
-        {
-          "telemetry": {
-            "enabled": true,
-            "target": "local",
-            "outfile": ".gemini/telemetry.log"
-          }
-        }
+    Usage:
+        # Auto-detect project from current directory
+        adapter = GeminiCLIAdapter(project="my-project")
+        adapter.start_tracking()
+
+        # Manual project hash
+        adapter = GeminiCLIAdapter(
+            project="my-project",
+            project_hash="abc123..."
+        )
     """
-
-    # OpenTelemetry metric names from Gemini CLI
-    METRIC_TOKEN_USAGE = "gemini_cli.token.usage"
-    METRIC_TOOL_CALL_COUNT = "gemini_cli.tool.call.count"
-    METRIC_TOOL_CALL_LATENCY = "gemini_cli.tool.call.latency"
 
     def __init__(
         self,
         project: str,
         gemini_dir: Optional[Path] = None,
-        telemetry_file: Optional[Path] = None,
+        project_hash: Optional[str] = None,
+        session_file: Optional[Path] = None,
     ):
         """
         Initialize Gemini CLI adapter.
@@ -73,113 +165,183 @@ class GeminiCLIAdapter(BaseTracker):
         Args:
             project: Project name (e.g., "mcp-audit")
             gemini_dir: Gemini config directory (default: ~/.gemini)
-            telemetry_file: Custom telemetry file path (overrides gemini_dir default)
+            project_hash: Project hash (auto-detected if not provided)
+            session_file: Specific session file to read (overrides auto-detection)
         """
         super().__init__(project=project, platform="gemini-cli")
 
         self.gemini_dir = gemini_dir or Path.home() / ".gemini"
-        self.telemetry_file = telemetry_file or self._get_telemetry_file_path()
-        self.file_position: int = 0
+        self._project_hash = project_hash
+        self._session_file = session_file
 
         # Gemini-specific: track thinking tokens separately
         self.thoughts_tokens: int = 0
-
-        # Token tracking for correlation with tool calls
-        self._pending_tokens: Dict[str, int] = {
-            "input": 0,
-            "output": 0,
-            "cache": 0,
-            "thought": 0,
-        }
-
-        # Latency tracking (keyed by function_name for correlation)
-        self._pending_latencies: Dict[str, int] = {}
 
         # Model detection
         self.detected_model: Optional[str] = None
         self.model_name: str = "Unknown Model"
 
-        # Initialize pricing config for cost calculation (AC #1, #2)
+        # Initialize pricing config for cost calculation
         self._pricing_config = PricingConfig()
         self._usd_to_aud = DEFAULT_USD_TO_AUD
         if self._pricing_config.loaded:
             rates = self._pricing_config.metadata.get("exchange_rates", {})
             self._usd_to_aud = rates.get("USD_to_AUD", DEFAULT_USD_TO_AUD)
 
-        # Source file tracking (task-50)
-        self._telemetry_had_events: bool = False
+        # Session tracking
+        self._processed_message_ids: set[str] = set()
+        self._last_file_mtime: float = 0.0
 
-    def _get_telemetry_file_path(self) -> Path:
+    # ========================================================================
+    # Project Hash Detection (Task 60.2)
+    # ========================================================================
+
+    @property
+    def project_hash(self) -> Optional[str]:
+        """Get or calculate project hash."""
+        if self._project_hash:
+            return self._project_hash
+
+        # Try to auto-detect from CWD
+        self._project_hash = self._calculate_project_hash()
+        return self._project_hash
+
+    def _calculate_project_hash(self) -> Optional[str]:
         """
-        Determine telemetry file path from settings or environment.
+        Calculate project hash from current working directory.
 
-        Priority:
-        1. GEMINI_TELEMETRY_OUTFILE environment variable
-        2. settings.json telemetry.outfile
-        3. Default: ~/.gemini/telemetry.log
+        Gemini CLI uses SHA256 of the absolute path.
         """
-        # Check environment variable first
-        env_outfile = os.environ.get("GEMINI_TELEMETRY_OUTFILE")
-        if env_outfile:
-            return Path(env_outfile).expanduser()
+        cwd = Path.cwd().absolute()
+        # Gemini CLI hashes the absolute path
+        path_bytes = str(cwd).encode("utf-8")
+        return hashlib.sha256(path_bytes).hexdigest()
 
-        # Check settings.json
-        settings_file = self.gemini_dir / "settings.json"
-        if settings_file.exists():
-            try:
-                with open(settings_file) as f:
-                    settings = json.load(f)
-                    telemetry = settings.get("telemetry", {})
-                    outfile = telemetry.get("outfile")
-                    if outfile:
-                        # Relative paths are relative to gemini_dir
-                        outfile_path = Path(outfile)
-                        if not outfile_path.is_absolute():
-                            return self.gemini_dir / outfile_path
-                        return outfile_path.expanduser()
-            except (json.JSONDecodeError, OSError):
-                pass
-
-        # Default location
-        return self.gemini_dir / "telemetry.log"
-
-    def _ensure_telemetry_enabled(self) -> bool:
+    def _find_project_hash(self) -> Optional[str]:
         """
-        Check if telemetry is enabled, warn if not.
+        Find project hash by listing available project directories.
 
         Returns:
-            True if telemetry appears to be enabled, False otherwise
+            Project hash if found, None otherwise
         """
-        # Check environment variable
-        if os.environ.get("GEMINI_TELEMETRY_ENABLED", "").lower() == "true":
-            return True
+        tmp_dir = self.gemini_dir / "tmp"
+        if not tmp_dir.exists():
+            return None
 
-        # Check settings.json
-        settings_file = self.gemini_dir / "settings.json"
-        if settings_file.exists():
-            try:
-                with open(settings_file) as f:
-                    settings = json.load(f)
-                    telemetry = settings.get("telemetry", {})
-                    if telemetry.get("enabled", False):
-                        return True
-            except (json.JSONDecodeError, OSError):
-                pass
+        # List all project hash directories
+        hashes = []
+        for item in tmp_dir.iterdir():
+            if item.is_dir() and len(item.name) == 64:  # SHA256 = 64 hex chars
+                chats_dir = item / "chats"
+                if chats_dir.exists():
+                    hashes.append(item.name)
 
-        # Warn user
-        print("[Gemini CLI] Warning: Telemetry does not appear to be enabled")
-        print("[Gemini CLI] Enable telemetry with one of these methods:")
-        print()
-        print("  Option 1: Environment variables")
-        print("    export GEMINI_TELEMETRY_ENABLED=true")
-        print("    export GEMINI_TELEMETRY_OUTFILE=~/.gemini/telemetry.log")
-        print()
-        print("  Option 2: Add to ~/.gemini/settings.json:")
-        print(
-            '    {"telemetry": {"enabled": true, "target": "local", "outfile": ".gemini/telemetry.log"}}'
-        )
-        print()
-        return False
+        if not hashes:
+            return None
+
+        # If we have a calculated hash, check if it exists
+        calculated = self._calculate_project_hash()
+        if calculated in hashes:
+            return calculated
+
+        # Return most recently modified
+        hashes_with_mtime = []
+        for h in hashes:
+            chats_dir = tmp_dir / h / "chats"
+            mtime = chats_dir.stat().st_mtime
+            hashes_with_mtime.append((h, mtime))
+
+        hashes_with_mtime.sort(key=lambda x: x[1], reverse=True)
+        return hashes_with_mtime[0][0]
+
+    def get_chats_directory(self) -> Optional[Path]:
+        """Get the chats directory for this project."""
+        if self.project_hash:
+            chats_dir = self.gemini_dir / "tmp" / self.project_hash / "chats"
+            if chats_dir.exists():
+                return chats_dir
+
+        # Try to find any valid project
+        found_hash = self._find_project_hash()
+        if found_hash:
+            self._project_hash = found_hash
+            return self.gemini_dir / "tmp" / found_hash / "chats"
+
+        return None
+
+    def list_available_hashes(self) -> List[Tuple[str, Path, datetime]]:
+        """
+        List all available project hashes with their paths and last update times.
+
+        Returns:
+            List of (hash, path, last_updated) tuples sorted by last_updated descending
+        """
+        tmp_dir = self.gemini_dir / "tmp"
+        if not tmp_dir.exists():
+            return []
+
+        results = []
+        for item in tmp_dir.iterdir():
+            if item.is_dir() and len(item.name) == 64:
+                chats_dir = item / "chats"
+                if chats_dir.exists():
+                    # Find most recent session file
+                    session_files = list(chats_dir.glob("session-*.json"))
+                    if session_files:
+                        latest = max(session_files, key=lambda p: p.stat().st_mtime)
+                        mtime = datetime.fromtimestamp(latest.stat().st_mtime)
+                        results.append((item.name, chats_dir, mtime))
+
+        results.sort(key=lambda x: x[2], reverse=True)
+        return results
+
+    # ========================================================================
+    # Session File Discovery (Task 60.1, 60.3)
+    # ========================================================================
+
+    def get_session_files(self) -> List[Path]:
+        """Get all session files for this project, sorted by modification time."""
+        chats_dir = self.get_chats_directory()
+        if not chats_dir:
+            return []
+
+        session_files = list(chats_dir.glob("session-*.json"))
+        session_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return session_files
+
+    def get_latest_session_file(self) -> Optional[Path]:
+        """Get the most recently modified session file."""
+        if self._session_file:
+            return self._session_file
+
+        session_files = self.get_session_files()
+        return session_files[0] if session_files else None
+
+    # ========================================================================
+    # Session Parsing (Task 60.1)
+    # ========================================================================
+
+    def parse_session_file(self, file_path: Path) -> GeminiSession:
+        """Parse a single session file."""
+        return GeminiSession.from_file(file_path)
+
+    def iter_messages(
+        self, session: GeminiSession, skip_processed: bool = True
+    ) -> Iterator[GeminiMessage]:
+        """
+        Iterate over messages in a session.
+
+        Args:
+            session: Parsed session
+            skip_processed: Skip messages already processed (for live monitoring)
+
+        Yields:
+            GeminiMessage objects
+        """
+        for msg in session.messages:
+            if skip_processed and msg.id in self._processed_message_ids:
+                continue
+            yield msg
 
     # ========================================================================
     # Abstract Method Implementations
@@ -189,69 +351,98 @@ class GeminiCLIAdapter(BaseTracker):
         """
         Start tracking Gemini CLI session.
 
-        Monitors telemetry file for new OpenTelemetry metrics.
+        Monitors session files for new messages.
         """
         print(f"[Gemini CLI] Initializing tracker for: {self.project}")
 
-        # Check telemetry configuration
-        self._ensure_telemetry_enabled()
+        # Find session file
+        session_file = self.get_latest_session_file()
+        if not session_file:
+            # Try to find project hash
+            available = self.list_available_hashes()
+            if available:
+                print("[Gemini CLI] Available project hashes:")
+                for h, _path, mtime in available[:5]:
+                    print(f"  - {h[:16]}... (last: {mtime.strftime('%Y-%m-%d %H:%M')})")
+                print("[Gemini CLI] Use --project-hash to specify one")
+            else:
+                print("[Gemini CLI] No session files found.")
+                print(f"[Gemini CLI] Expected at: {self.gemini_dir}/tmp/<hash>/chats/")
+            return
 
-        print(f"[Gemini CLI] Monitoring: {self.telemetry_file}")
+        print(f"[Gemini CLI] Monitoring: {session_file}")
+        if self.project_hash:
+            print(f"[Gemini CLI] Project hash: {self.project_hash[:16]}...")
 
-        # Start from end of file (track NEW content only)
-        if self.telemetry_file.exists():
-            self.file_position = self.telemetry_file.stat().st_size
+        # Record session file
+        self.session.source_files = [session_file.name]
 
         print("[Gemini CLI] Tracking started. Press Ctrl+C to stop.")
 
         # Main monitoring loop
         while True:
             try:
-                self._process_new_telemetry()
+                self._process_session_file(session_file)
                 time.sleep(0.5)
             except KeyboardInterrupt:
                 print("\n[Gemini CLI] Stopping tracker...")
-                # Populate source_files before exit (task-50)
-                if self._telemetry_had_events:
-                    self.session.source_files = [self.telemetry_file.name]
                 break
 
     def parse_event(self, event_data: Any) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
-        Parse OpenTelemetry metric event.
+        Parse a Gemini message into normalized format.
 
         Args:
-            event_data: JSON line from telemetry file
+            event_data: GeminiMessage object
 
         Returns:
             Tuple of (tool_name, usage_dict) for MCP tool calls, or
-            Tuple of ("__session__", usage_dict) for token usage events
+            Tuple of ("__session__", usage_dict) for session token events
         """
-        try:
-            data = json.loads(event_data)
-
-            # Get metric name - handle different OTEL JSON formats
-            metric_name = data.get("name") or data.get("metric_name", "")
-
-            # Handle tool call count metric (primary MCP tracking)
-            if self.METRIC_TOOL_CALL_COUNT in metric_name:
-                return self._parse_tool_call_count(data)
-
-            # Handle token usage metric (aggregate tracking)
-            # Return session-level tokens to track all usage, not just MCP calls
-            if self.METRIC_TOKEN_USAGE in metric_name:
-                return self._parse_token_usage(data)
-
-            # Handle tool latency metric (duration tracking)
-            if self.METRIC_TOOL_CALL_LATENCY in metric_name:
-                self._parse_tool_latency(data)
-                return None
-
+        if not isinstance(event_data, GeminiMessage):
             return None
 
-        except (json.JSONDecodeError, KeyError) as e:
-            self.handle_unrecognized_line(f"Parse error: {e}")
+        msg = event_data
+
+        # Skip user messages (no token data)
+        if msg.message_type == "user":
             return None
+
+        # Track model
+        if msg.model and not self.detected_model:
+            self.detected_model = msg.model
+            self.model_name = MODEL_DISPLAY_NAMES.get(msg.model, msg.model)
+            self.session.model = msg.model
+
+        # Extract token usage
+        tokens = msg.tokens or {}
+        input_tokens = tokens.get("input", 0)
+        output_tokens = tokens.get("output", 0)
+        cached_tokens = tokens.get("cached", 0)
+        thoughts_tokens = tokens.get("thoughts", 0)
+        tool_tokens = tokens.get("tool", 0)
+
+        # Track thoughts tokens cumulatively
+        self.thoughts_tokens += thoughts_tokens
+
+        # Process tool calls if present
+        if msg.tool_calls:
+            for tool_call in msg.tool_calls:
+                result = self._parse_tool_call(tool_call, msg)
+                if result:
+                    return result
+
+        # Return session-level token data
+        usage_dict = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens + thoughts_tokens,  # Include thoughts as output
+            "cache_created_tokens": 0,  # Gemini doesn't report cache creation
+            "cache_read_tokens": cached_tokens,
+            "thoughts_tokens": thoughts_tokens,
+            "tool_tokens": tool_tokens,
+        }
+
+        return ("__session__", usage_dict)
 
     def get_platform_metadata(self) -> Dict[str, Any]:
         """Get Gemini CLI platform metadata."""
@@ -259,166 +450,109 @@ class GeminiCLIAdapter(BaseTracker):
             "model": self.detected_model,
             "model_name": self.model_name,
             "gemini_dir": str(self.gemini_dir),
-            "telemetry_file": str(self.telemetry_file),
+            "project_hash": self.project_hash,
             "thoughts_tokens": self.thoughts_tokens,
         }
 
     # ========================================================================
-    # Telemetry Parsing Helpers
+    # Tool Call Parsing (Task 60.5)
     # ========================================================================
 
-    def _parse_tool_call_count(self, data: Dict[str, Any]) -> Optional[Tuple[str, Dict[str, Any]]]:
+    def _parse_tool_call(
+        self, tool_call: Dict[str, Any], msg: GeminiMessage
+    ) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
-        Parse gemini_cli.tool.call.count metric.
-
-        Only returns MCP tool calls (tool_type="mcp").
-        """
-        attributes = data.get("attributes", {})
-
-        # Only track MCP tools (filter out native tools)
-        tool_type = attributes.get("tool_type", "")
-        if tool_type != "mcp":
-            return None
-
-        function_name = attributes.get("function_name", "")
-        if not function_name.startswith("mcp__"):
-            return None
-
-        # Get pending tokens (from recent token.usage events)
-        # Note: Token attribution is approximate based on timing
-        usage_dict = {
-            "input_tokens": self._pending_tokens.get("input", 0),
-            "output_tokens": self._pending_tokens.get("output", 0),
-            "cache_created_tokens": 0,  # Gemini uses different cache naming
-            "cache_read_tokens": self._pending_tokens.get("cache", 0),
-            "duration_ms": self._pending_latencies.pop(function_name, 0),
-            "success": attributes.get("success", True),
-            "decision": attributes.get("decision", "auto_accept"),
-        }
-
-        # Reset pending tokens after attribution
-        self._pending_tokens = {"input": 0, "output": 0, "cache": 0, "thought": 0}
-
-        return (function_name, usage_dict)
-
-    def _parse_token_usage(self, data: Dict[str, Any]) -> Optional[Tuple[str, Dict[str, Any]]]:
-        """
-        Parse gemini_cli.token.usage metric.
-
-        Accumulates tokens by type for attribution to tool calls,
-        and returns session-level token data for total tracking.
-
-        Returns:
-            Tuple of ("__session__", usage_dict) with token data
-        """
-        attributes = data.get("attributes", {})
-        value = data.get("value", 0)
-
-        token_type = attributes.get("type", "")
-
-        # Build usage dict for this token event
-        usage_dict = {
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cache_created_tokens": 0,
-            "cache_read_tokens": 0,
-        }
-
-        if token_type == "input":
-            self._pending_tokens["input"] += value
-            usage_dict["input_tokens"] = value
-        elif token_type == "output":
-            self._pending_tokens["output"] += value
-            usage_dict["output_tokens"] = value
-        elif token_type == "thought":
-            self._pending_tokens["thought"] += value
-            self.thoughts_tokens += value  # Track cumulative for session
-            # Count thought tokens as output for session totals
-            usage_dict["output_tokens"] = value
-        elif token_type == "cache":
-            self._pending_tokens["cache"] += value
-            usage_dict["cache_read_tokens"] = value
-
-        # Model detection (AC #5)
-        model = attributes.get("model")
-        if model and not self.detected_model:
-            self.detected_model = model
-            # Map to human-readable name (AC #15)
-            self.model_name = MODEL_DISPLAY_NAMES.get(model, model)
-            # Set on session object for persistence
-            self.session.model = model
-
-        # Return session-level token data
-        if value > 0:
-            return ("__session__", usage_dict)
-        return None
-
-    def _parse_tool_latency(self, data: Dict[str, Any]) -> None:
-        """
-        Parse gemini_cli.tool.call.latency metric.
-
-        Stores latency for correlation with tool calls.
-        """
-        attributes = data.get("attributes", {})
-        value = data.get("value", 0)
-
-        function_name = attributes.get("function_name", "")
-        if function_name:
-            self._pending_latencies[function_name] = int(value)
-
-    # ========================================================================
-    # File Monitoring
-    # ========================================================================
-
-    def _process_new_telemetry(self) -> None:
-        """Read and process new telemetry entries."""
-        if not self.telemetry_file.exists():
-            return
-
-        try:
-            with open(self.telemetry_file) as f:
-                f.seek(self.file_position)
-                new_content = f.read()
-
-                if new_content:
-                    for line in new_content.strip().split("\n"):
-                        if line.strip():
-                            result = self.parse_event(line)
-                            if result:
-                                # Track that telemetry had events (task-50)
-                                self._telemetry_had_events = True
-                                tool_name, usage = result
-                                self._process_tool_call(tool_name, usage)
-
-                self.file_position = f.tell()
-        except OSError as e:
-            self.handle_unrecognized_line(f"Error reading telemetry: {e}")
-
-    def _process_tool_call(self, tool_name: str, usage: Dict[str, Any]) -> None:
-        """
-        Process a single tool call or session event.
+        Parse a tool call from Gemini message.
 
         Args:
-            tool_name: MCP tool name or "__session__" for token usage events
+            tool_call: Tool call data from toolCalls array
+            msg: Parent message for token context
+
+        Returns:
+            Tuple of (tool_name, usage_dict) for MCP tools, None otherwise
+        """
+        tool_name = tool_call.get("name", "")
+
+        # Only track MCP tools
+        if not tool_name.startswith("mcp__"):
+            return None
+
+        # Extract token info from parent message
+        tokens = msg.tokens or {}
+        tool_tokens = tokens.get("tool", 0)
+
+        usage_dict = {
+            "input_tokens": 0,  # Tool-specific tokens not tracked separately
+            "output_tokens": tool_tokens,
+            "cache_created_tokens": 0,
+            "cache_read_tokens": 0,
+            "duration_ms": 0,  # Not available in session format
+            "success": tool_call.get("status") == "success",
+            "tool_call_id": tool_call.get("id", ""),
+        }
+
+        return (tool_name, usage_dict)
+
+    # ========================================================================
+    # File Monitoring (Task 60.3)
+    # ========================================================================
+
+    def _process_session_file(self, file_path: Path) -> None:
+        """Read and process session file for new messages."""
+        if not file_path.exists():
+            return
+
+        # Check if file was modified
+        current_mtime = file_path.stat().st_mtime
+        if current_mtime == self._last_file_mtime:
+            return
+
+        self._last_file_mtime = current_mtime
+
+        try:
+            session = self.parse_session_file(file_path)
+
+            # Process new messages
+            for msg in self.iter_messages(session, skip_processed=True):
+                result = self.parse_event(msg)
+                if result:
+                    tool_name, usage = result
+                    self._process_parsed_event(tool_name, usage)
+
+                # Mark as processed
+                self._processed_message_ids.add(msg.id)
+
+                # Increment message count for gemini messages
+                if msg.message_type == "gemini":
+                    self.session.message_count += 1
+
+        except (json.JSONDecodeError, OSError) as e:
+            self.handle_unrecognized_line(f"Error reading session file: {e}")
+
+    def _process_parsed_event(self, tool_name: str, usage: Dict[str, Any]) -> None:
+        """
+        Process a parsed event (tool call or session tokens).
+
+        Args:
+            tool_name: MCP tool name or "__session__" for token events
             usage: Token usage and metadata dictionary
         """
-        total_tokens = (
-            usage["input_tokens"]
-            + usage["output_tokens"]
-            + usage["cache_created_tokens"]
-            + usage["cache_read_tokens"]
-        )
-
-        # Handle session-level token tracking (non-MCP events)
+        # Handle session-level token tracking
         if tool_name == "__session__":
-            # Update session token usage directly (don't record as tool call)
             self.session.token_usage.input_tokens += usage["input_tokens"]
             self.session.token_usage.output_tokens += usage["output_tokens"]
             self.session.token_usage.cache_created_tokens += usage["cache_created_tokens"]
             self.session.token_usage.cache_read_tokens += usage["cache_read_tokens"]
-            self.session.token_usage.total_tokens += total_tokens
 
-            # Recalculate cache efficiency: percentage of INPUT tokens served from cache
+            total = (
+                usage["input_tokens"]
+                + usage["output_tokens"]
+                + usage["cache_created_tokens"]
+                + usage["cache_read_tokens"]
+            )
+            self.session.token_usage.total_tokens += total
+
+            # Recalculate cache efficiency
             total_input = (
                 self.session.token_usage.input_tokens
                 + self.session.token_usage.cache_created_tokens
@@ -430,18 +564,14 @@ class GeminiCLIAdapter(BaseTracker):
                 )
             return
 
-        # Extract tool parameters for duplicate detection (if available)
-        content_hash = None
-
-        # Get platform metadata
+        # Record MCP tool call using BaseTracker
         platform_data = {
             "model": self.detected_model,
             "success": usage.get("success", True),
-            "decision": usage.get("decision"),
-            "thoughts_tokens": self._pending_tokens.get("thought", 0),
+            "tool_call_id": usage.get("tool_call_id"),
+            "thoughts_tokens": self.thoughts_tokens,
         }
 
-        # Record tool call using BaseTracker
         self.record_tool_call(
             tool_name=tool_name,
             input_tokens=usage["input_tokens"],
@@ -449,9 +579,42 @@ class GeminiCLIAdapter(BaseTracker):
             cache_created_tokens=usage["cache_created_tokens"],
             cache_read_tokens=usage["cache_read_tokens"],
             duration_ms=usage.get("duration_ms", 0),
-            content_hash=content_hash,
+            content_hash=None,
             platform_data=platform_data,
         )
+
+    # ========================================================================
+    # Batch Processing (for report generation)
+    # ========================================================================
+
+    def process_session_file_batch(self, file_path: Path) -> None:
+        """
+        Process a complete session file in batch mode (no live monitoring).
+
+        Used for generating reports from existing session files.
+
+        Args:
+            file_path: Path to session file
+        """
+        session = self.parse_session_file(file_path)
+
+        # Record source file
+        self.session.source_files = [file_path.name]
+
+        # Update session timestamps from Gemini session
+        self.session.timestamp = session.start_time
+        self.session.end_timestamp = session.last_updated
+
+        # Process all messages
+        for msg in session.messages:
+            result = self.parse_event(msg)
+            if result:
+                tool_name, usage = result
+                self._process_parsed_event(tool_name, usage)
+
+            # Increment message count for gemini messages
+            if msg.message_type == "gemini":
+                self.session.message_count += 1
 
 
 # ============================================================================
@@ -460,10 +623,10 @@ class GeminiCLIAdapter(BaseTracker):
 
 
 def main() -> int:
-    """Main entry point for standalone execution"""
+    """Main entry point for standalone execution."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Gemini CLI MCP Tracker (BaseTracker Adapter)")
+    parser = argparse.ArgumentParser(description="Gemini CLI MCP Tracker")
     parser.add_argument("--project", default="mcp-audit", help="Project name")
     parser.add_argument(
         "--gemini-dir",
@@ -472,44 +635,75 @@ def main() -> int:
         help="Gemini config directory (default: ~/.gemini)",
     )
     parser.add_argument(
-        "--telemetry-file",
+        "--project-hash",
+        default=None,
+        help="Project hash (auto-detected from CWD if not provided)",
+    )
+    parser.add_argument(
+        "--session-file",
         type=Path,
         default=None,
-        help="Telemetry file path (overrides gemini-dir default)",
+        help="Specific session file to process",
     )
     parser.add_argument(
         "--output",
         default=str(Path.home() / ".mcp-audit" / "sessions"),
         help="Output directory for session logs (default: ~/.mcp-audit/sessions)",
     )
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Process session file in batch mode (no live monitoring)",
+    )
+    parser.add_argument(
+        "--list-hashes",
+        action="store_true",
+        help="List available project hashes and exit",
+    )
     args = parser.parse_args()
 
     # Create adapter
-    print(f"Starting Gemini CLI tracker for project: {args.project}")
     adapter = GeminiCLIAdapter(
         project=args.project,
         gemini_dir=args.gemini_dir,
-        telemetry_file=args.telemetry_file,
+        project_hash=args.project_hash,
+        session_file=args.session_file,
     )
 
+    # List hashes mode
+    if args.list_hashes:
+        print("Available Gemini CLI project hashes:")
+        print("-" * 80)
+        for h, path, mtime in adapter.list_available_hashes():
+            print(f"  {h[:16]}...  {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"    Path: {path}")
+        return 0
+
+    print(f"Starting Gemini CLI tracker for project: {args.project}")
+
     try:
-        # Start tracking
-        adapter.start_tracking()
+        if args.batch and args.session_file:
+            # Batch mode - process file without monitoring
+            adapter.process_session_file_batch(args.session_file)
+            session = adapter.finalize_session()
+        else:
+            # Live monitoring mode
+            adapter.start_tracking()
+            session = adapter.finalize_session()
     except KeyboardInterrupt:
         print("\nStopping tracker...")
-    finally:
-        # Finalize session
         session = adapter.finalize_session()
 
-        # Save session data
-        output_dir = Path(args.output)
-        adapter.save_session(output_dir)
+    # Save session data
+    output_dir = Path(args.output)
+    adapter.save_session(output_dir)
 
-        print(f"\nSession saved to: {adapter.session_dir}")
-        print(f"Total tokens: {session.token_usage.total_tokens:,}")
-        print(f"MCP calls: {session.mcp_tool_calls.total_calls}")
-        print(f"Cache efficiency: {session.token_usage.cache_efficiency:.1%}")
-        print(f"Thinking tokens: {adapter.thoughts_tokens:,}")
+    print(f"\nSession saved to: {adapter.session_dir}")
+    print(f"Total tokens: {session.token_usage.total_tokens:,}")
+    print(f"MCP calls: {session.mcp_tool_calls.total_calls}")
+    print(f"Cache efficiency: {session.token_usage.cache_efficiency:.1%}")
+    print(f"Thinking tokens: {adapter.thoughts_tokens:,}")
+    print(f"Messages: {session.message_count}")
 
     return 0
 

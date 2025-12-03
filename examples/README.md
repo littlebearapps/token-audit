@@ -8,6 +8,7 @@ This directory contains example sessions demonstrating the MCP Audit data format
 |-----------|----------|-------------|
 | `claude-code-session/` | Claude Code | Example Claude Code tracking session |
 | `codex-cli-session/` | Codex CLI | Example Codex CLI tracking session |
+| `gemini-cli-session/` | Gemini CLI | Example Gemini CLI tracking session |
 
 ## Purpose
 

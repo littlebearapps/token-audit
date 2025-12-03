@@ -262,6 +262,13 @@ This command analyzes session data and produces reports in various formats
     )
 
     report_parser.add_argument(
+        "--platform",
+        choices=["claude_code", "codex_cli", "gemini_cli", "ollama_cli"],
+        default=None,
+        help="Filter sessions by platform (default: all platforms)",
+    )
+
+    report_parser.add_argument(
         "--top-n", type=int, default=10, help="Number of top tools to show (default: 10)"
     )
 
@@ -640,6 +647,15 @@ def cmd_report(args: argparse.Namespace) -> int:
 
         print(f"Loaded {len(sessions)} session(s)")
 
+    # Apply platform filter if specified
+    platform_filter = getattr(args, "platform", None)
+    if platform_filter:
+        sessions = [s for s in sessions if s.platform == platform_filter]
+        if not sessions:
+            print(f"Error: No sessions found for platform: {platform_filter}")
+            return 1
+        print(f"Filtered to {len(sessions)} session(s) for platform: {platform_filter}")
+
     print()
 
     # Generate report
@@ -662,6 +678,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 def generate_json_report(sessions: List["Session"], args: argparse.Namespace) -> int:
     """Generate JSON report."""
     import json
+    from collections import defaultdict
     from datetime import datetime
     from typing import Any, Dict
     from typing import List as TList
@@ -673,9 +690,48 @@ def generate_json_report(sessions: List["Session"], args: argparse.Namespace) ->
     for session in sessions:
         sessions_list.append(session.to_dict())
 
+    # Calculate platform breakdown
+    platform_stats: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {"sessions": 0, "total_tokens": 0, "cost": 0.0, "mcp_calls": 0}
+    )
+    for session in sessions:
+        platform = session.platform or "unknown"
+        platform_stats[platform]["sessions"] += 1
+        platform_stats[platform]["total_tokens"] += session.token_usage.total_tokens
+        platform_stats[platform]["cost"] += session.cost_estimate
+        platform_stats[platform]["mcp_calls"] += session.mcp_tool_calls.total_calls
+
+    # Calculate efficiency metrics
+    for stats in platform_stats.values():
+        stats["cost_per_1m_tokens"] = (
+            (stats["cost"] / stats["total_tokens"]) * 1_000_000 if stats["total_tokens"] > 0 else 0
+        )
+        stats["cost_per_session"] = (
+            stats["cost"] / stats["sessions"] if stats["sessions"] > 0 else 0
+        )
+
+    # Find most efficient platform
+    most_efficient_platform = None
+    if platform_stats:
+        most_efficient = min(
+            platform_stats.items(),
+            key=lambda x: (
+                x[1]["cost_per_1m_tokens"] if x[1]["cost_per_1m_tokens"] > 0 else float("inf")
+            ),
+        )
+        most_efficient_platform = most_efficient[0]
+
     report: Dict[str, Any] = {
         "generated": datetime.now().isoformat(),
         "version": __version__,
+        "summary": {
+            "total_sessions": len(sessions),
+            "total_tokens": sum(s.token_usage.total_tokens for s in sessions),
+            "total_cost": sum(s.cost_estimate for s in sessions),
+            "total_mcp_calls": sum(s.mcp_tool_calls.total_calls for s in sessions),
+            "most_efficient_platform": most_efficient_platform,
+        },
+        "platforms": dict(platform_stats),
         "sessions": sessions_list,
     }
 
@@ -693,7 +749,9 @@ def generate_json_report(sessions: List["Session"], args: argparse.Namespace) ->
 
 def generate_markdown_report(sessions: List["Session"], args: argparse.Namespace) -> int:
     """Generate Markdown report."""
+    from collections import defaultdict
     from datetime import datetime
+    from typing import Dict
 
     # Build markdown content
     lines = []
@@ -701,6 +759,72 @@ def generate_markdown_report(sessions: List["Session"], args: argparse.Namespace
     lines.append("")
     lines.append(f"**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"**Sessions**: {len(sessions)}")
+
+    # Calculate platform breakdown
+    platform_stats: Dict[str, Dict[str, float]] = defaultdict(
+        lambda: {"sessions": 0, "tokens": 0, "cost": 0.0, "mcp_calls": 0}
+    )
+    for session in sessions:
+        platform = session.platform or "unknown"
+        platform_stats[platform]["sessions"] += 1
+        platform_stats[platform]["tokens"] += session.token_usage.total_tokens
+        platform_stats[platform]["cost"] += session.cost_estimate
+        platform_stats[platform]["mcp_calls"] += session.mcp_tool_calls.total_calls
+
+    # Calculate efficiency metrics for each platform
+    for stats in platform_stats.values():
+        # Cost per million tokens
+        stats["cost_per_1m"] = (
+            (stats["cost"] / stats["tokens"]) * 1_000_000 if stats["tokens"] > 0 else 0
+        )
+        # Cost per session
+        stats["cost_per_session"] = (
+            stats["cost"] / stats["sessions"] if stats["sessions"] > 0 else 0
+        )
+
+    # Show platform breakdown if multiple platforms
+    if len(platform_stats) > 1:
+        lines.append("")
+        lines.append("## Platform Summary")
+        lines.append("")
+        lines.append("| Platform | Sessions | Total Tokens | Cost | MCP Calls |")
+        lines.append("|----------|----------|--------------|------|-----------|")
+        for platform, stats in sorted(platform_stats.items()):
+            lines.append(
+                f"| {platform} | {stats['sessions']} | "
+                f"{stats['tokens']:,.0f} | ${stats['cost']:.4f} | "
+                f"{stats['mcp_calls']} |"
+            )
+        # Add totals row
+        total_tokens = sum(s["tokens"] for s in platform_stats.values())
+        total_cost = sum(s["cost"] for s in platform_stats.values())
+        total_mcp = sum(s["mcp_calls"] for s in platform_stats.values())
+        lines.append(
+            f"| **Total** | **{len(sessions)}** | "
+            f"**{total_tokens:,.0f}** | **${total_cost:.4f}** | "
+            f"**{total_mcp}** |"
+        )
+        lines.append("")
+
+        # Add cost comparison section
+        lines.append("### Cost Comparison")
+        lines.append("")
+        lines.append("| Platform | Cost/1M Tokens | Cost/Session | Efficiency |")
+        lines.append("|----------|----------------|--------------|------------|")
+
+        # Find most efficient platform (lowest cost per 1M tokens)
+        most_efficient = min(
+            platform_stats.items(),
+            key=lambda x: x[1]["cost_per_1m"] if x[1]["cost_per_1m"] > 0 else float("inf"),
+        )
+        most_efficient_platform = most_efficient[0]
+
+        for platform, stats in sorted(platform_stats.items()):
+            efficiency_marker = "✓ Best" if platform == most_efficient_platform else ""
+            lines.append(
+                f"| {platform} | ${stats['cost_per_1m']:.4f} | "
+                f"${stats['cost_per_session']:.4f} | {efficiency_marker} |"
+            )
     lines.append("")
 
     # Per-session summaries
@@ -709,6 +833,8 @@ def generate_markdown_report(sessions: List["Session"], args: argparse.Namespace
         lines.append("")
         lines.append(f"**Timestamp**: {session.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append(f"**Platform**: {session.platform}")
+        if session.model:
+            lines.append(f"**Model**: {session.model}")
         lines.append("")
 
         lines.append("### Token Usage")
@@ -767,26 +893,34 @@ def generate_csv_report(sessions: List["Session"], args: argparse.Namespace) -> 
     import csv
     from typing import Any, Dict
 
-    # Collect tool statistics across all sessions
-    aggregated_stats: Dict[str, Dict[str, int]] = {}
+    # Collect tool statistics across all sessions, grouped by platform
+    aggregated_stats: Dict[str, Dict[str, Any]] = {}
 
     for session in sessions:
+        platform = session.platform or "unknown"
         for _server_name, server_session in session.server_sessions.items():
             for tool_name, tool_stats in server_session.tools.items():
-                if tool_name not in aggregated_stats:
-                    aggregated_stats[tool_name] = {"calls": 0, "total_tokens": 0}
+                key = f"{platform}:{tool_name}"
+                if key not in aggregated_stats:
+                    aggregated_stats[key] = {
+                        "platform": platform,
+                        "tool_name": tool_name,
+                        "calls": 0,
+                        "total_tokens": 0,
+                    }
 
-                aggregated_stats[tool_name]["calls"] += tool_stats.calls
-                aggregated_stats[tool_name]["total_tokens"] += tool_stats.total_tokens
+                aggregated_stats[key]["calls"] += tool_stats.calls
+                aggregated_stats[key]["total_tokens"] += tool_stats.total_tokens
 
     # Build CSV rows
     rows: List[Dict[str, Any]] = []
-    for tool_name, stats in sorted(
+    for _key, stats in sorted(
         aggregated_stats.items(), key=lambda x: x[1]["total_tokens"], reverse=True
     ):
         rows.append(
             {
-                "tool_name": tool_name,
+                "platform": stats["platform"],
+                "tool_name": stats["tool_name"],
                 "total_calls": stats["calls"],
                 "total_tokens": stats["total_tokens"],
                 "avg_tokens": stats["total_tokens"] // stats["calls"] if stats["calls"] > 0 else 0,
@@ -799,7 +933,8 @@ def generate_csv_report(sessions: List["Session"], args: argparse.Namespace) -> 
     with open(output_path, "w", newline="") as f:
         if rows:
             writer = csv.DictWriter(
-                f, fieldnames=["tool_name", "total_calls", "total_tokens", "avg_tokens"]
+                f,
+                fieldnames=["platform", "tool_name", "total_calls", "total_tokens", "avg_tokens"],
             )
             writer.writeheader()
             writer.writerows(rows)

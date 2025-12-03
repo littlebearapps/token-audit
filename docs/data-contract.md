@@ -1,7 +1,7 @@
 # MCP Audit Data Contract
 
 **Version**: 1.1.0
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-03
 **Status**: Active
 
 This document defines the data contract for MCP Audit, including backward compatibility guarantees, versioning policy, and migration guidelines.

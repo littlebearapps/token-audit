@@ -1,0 +1,75 @@
+{
+  "sessionId": "example-session-001",
+  "projectHash": "abc123def456",
+  "startTime": "2025-12-03T10:00:00Z",
+  "lastUpdated": "2025-12-03T10:05:30Z",
+  "messages": [
+    {
+      "id": "msg-001",
+      "timestamp": "2025-12-03T10:00:05Z",
+      "type": "user",
+      "content": "Search for MCP best practices"
+    },
+    {
+      "id": "msg-002",
+      "timestamp": "2025-12-03T10:00:15Z",
+      "type": "gemini",
+      "content": "I'll search for MCP best practices...",
+      "tokens": {
+        "input": 125,
+        "output": 450,
+        "cached": 0,
+        "thoughts": 200,
+        "tool": 50,
+        "total": 825
+      },
+      "model": "gemini-2.5-pro",
+      "toolCalls": [
+        {
+          "id": "call-001",
+          "name": "mcp__brave-search__brave_web_search",
+          "args": {"query": "MCP Model Context Protocol best practices"},
+          "result": ["...search results..."],
+          "status": "success"
+        }
+      ]
+    },
+    {
+      "id": "msg-003",
+      "timestamp": "2025-12-03T10:02:00Z",
+      "type": "user",
+      "content": "Analyze that with thinkdeep"
+    },
+    {
+      "id": "msg-004",
+      "timestamp": "2025-12-03T10:03:30Z",
+      "type": "gemini",
+      "content": "Let me analyze this more deeply...",
+      "tokens": {
+        "input": 890,
+        "output": 1250,
+        "cached": 125,
+        "thoughts": 2500,
+        "tool": 150,
+        "total": 4915
+      },
+      "model": "gemini-2.5-pro",
+      "thoughts": [
+        {
+          "subject": "Analysis",
+          "description": "Evaluating MCP patterns across search results",
+          "timestamp": "2025-12-03T10:03:00Z"
+        }
+      ],
+      "toolCalls": [
+        {
+          "id": "call-002",
+          "name": "mcp__zen__thinkdeep",
+          "args": {"topic": "MCP best practices analysis"},
+          "result": ["...analysis..."],
+          "status": "success"
+        }
+      ]
+    }
+  ]
+}

@@ -238,10 +238,10 @@ mcp-audit report ~/.mcp-audit/sessions/
 
 | Feature | Benefit |
 |---------|---------|
-| OpenTelemetry integration | Full telemetry support |
-| Latency tracking | Performance insights |
+| Native session parsing | No OTEL setup required |
+| Thinking token tracking | See reasoning costs separately |
 | Google model pricing | Accurate cost estimates |
-| Early adopter support | First-class platform support |
+| Tool call detection | Track MCP server usage |
 
 **Pain Point Addressed**: "How does Gemini CLI compare to alternatives?"
 

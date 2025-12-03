@@ -1,0 +1,405 @@
+# ============================================================================
+# Release Both Repositories (Master + Public)
+# ============================================================================
+# Synchronized release workflow for mcp-audit master/public split.
+#
+# Triggers on version tag push and:
+# 1. Creates GitHub Release in master repo
+# 2. Syncs filtered content to public repo
+# 3. Publishes to PyPI from public repo
+#
+# Required Secrets:
+#   - PUBLIC_REPO_TOKEN: PAT with push access to mcp-audit (public)
+#
+# PyPI uses Trusted Publisher (OIDC) - no secret needed
+# ============================================================================
+
+name: Release Both Repositories
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v0.3.12)'
+        required: true
+        type: string
+
+env:
+  PUBLIC_REPO: littlebearapps/mcp-audit
+
+permissions:
+  contents: write
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 1: Release Master (GitHub Release)
+  # ──────────────────────────────────────────────────────────────────────────
+  release-master:
+    name: Release Master
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_bare: ${{ steps.version.outputs.version_bare }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Get Version from Tag
+        id: version
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          # Handle both tag push and workflow_dispatch
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION_BARE="${TAG#v}"
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+          echo "version_bare=$VERSION_BARE" >> $GITHUB_OUTPUT
+          echo "Tag: $TAG"
+          echo "Version: $VERSION_BARE"
+
+      - name: Validate Version Match
+        env:
+          TAG_VERSION: ${{ steps.version.outputs.version_bare }}
+        run: |
+          # Extract version from pyproject.toml
+          PYPROJECT_VERSION=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match pyproject.toml ($PYPROJECT_VERSION)"
+            exit 1
+          fi
+
+          echo "::notice::Version validated: $PYPROJECT_VERSION"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run Tests
+        run: |
+          pip install -e ".[dev]"
+          pytest tests/ --tb=short -q
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          name: v${{ steps.version.outputs.version_bare }}
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 2: Sync to Public Repository
+  # ──────────────────────────────────────────────────────────────────────────
+  sync-public:
+    name: Sync Public
+    needs: release-master
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master repo
+        uses: actions/checkout@v4
+
+      - name: Prepare sync directory
+        run: |
+          mkdir -p ./dist/public
+
+          # Sync with exclusions
+          rsync -av \
+            --exclude-from=.public-exclude \
+            --exclude='.git' \
+            ./ ./dist/public/
+
+          echo "::notice::Files synced to dist/public"
+
+      - name: Validate sync
+        run: |
+          # Check required files exist
+          REQUIRED=(
+            "src/mcp_audit/__init__.py"
+            "pyproject.toml"
+            "README.md"
+            "LICENSE"
+          )
+
+          for file in "${REQUIRED[@]}"; do
+            if [ ! -f "./dist/public/$file" ]; then
+              echo "::error::Required file missing: $file"
+              exit 1
+            fi
+          done
+
+          # Check internal files excluded
+          EXCLUDED=(
+            "backlog"
+            "quickref"
+            "CLAUDE.md"
+            ".envrc"
+            ".public-exclude"
+          )
+
+          for item in "${EXCLUDED[@]}"; do
+            if [ -e "./dist/public/$item" ]; then
+              echo "::error::Internal file not excluded: $item"
+              exit 1
+            fi
+          done
+
+          echo "::notice::Sync validation passed"
+
+      - name: Clone public repository
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/${{ env.PUBLIC_REPO }}.git" ./public-repo
+
+          if [ ! -d "./public-repo/.git" ]; then
+            echo "::error::Failed to clone public repository"
+            exit 1
+          fi
+
+          echo "::notice::Public repository cloned"
+
+      - name: Check for tag collision
+        env:
+          TAG: ${{ needs.release-master.outputs.version }}
+        run: |
+          cd ./public-repo
+
+          git fetch --tags
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists in public repo"
+            exit 1
+          fi
+
+          echo "::notice::Tag $TAG available in public repo"
+
+      - name: Sync content to public repo
+        run: |
+          # Safety check
+          if [ ! -d "./public-repo/.git" ]; then
+            echo "::error::./public-repo is not a git repository"
+            exit 1
+          fi
+
+          # Preserve public-repo-specific files
+          mkdir -p /tmp/preserve
+          [ -d "./public-repo/.github" ] && cp -r ./public-repo/.github /tmp/preserve/
+          [ -f "./public-repo/CHANGELOG.md" ] && cp ./public-repo/CHANGELOG.md /tmp/preserve/
+
+          # Clear existing content (except .git)
+          find ./public-repo -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Copy synced content (including hidden files like .github/)
+          # Using rsync instead of cp to properly handle dotfiles
+          rsync -a --exclude='.git' ./dist/public/ ./public-repo/
+
+          # Restore preserved files (public-repo-specific, if any)
+          [ -f "/tmp/preserve/CHANGELOG.md" ] && cp /tmp/preserve/CHANGELOG.md ./public-repo/
+
+          echo "::notice::Content synced to public repo"
+
+      - name: Commit and tag public repo
+        env:
+          TAG: ${{ needs.release-master.outputs.version }}
+        run: |
+          cd ./public-repo
+
+          # Use repository owner for attribution (noreply for GitHub privacy)
+          git config user.name "Nathan Schram"
+          git config user.email "nathanschram@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "::warning::No changes to commit"
+          else
+            git commit -m "Release $TAG"
+          fi
+
+          git tag "$TAG" -m "Release $TAG"
+          git push origin main
+          git push origin "$TAG"
+
+          echo "::notice::Public repo committed and tagged as $TAG"
+
+      - name: Upload sync report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-report
+          path: ./dist/public
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 3: Publish to PyPI
+  # ──────────────────────────────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [release-master, sync-public]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mcp-audit/
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout public repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PUBLIC_REPO }}
+          ref: ${{ needs.release-master.outputs.version }}
+          token: ${{ secrets.PUBLIC_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 4: Create Release Announcement Discussion
+  # ──────────────────────────────────────────────────────────────────────────
+  announce-release:
+    name: Announce Release
+    needs: [release-master, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      discussions: write
+    steps:
+      - name: Create Release Discussion
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          VERSION: ${{ needs.release-master.outputs.version }}
+          VERSION_BARE: ${{ needs.release-master.outputs.version_bare }}
+        run: |
+          # Repository and category IDs for mcp-audit public repo
+          REPO_ID="R_kgDOQhfa4g"
+          ANNOUNCEMENTS_CATEGORY_ID="DIC_kwDOQhfa4s4CzVDX"
+
+          # Build the announcement body
+          BODY="## mcp-audit $VERSION Released
+
+          Install or upgrade:
+          \`\`\`bash
+          pip install --upgrade mcp-audit
+          \`\`\`
+
+          ### What's New
+          See the [Changelog](https://github.com/littlebearapps/mcp-audit/blob/main/CHANGELOG.md) for details.
+
+          ### Links
+          - [PyPI](https://pypi.org/project/mcp-audit/${VERSION_BARE}/)
+          - [GitHub Release](https://github.com/littlebearapps/mcp-audit-master/releases/tag/$VERSION)
+          - [Documentation](https://github.com/littlebearapps/mcp-audit#readme)
+
+          ---
+          _Automated release announcement_"
+
+          # Create the discussion using GraphQL
+          cat > /tmp/gql_request.json << EOF
+          {
+            "query": "mutation(\$title: String!, \$body: String!) { createDiscussion(input: { repositoryId: \"$REPO_ID\", categoryId: \"$ANNOUNCEMENTS_CATEGORY_ID\", title: \$title, body: \$body }) { discussion { id url } } }",
+            "variables": {
+              "title": "Release: mcp-audit $VERSION",
+              "body": $(echo "$BODY" | jq -Rs .)
+            }
+          }
+          EOF
+
+          RESULT=$(gh api graphql --input /tmp/gql_request.json)
+          DISCUSSION_URL=$(echo "$RESULT" | jq -r '.data.createDiscussion.discussion.url')
+
+          if [ "$DISCUSSION_URL" != "null" ]; then
+            echo "::notice::Release announcement created: $DISCUSSION_URL"
+          else
+            echo "::warning::Failed to create release announcement"
+            echo "$RESULT"
+          fi
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Summary Job
+  # ──────────────────────────────────────────────────────────────────────────
+  release-summary:
+    name: Release Summary
+    needs: [release-master, sync-public, publish-pypi, announce-release]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Release Summary
+        env:
+          VERSION: ${{ needs.release-master.outputs.version }}
+          MASTER_RESULT: ${{ needs.release-master.result }}
+          SYNC_RESULT: ${{ needs.sync-public.result }}
+          PYPI_RESULT: ${{ needs.publish-pypi.result }}
+          ANNOUNCE_RESULT: ${{ needs.announce-release.result }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Release Summary - $VERSION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          if [ "$MASTER_RESULT" == "success" ]; then
+            echo "✅ Master Release: SUCCESS"
+          else
+            echo "❌ Master Release: FAILED"
+          fi
+
+          if [ "$SYNC_RESULT" == "success" ]; then
+            echo "✅ Public Sync: SUCCESS"
+          elif [ "$SYNC_RESULT" == "skipped" ]; then
+            echo "⏭️  Public Sync: SKIPPED"
+          else
+            echo "❌ Public Sync: FAILED"
+          fi
+
+          if [ "$PYPI_RESULT" == "success" ]; then
+            echo "✅ PyPI Publish: SUCCESS"
+          elif [ "$PYPI_RESULT" == "skipped" ]; then
+            echo "⏭️  PyPI Publish: SKIPPED"
+          else
+            echo "❌ PyPI Publish: FAILED"
+          fi
+
+          if [ "$ANNOUNCE_RESULT" == "success" ]; then
+            echo "✅ Discussion Announcement: SUCCESS"
+          elif [ "$ANNOUNCE_RESULT" == "skipped" ]; then
+            echo "⏭️  Discussion Announcement: SKIPPED"
+          else
+            echo "⚠️  Discussion Announcement: FAILED (non-blocking)"
+          fi
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          if [ "$MASTER_RESULT" != "success" ]; then
+            echo "::error::Release failed at master stage"
+            exit 1
+          elif [ "$SYNC_RESULT" != "success" ]; then
+            echo "::warning::Master released but public sync failed"
+          elif [ "$PYPI_RESULT" != "success" ]; then
+            echo "::warning::Released but PyPI publish failed - manual retry needed"
+          else
+            echo "::notice::All release stages completed successfully!"
+          fi

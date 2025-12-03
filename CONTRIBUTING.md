@@ -683,8 +683,8 @@ MCP Audit uses automated releases via GitHub Actions. When a version bump is mer
 5. **Automatic publishing**:
    - `auto-tag.yml` detects version change in `pyproject.toml`
    - Creates git tag `vX.Y.Z`
-   - `publish.yml` triggers on the new tag
-   - Runs CI checks, builds package, publishes to PyPI
+   - Maintainer triggers `release-both.yml` workflow with the tag
+   - Workflow syncs to public repo and publishes to PyPI
 
 ### Version Numbering
 

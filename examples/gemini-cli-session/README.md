@@ -1,10 +1,10 @@
 # Example Gemini CLI Session
 
-This directory contains example session data from a Gemini CLI MCP tracking session.
+This directory contains example session data from Gemini CLI.
 
 ## Files
 
-- `telemetry-sample.jsonl` - Sample OpenTelemetry events from Gemini CLI
+- `session-sample.json` - Sample native JSON session file from Gemini CLI
 
 ## Session Details
 
@@ -13,21 +13,41 @@ This directory contains example session data from a Gemini CLI MCP tracking sess
 - **Duration**: ~5 minutes
 - **MCP Tools Used**: zen (chat, thinkdeep), brave-search (web)
 
-## Telemetry Format
+## Session Format
 
-Gemini CLI exports OpenTelemetry metrics in JSON Lines format. Each line is a metric event:
+Gemini CLI stores sessions as JSON files at `~/.gemini/tmp/<project_hash>/chats/session-*.json`:
 
 ```json
-{"name": "gemini_cli.token.usage", "attributes": {"model": "gemini-2.5-pro", "type": "input"}, "value": 1234}
-{"name": "gemini_cli.tool.call.count", "attributes": {"function_name": "mcp__zen__chat", "tool_type": "mcp", "success": true}, "value": 1}
-{"name": "gemini_cli.tool.call.latency", "attributes": {"function_name": "mcp__zen__chat"}, "value": 456}
+{
+  "sessionId": "uuid",
+  "projectHash": "sha256-hash",
+  "startTime": "ISO8601",
+  "messages": [
+    {
+      "id": "uuid",
+      "timestamp": "ISO8601",
+      "type": "gemini",
+      "content": "...",
+      "tokens": {
+        "input": 100,
+        "output": 200,
+        "cached": 50,
+        "thoughts": 150,
+        "tool": 25,
+        "total": 525
+      },
+      "model": "gemini-2.5-pro",
+      "toolCalls": [...]
+    }
+  ]
+}
 ```
 
-## Key Attributes
+## Key Features
 
-- `tool_type: "mcp"` - Distinguishes MCP tools from native tools
-- `type: "thought"` - Gemini-specific thinking/reasoning tokens
-- `model` - Auto-detected model identifier
+- **No OTEL required** - Parses native session files directly
+- **Thinking tokens** - Tracked separately via `tokens.thoughts`
+- **Tool calls** - MCP tools detected by `mcp__` prefix
 
 ## Usage
 
@@ -39,4 +59,4 @@ mcp-audit collect --platform gemini-cli
 mcp-audit report ~/.mcp-audit/sessions/gemini_cli/
 ```
 
-See [Gemini CLI Setup Guide](../../docs/platforms/gemini-cli.md) for detailed instructions.
+See [Gemini CLI Setup Guide](../../docs/gemini-cli-setup.md) for detailed instructions.

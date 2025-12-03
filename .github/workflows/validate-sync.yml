@@ -1,0 +1,82 @@
+# ============================================================================
+# Validate Public Sync
+# ============================================================================
+# Tests the public sync process on pull requests to catch issues early.
+# Runs when source code, tests, docs, or sync configuration changes.
+#
+# Security: This workflow uses no user-controlled inputs (issue titles,
+# PR bodies, commit messages, etc). All values are hardcoded or from
+# trusted step outputs.
+# ============================================================================
+
+name: Validate Public Sync
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'docs/**'
+      - '.public-exclude'
+      - '.github/workflows/release-both.yml'
+
+jobs:
+  validate-sync:
+    name: Validate Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test sync
+        run: |
+          mkdir -p ./dist/public
+
+          rsync -av \
+            --exclude-from=.public-exclude \
+            --exclude='.git' \
+            ./ ./dist/public/
+
+      - name: Validate required files
+        run: |
+          REQUIRED=(
+            "src/mcp_audit/__init__.py"
+            "pyproject.toml"
+            "README.md"
+          )
+
+          for file in "${REQUIRED[@]}"; do
+            if [ ! -f "./dist/public/$file" ]; then
+              echo "::error::Required file missing: $file"
+              exit 1
+            fi
+          done
+
+      - name: Validate exclusions
+        run: |
+          EXCLUDED=("backlog" "quickref" "CLAUDE.md" ".envrc" "scripts")
+
+          for item in "${EXCLUDED[@]}"; do
+            if [ -e "./dist/public/$item" ]; then
+              echo "::error::Internal file not excluded: $item"
+              exit 1
+            fi
+          done
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Test package install
+        run: |
+          cd ./dist/public
+          pip install -e .
+          python -c "import mcp_audit; print(mcp_audit.__version__)"
+
+      - name: Run tests on synced version
+        run: |
+          cd ./dist/public
+          pip install pytest
+          pytest tests/ --tb=short -q

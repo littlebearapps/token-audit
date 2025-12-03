@@ -34,6 +34,7 @@ pip install mcp-audit
 - [CLI Reference](#-cli-reference)
 - [Data Storage](#-data-storage)
 - [FAQ](#-faq)
+- [Roadmap](#️-roadmap)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -138,7 +139,7 @@ mcp-audit collect --platform claude-code
 # Track Codex CLI session
 mcp-audit collect --platform codex-cli
 
-# Track Gemini CLI session (requires telemetry enabled)
+# Track Gemini CLI session
 mcp-audit collect --platform gemini-cli
 ```
 
@@ -191,7 +192,7 @@ mcp-audit collect --platform claude-code
 |----------|--------|-------------------|
 | Claude Code | **Stable** | Stop wondering why you hit the context limit |
 | Codex CLI | **Stable** | Know exactly what you're paying for |
-| Gemini CLI | **Stable** | Full telemetry with latency tracking |
+| Gemini CLI | **Stable** | Native session file parsing with thinking tokens |
 | Ollama CLI | *Coming Soon* | Time-based tracking (no token costs locally) |
 
 Want support for another CLI platform? Have a feature request? [Start a discussion](https://github.com/littlebearapps/mcp-audit/discussions)!
@@ -313,6 +314,7 @@ See [Pricing Configuration](docs/PRICING-CONFIGURATION.md) for the full list of 
 | [Contributing](docs/contributing.md) | How to add platform adapters |
 | [Privacy & Security](docs/privacy-security.md) | Data handling policies |
 | [Changelog](CHANGELOG.md) | Version history and release notes |
+| [Roadmap](ROADMAP.md) | Planned features and long-term vision |
 
 ---
 
@@ -517,6 +519,22 @@ Sessions are organized by date in `~/.mcp-audit/sessions/`.
 
 ---
 
+## 🗺️ Roadmap
+
+**Current**: v0.3.x (Beta) — Stable for daily use
+
+### Coming Soon
+- Multi-model session tracking
+- Enhanced CLI commands and report filters
+- Ollama CLI support (local models)
+- Dynamic pricing via LiteLLM
+
+See the full [Roadmap](ROADMAP.md) for details and long-term vision.
+
+**Have an idea?** [Start a discussion](https://github.com/littlebearapps/mcp-audit/discussions/new?category=ideas) — we'd love to hear from you!
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
@@ -544,4 +562,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-🐻 **Made with care by [Little Bear Apps](https://littlebearapps.com)** · [Issues](https://github.com/littlebearapps/mcp-audit/issues) · [Discussions](https://github.com/littlebearapps/mcp-audit/discussions)
+🐻 **Made with care by [Little Bear Apps](https://littlebearapps.com)**
+
+[Issues](https://github.com/littlebearapps/mcp-audit/issues) · [Discussions](https://github.com/littlebearapps/mcp-audit/discussions) · [Roadmap](ROADMAP.md)

@@ -2,16 +2,100 @@
 """
 Test suite for gemini_cli_adapter module
 
-Tests GeminiCLIAdapter implementation and OpenTelemetry parsing.
+Tests GeminiCLIAdapter implementation for parsing Gemini CLI session JSON files.
 """
 
 import json
-import os
 import pytest
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-from mcp_audit.gemini_cli_adapter import GeminiCLIAdapter
+from mcp_audit.gemini_cli_adapter import (
+    GeminiCLIAdapter,
+    GeminiMessage,
+    GeminiSession,
+    MODEL_DISPLAY_NAMES,
+)
+
+
+# ============================================================================
+# Sample Session Data
+# ============================================================================
+
+
+def make_sample_session(
+    session_id: str = "test-session-id",
+    project_hash: str = "a" * 64,
+    model: str = "gemini-2.5-pro",
+    include_mcp_tools: bool = True,
+) -> Dict[str, Any]:
+    """Create a sample Gemini CLI session JSON structure."""
+    messages = [
+        # User message
+        {
+            "id": "msg-001",
+            "type": "user",
+            "content": "Hello, can you help me?",
+            "timestamp": "2025-11-07T05:10:42.000Z",
+        },
+        # Gemini response with tokens
+        {
+            "id": "msg-002",
+            "type": "gemini",
+            "content": "Of course! How can I help?",
+            "model": model,
+            "thoughts": [{"type": "thought", "text": "Analyzing request..."}],
+            "tokens": {
+                "input": 1000,
+                "output": 50,
+                "cached": 500,
+                "thoughts": 100,
+                "tool": 0,
+                "total": 1650,
+            },
+            "timestamp": "2025-11-07T05:10:45.000Z",
+        },
+    ]
+
+    # Add MCP tool call if requested
+    if include_mcp_tools:
+        messages.append(
+            {
+                "id": "msg-003",
+                "type": "gemini",
+                "content": "I found some results.",
+                "model": model,
+                "thoughts": [],
+                "toolCalls": [
+                    {
+                        "id": "mcp-call-001",
+                        "name": "mcp__zen__chat",
+                        "args": {"prompt": "test"},
+                        "result": ["Result"],
+                        "status": "success",
+                        "timestamp": "2025-11-07T05:10:50.000Z",
+                    }
+                ],
+                "tokens": {
+                    "input": 500,
+                    "output": 100,
+                    "cached": 200,
+                    "thoughts": 50,
+                    "tool": 25,
+                    "total": 875,
+                },
+                "timestamp": "2025-11-07T05:10:55.000Z",
+            }
+        )
+
+    return {
+        "sessionId": session_id,
+        "projectHash": project_hash,
+        "startTime": "2025-11-07T05:10:41.717Z",
+        "lastUpdated": "2025-11-07T05:15:00.000Z",
+        "messages": messages,
+    }
 
 
 # ============================================================================
@@ -20,213 +104,201 @@ from mcp_audit.gemini_cli_adapter import GeminiCLIAdapter
 
 
 @pytest.fixture
-def adapter(tmp_path: Path) -> GeminiCLIAdapter:
-    """Create a GeminiCLIAdapter with temp directories"""
-    gemini_dir = tmp_path / ".gemini"
-    gemini_dir.mkdir()
-
-    telemetry_file = gemini_dir / "telemetry.log"
-    telemetry_file.touch()
-
-    return GeminiCLIAdapter(
-        project="test-project",
-        gemini_dir=gemini_dir,
-        telemetry_file=telemetry_file,
-    )
+def sample_session_data() -> Dict[str, Any]:
+    """Create sample session data."""
+    return make_sample_session()
 
 
 @pytest.fixture
-def adapter_with_settings(tmp_path: Path) -> GeminiCLIAdapter:
-    """Create adapter with settings.json configured"""
-    gemini_dir = tmp_path / ".gemini"
-    gemini_dir.mkdir()
+def sample_session_file(tmp_path: Path, sample_session_data: Dict[str, Any]) -> Path:
+    """Create a temporary session file."""
+    chats_dir = tmp_path / ".gemini" / "tmp" / ("a" * 64) / "chats"
+    chats_dir.mkdir(parents=True)
 
-    # Create settings.json with telemetry enabled
-    settings = {
-        "telemetry": {
-            "enabled": True,
-            "target": "local",
-            "outfile": ".gemini/telemetry.log",
-        }
-    }
-    settings_file = gemini_dir / "settings.json"
-    settings_file.write_text(json.dumps(settings))
+    session_file = chats_dir / "session-2025-11-07T05-10-test.json"
+    session_file.write_text(json.dumps(sample_session_data))
 
-    telemetry_file = gemini_dir / "telemetry.log"
-    telemetry_file.touch()
+    return session_file
 
+
+@pytest.fixture
+def adapter(tmp_path: Path, sample_session_file: Path) -> GeminiCLIAdapter:
+    """Create adapter with temp directories."""
     return GeminiCLIAdapter(
         project="test-project",
-        gemini_dir=gemini_dir,
-        telemetry_file=telemetry_file,
+        gemini_dir=tmp_path / ".gemini",
+        session_file=sample_session_file,
     )
 
 
 # ============================================================================
-# Sample OpenTelemetry Events
+# GeminiMessage Tests
 # ============================================================================
 
 
-def make_tool_call_count_event(
-    function_name: str,
-    tool_type: str = "mcp",
-    success: bool = True,
-    decision: str = "auto_accept",
-) -> Dict[str, Any]:
-    """Create a gemini_cli.tool.call.count event"""
-    return {
-        "name": "gemini_cli.tool.call.count",
-        "attributes": {
-            "function_name": function_name,
-            "tool_type": tool_type,
-            "success": success,
-            "decision": decision,
-        },
-        "value": 1,
-        "timestamp": "2025-11-25T10:30:00Z",
-    }
+class TestGeminiMessage:
+    """Tests for GeminiMessage parsing."""
 
+    def test_from_json_user_message(self) -> None:
+        """Test parsing user message."""
+        data = {
+            "id": "msg-001",
+            "type": "user",
+            "content": "Hello",
+            "timestamp": "2025-11-07T05:10:42.000Z",
+        }
 
-def make_token_usage_event(
-    token_type: str,
-    value: int,
-    model: str = "gemini-2.5-pro",
-) -> Dict[str, Any]:
-    """Create a gemini_cli.token.usage event"""
-    return {
-        "name": "gemini_cli.token.usage",
-        "attributes": {
-            "model": model,
-            "type": token_type,
-        },
-        "value": value,
-        "timestamp": "2025-11-25T10:30:01Z",
-    }
+        msg = GeminiMessage.from_json(data)
 
+        assert msg.id == "msg-001"
+        assert msg.message_type == "user"
+        assert msg.content == "Hello"
+        assert msg.model is None
+        assert msg.tokens is None
 
-def make_tool_latency_event(
-    function_name: str,
-    latency_ms: int,
-) -> Dict[str, Any]:
-    """Create a gemini_cli.tool.call.latency event"""
-    return {
-        "name": "gemini_cli.tool.call.latency",
-        "attributes": {
-            "function_name": function_name,
-        },
-        "value": latency_ms,
-        "timestamp": "2025-11-25T10:30:02Z",
-    }
+    def test_from_json_gemini_message_with_tokens(self) -> None:
+        """Test parsing gemini message with tokens."""
+        data = {
+            "id": "msg-002",
+            "type": "gemini",
+            "content": "Response",
+            "model": "gemini-2.5-pro",
+            "tokens": {
+                "input": 1000,
+                "output": 50,
+                "cached": 500,
+                "thoughts": 100,
+                "tool": 0,
+                "total": 1650,
+            },
+            "timestamp": "2025-11-07T05:10:45.000Z",
+        }
+
+        msg = GeminiMessage.from_json(data)
+
+        assert msg.id == "msg-002"
+        assert msg.message_type == "gemini"
+        assert msg.model == "gemini-2.5-pro"
+        assert msg.tokens is not None
+        assert msg.tokens["input"] == 1000
+        assert msg.tokens["output"] == 50
+        assert msg.tokens["cached"] == 500
+        assert msg.tokens["thoughts"] == 100
+
+    def test_from_json_with_tool_calls(self) -> None:
+        """Test parsing message with tool calls."""
+        data = {
+            "id": "msg-003",
+            "type": "gemini",
+            "content": "Result",
+            "model": "gemini-2.5-pro",
+            "toolCalls": [
+                {
+                    "id": "call-001",
+                    "name": "mcp__zen__chat",
+                    "args": {"prompt": "test"},
+                    "status": "success",
+                }
+            ],
+            "tokens": {
+                "input": 100,
+                "output": 50,
+                "cached": 0,
+                "thoughts": 0,
+                "tool": 10,
+                "total": 160,
+            },
+            "timestamp": "2025-11-07T05:10:50.000Z",
+        }
+
+        msg = GeminiMessage.from_json(data)
+
+        assert msg.tool_calls is not None
+        assert len(msg.tool_calls) == 1
+        assert msg.tool_calls[0]["name"] == "mcp__zen__chat"
+        assert msg.tool_calls[0]["status"] == "success"
 
 
 # ============================================================================
-# Initialization Tests
+# GeminiSession Tests
+# ============================================================================
+
+
+class TestGeminiSession:
+    """Tests for GeminiSession parsing."""
+
+    def test_from_file(self, sample_session_file: Path) -> None:
+        """Test parsing session from file."""
+        session = GeminiSession.from_file(sample_session_file)
+
+        assert session.session_id == "test-session-id"
+        assert session.project_hash == "a" * 64
+        assert len(session.messages) == 3
+        assert session.source_file == sample_session_file.name
+
+    def test_session_timestamps(self, sample_session_file: Path) -> None:
+        """Test session timestamp parsing."""
+        session = GeminiSession.from_file(sample_session_file)
+
+        assert session.start_time.year == 2025
+        assert session.start_time.month == 11
+        assert session.start_time.day == 7
+
+
+# ============================================================================
+# GeminiCLIAdapter Initialization Tests
 # ============================================================================
 
 
 class TestGeminiCLIAdapterInitialization:
-    """Tests for GeminiCLIAdapter initialization"""
+    """Tests for GeminiCLIAdapter initialization."""
 
     def test_initialization(self, adapter: GeminiCLIAdapter) -> None:
-        """Test adapter initializes correctly"""
+        """Test adapter initializes correctly."""
         assert adapter.project == "test-project"
         assert adapter.platform == "gemini-cli"
-        assert adapter.gemini_dir is not None
-        assert adapter.telemetry_file is not None
+        assert adapter.thoughts_tokens == 0
 
-    def test_default_gemini_dir(self, tmp_path: Path) -> None:
-        """Test default gemini_dir is ~/.gemini"""
-        # Create adapter without specifying gemini_dir
+    def test_default_gemini_dir(self) -> None:
+        """Test default gemini_dir is ~/.gemini."""
         adapter = GeminiCLIAdapter(project="test")
         assert adapter.gemini_dir == Path.home() / ".gemini"
 
-    def test_custom_telemetry_file(self, tmp_path: Path) -> None:
-        """Test custom telemetry file path"""
-        custom_file = tmp_path / "custom_telemetry.log"
-        custom_file.touch()
+    def test_custom_session_file(self, tmp_path: Path) -> None:
+        """Test custom session file path."""
+        custom_file = tmp_path / "custom_session.json"
+        custom_file.write_text('{"sessionId": "test", "projectHash": "abc", "messages": []}')
 
-        adapter = GeminiCLIAdapter(
-            project="test",
-            telemetry_file=custom_file,
-        )
-        assert adapter.telemetry_file == custom_file
+        adapter = GeminiCLIAdapter(project="test", session_file=custom_file)
 
-    def test_thoughts_tokens_initialized(self, adapter: GeminiCLIAdapter) -> None:
-        """Test thoughts_tokens initialized to zero"""
-        assert adapter.thoughts_tokens == 0
-
-    def test_pending_tokens_initialized(self, adapter: GeminiCLIAdapter) -> None:
-        """Test pending tokens dict initialized"""
-        assert adapter._pending_tokens == {
-            "input": 0,
-            "output": 0,
-            "cache": 0,
-            "thought": 0,
-        }
+        assert adapter._session_file == custom_file
 
 
 # ============================================================================
-# Telemetry Path Detection Tests
+# Project Hash Detection Tests
 # ============================================================================
 
 
-class TestTelemetryPathDetection:
-    """Tests for telemetry file path detection"""
+class TestProjectHashDetection:
+    """Tests for project hash detection."""
 
-    def test_env_var_takes_priority(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test GEMINI_TELEMETRY_OUTFILE environment variable takes priority"""
-        env_path = tmp_path / "env_telemetry.log"
-        monkeypatch.setenv("GEMINI_TELEMETRY_OUTFILE", str(env_path))
+    def test_calculate_project_hash(self, adapter: GeminiCLIAdapter) -> None:
+        """Test project hash calculation."""
+        # Hash should be 64 hex chars (SHA256)
+        adapter._project_hash = None
+        calculated = adapter._calculate_project_hash()
 
-        gemini_dir = tmp_path / ".gemini"
-        gemini_dir.mkdir()
+        assert calculated is not None
+        assert len(calculated) == 64
+        assert all(c in "0123456789abcdef" for c in calculated)
 
-        adapter = GeminiCLIAdapter(project="test", gemini_dir=gemini_dir)
-        assert adapter.telemetry_file == env_path
+    def test_list_available_hashes(self, adapter: GeminiCLIAdapter, tmp_path: Path) -> None:
+        """Test listing available project hashes."""
+        hashes = adapter.list_available_hashes()
 
-    def test_settings_json_path(self, tmp_path: Path) -> None:
-        """Test settings.json outfile is used when env var not set"""
-        gemini_dir = tmp_path / ".gemini"
-        gemini_dir.mkdir()
-
-        settings = {"telemetry": {"outfile": "custom/path.log"}}
-        (gemini_dir / "settings.json").write_text(json.dumps(settings))
-
-        adapter = GeminiCLIAdapter(project="test", gemini_dir=gemini_dir)
-        assert adapter.telemetry_file == gemini_dir / "custom/path.log"
-
-    def test_default_telemetry_path(self, tmp_path: Path) -> None:
-        """Test default path when no config exists"""
-        gemini_dir = tmp_path / ".gemini"
-        gemini_dir.mkdir()
-
-        adapter = GeminiCLIAdapter(project="test", gemini_dir=gemini_dir)
-        assert adapter.telemetry_file == gemini_dir / "telemetry.log"
-
-
-# ============================================================================
-# Telemetry Enabled Check Tests
-# ============================================================================
-
-
-class TestTelemetryEnabledCheck:
-    """Tests for telemetry enabled detection"""
-
-    def test_env_var_enabled(
-        self, adapter: GeminiCLIAdapter, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Test env var enables telemetry"""
-        monkeypatch.setenv("GEMINI_TELEMETRY_ENABLED", "true")
-        assert adapter._ensure_telemetry_enabled() is True
-
-    def test_settings_enabled(self, adapter_with_settings: GeminiCLIAdapter) -> None:
-        """Test settings.json enables telemetry"""
-        assert adapter_with_settings._ensure_telemetry_enabled() is True
-
-    def test_telemetry_not_enabled(self, adapter: GeminiCLIAdapter) -> None:
-        """Test warning when telemetry not enabled"""
-        # No env var, no settings.json with enabled=true
-        assert adapter._ensure_telemetry_enabled() is False
+        assert len(hashes) >= 1
+        hash_val, path, mtime = hashes[0]
+        assert len(hash_val) == 64
 
 
 # ============================================================================
@@ -235,215 +307,230 @@ class TestTelemetryEnabledCheck:
 
 
 class TestEventParsing:
-    """Tests for OpenTelemetry event parsing"""
+    """Tests for message event parsing."""
+
+    def test_parse_user_message_returns_none(self, adapter: GeminiCLIAdapter) -> None:
+        """Test user messages return None (no token data)."""
+        msg = GeminiMessage(
+            id="msg-001",
+            timestamp=datetime.now(tz=timezone.utc),
+            message_type="user",
+            content="Hello",
+        )
+
+        result = adapter.parse_event(msg)
+        assert result is None
+
+    def test_parse_gemini_message_with_tokens(self, adapter: GeminiCLIAdapter) -> None:
+        """Test gemini messages return session token data."""
+        msg = GeminiMessage(
+            id="msg-002",
+            timestamp=datetime.now(tz=timezone.utc),
+            message_type="gemini",
+            content="Response",
+            model="gemini-2.5-pro",
+            tokens={
+                "input": 1000,
+                "output": 50,
+                "cached": 500,
+                "thoughts": 100,
+                "tool": 0,
+                "total": 1650,
+            },
+        )
+
+        result = adapter.parse_event(msg)
+
+        assert result is not None
+        tool_name, usage = result
+        assert tool_name == "__session__"
+        assert usage["input_tokens"] == 1000
+        assert usage["output_tokens"] == 150  # output + thoughts
+        assert usage["cache_read_tokens"] == 500
 
     def test_parse_mcp_tool_call(self, adapter: GeminiCLIAdapter) -> None:
-        """Test parsing MCP tool call event"""
-        event = make_tool_call_count_event("mcp__zen__chat")
+        """Test MCP tool call parsing."""
+        msg = GeminiMessage(
+            id="msg-003",
+            timestamp=datetime.now(tz=timezone.utc),
+            message_type="gemini",
+            content="Result",
+            model="gemini-2.5-pro",
+            tool_calls=[
+                {
+                    "id": "call-001",
+                    "name": "mcp__zen__chat",
+                    "args": {"prompt": "test"},
+                    "status": "success",
+                }
+            ],
+            tokens={
+                "input": 100,
+                "output": 50,
+                "cached": 0,
+                "thoughts": 0,
+                "tool": 10,
+                "total": 160,
+            },
+        )
 
-        result = adapter.parse_event(json.dumps(event))
+        result = adapter.parse_event(msg)
 
         assert result is not None
         tool_name, usage = result
         assert tool_name == "mcp__zen__chat"
-        assert "input_tokens" in usage
-        assert "output_tokens" in usage
         assert usage["success"] is True
-        assert usage["decision"] == "auto_accept"
 
-    def test_parse_native_tool_ignored(self, adapter: GeminiCLIAdapter) -> None:
-        """Test native tools are ignored"""
-        event = make_tool_call_count_event("read_file", tool_type="native")
+    def test_native_tool_ignored(self, adapter: GeminiCLIAdapter) -> None:
+        """Test native tools (not mcp__) are ignored."""
+        msg = GeminiMessage(
+            id="msg-003",
+            timestamp=datetime.now(tz=timezone.utc),
+            message_type="gemini",
+            content="Result",
+            model="gemini-2.5-pro",
+            tool_calls=[
+                {
+                    "id": "call-001",
+                    "name": "read_file",  # Native tool
+                    "args": {"path": "/test"},
+                    "status": "success",
+                }
+            ],
+            tokens={
+                "input": 100,
+                "output": 50,
+                "cached": 0,
+                "thoughts": 0,
+                "tool": 0,
+                "total": 150,
+            },
+        )
 
-        result = adapter.parse_event(json.dumps(event))
+        result = adapter.parse_event(msg)
 
-        assert result is None
+        # Should return session tokens, not tool call
+        assert result is not None
+        tool_name, _ = result
+        assert tool_name == "__session__"
 
-    def test_parse_non_mcp_prefix_ignored(self, adapter: GeminiCLIAdapter) -> None:
-        """Test non-mcp__ prefixed tools are ignored"""
-        event = make_tool_call_count_event("some_tool", tool_type="mcp")
 
-        result = adapter.parse_event(json.dumps(event))
+# ============================================================================
+# Model Detection Tests
+# ============================================================================
 
-        assert result is None
 
-    def test_parse_token_usage_input(self, adapter: GeminiCLIAdapter) -> None:
-        """Test parsing input token usage"""
-        event = make_token_usage_event("input", 1000)
+class TestModelDetection:
+    """Tests for model detection."""
 
-        adapter.parse_event(json.dumps(event))
+    def test_model_display_names(self) -> None:
+        """Test model display name mappings."""
+        assert MODEL_DISPLAY_NAMES["gemini-2.5-pro"] == "Gemini 2.5 Pro"
+        assert MODEL_DISPLAY_NAMES["gemini-2.5-flash"] == "Gemini 2.5 Flash"
+        assert MODEL_DISPLAY_NAMES["gemini-3-pro-preview"] == "Gemini 3 Pro Preview"
 
-        assert adapter._pending_tokens["input"] == 1000
+    def test_model_detected_from_message(self, adapter: GeminiCLIAdapter) -> None:
+        """Test model detection from gemini message."""
+        msg = GeminiMessage(
+            id="msg-001",
+            timestamp=datetime.now(tz=timezone.utc),
+            message_type="gemini",
+            content="Response",
+            model="gemini-2.5-pro",
+            tokens={
+                "input": 100,
+                "output": 50,
+                "cached": 0,
+                "thoughts": 0,
+                "tool": 0,
+                "total": 150,
+            },
+        )
 
-    def test_parse_token_usage_output(self, adapter: GeminiCLIAdapter) -> None:
-        """Test parsing output token usage"""
-        event = make_token_usage_event("output", 500)
-
-        adapter.parse_event(json.dumps(event))
-
-        assert adapter._pending_tokens["output"] == 500
-
-    def test_parse_token_usage_thought(self, adapter: GeminiCLIAdapter) -> None:
-        """Test parsing thought token usage (Gemini-specific)"""
-        event = make_token_usage_event("thought", 250)
-
-        adapter.parse_event(json.dumps(event))
-
-        assert adapter._pending_tokens["thought"] == 250
-        assert adapter.thoughts_tokens == 250  # Cumulative
-
-    def test_parse_token_usage_cache(self, adapter: GeminiCLIAdapter) -> None:
-        """Test parsing cache token usage"""
-        event = make_token_usage_event("cache", 5000)
-
-        adapter.parse_event(json.dumps(event))
-
-        assert adapter._pending_tokens["cache"] == 5000
-
-    def test_parse_tool_latency(self, adapter: GeminiCLIAdapter) -> None:
-        """Test parsing tool latency event"""
-        event = make_tool_latency_event("mcp__zen__chat", 1500)
-
-        adapter.parse_event(json.dumps(event))
-
-        assert adapter._pending_latencies["mcp__zen__chat"] == 1500
-
-    def test_model_detection(self, adapter: GeminiCLIAdapter) -> None:
-        """Test model detection from token usage event"""
-        event = make_token_usage_event("input", 100, model="gemini-2.5-pro")
-
-        adapter.parse_event(json.dumps(event))
+        adapter.parse_event(msg)
 
         assert adapter.detected_model == "gemini-2.5-pro"
-        # AC #15: Model should be mapped to human-readable name
         assert adapter.model_name == "Gemini 2.5 Pro"
-        # AC #5: Model should be set on session object for persistence
         assert adapter.session.model == "gemini-2.5-pro"
 
-    def test_invalid_json_handled(self, adapter: GeminiCLIAdapter) -> None:
-        """Test invalid JSON is handled gracefully"""
-        result = adapter.parse_event("not valid json")
-
-        assert result is None
-
 
 # ============================================================================
-# Token Attribution Tests
+# Thoughts Token Tracking Tests
 # ============================================================================
 
 
-class TestTokenAttribution:
-    """Tests for token attribution to tool calls"""
+class TestThoughtsTokenTracking:
+    """Tests for Gemini-specific thoughts token tracking."""
 
-    def test_pending_tokens_attributed_to_tool_call(self, adapter: GeminiCLIAdapter) -> None:
-        """Test pending tokens are attributed to tool calls"""
-        # Simulate token events before tool call
-        adapter.parse_event(json.dumps(make_token_usage_event("input", 1000)))
-        adapter.parse_event(json.dumps(make_token_usage_event("output", 500)))
-        adapter.parse_event(json.dumps(make_token_usage_event("cache", 5000)))
+    def test_thoughts_tokens_accumulated(self, adapter: GeminiCLIAdapter) -> None:
+        """Test thoughts tokens are accumulated separately."""
+        msg1 = GeminiMessage(
+            id="msg-001",
+            timestamp=datetime.now(tz=timezone.utc),
+            message_type="gemini",
+            content="Response 1",
+            model="gemini-2.5-pro",
+            tokens={
+                "input": 100,
+                "output": 50,
+                "cached": 0,
+                "thoughts": 100,
+                "tool": 0,
+                "total": 250,
+            },
+        )
+        msg2 = GeminiMessage(
+            id="msg-002",
+            timestamp=datetime.now(tz=timezone.utc),
+            message_type="gemini",
+            content="Response 2",
+            model="gemini-2.5-pro",
+            tokens={
+                "input": 100,
+                "output": 50,
+                "cached": 0,
+                "thoughts": 150,
+                "tool": 0,
+                "total": 300,
+            },
+        )
 
-        # Parse tool call
-        event = make_tool_call_count_event("mcp__zen__chat")
-        result = adapter.parse_event(json.dumps(event))
+        adapter.parse_event(msg1)
+        adapter.parse_event(msg2)
 
-        assert result is not None
-        _, usage = result
-        assert usage["input_tokens"] == 1000
-        assert usage["output_tokens"] == 500
-        assert usage["cache_read_tokens"] == 5000
-
-    def test_pending_tokens_reset_after_attribution(self, adapter: GeminiCLIAdapter) -> None:
-        """Test pending tokens are reset after attribution"""
-        adapter.parse_event(json.dumps(make_token_usage_event("input", 1000)))
-
-        # Parse tool call (consumes pending tokens)
-        event = make_tool_call_count_event("mcp__zen__chat")
-        adapter.parse_event(json.dumps(event))
-
-        # Pending tokens should be reset
-        assert adapter._pending_tokens["input"] == 0
-        assert adapter._pending_tokens["output"] == 0
-
-    def test_latency_attributed_to_tool_call(self, adapter: GeminiCLIAdapter) -> None:
-        """Test latency is attributed to correct tool call"""
-        # Parse latency event first
-        adapter.parse_event(json.dumps(make_tool_latency_event("mcp__zen__chat", 1500)))
-
-        # Parse tool call
-        event = make_tool_call_count_event("mcp__zen__chat")
-        result = adapter.parse_event(json.dumps(event))
-
-        assert result is not None
-        _, usage = result
-        assert usage["duration_ms"] == 1500
-
-    def test_latency_removed_after_attribution(self, adapter: GeminiCLIAdapter) -> None:
-        """Test latency is removed from pending after attribution"""
-        adapter.parse_event(json.dumps(make_tool_latency_event("mcp__zen__chat", 1500)))
-
-        # Parse tool call (consumes latency)
-        event = make_tool_call_count_event("mcp__zen__chat")
-        adapter.parse_event(json.dumps(event))
-
-        # Latency should be removed
-        assert "mcp__zen__chat" not in adapter._pending_latencies
+        assert adapter.thoughts_tokens == 250  # 100 + 150
 
 
 # ============================================================================
-# Tool Call Recording Tests
+# Batch Processing Tests
 # ============================================================================
 
 
-class TestToolCallRecording:
-    """Tests for recording tool calls via BaseTracker"""
+class TestBatchProcessing:
+    """Tests for batch session processing."""
 
-    def test_process_tool_call(self, adapter: GeminiCLIAdapter) -> None:
-        """Test _process_tool_call records via BaseTracker"""
-        usage = {
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "cache_created_tokens": 0,
-            "cache_read_tokens": 500,
-            "duration_ms": 1500,
-            "success": True,
-            "decision": "auto_accept",
-        }
+    def test_process_session_file_batch(
+        self, adapter: GeminiCLIAdapter, sample_session_file: Path
+    ) -> None:
+        """Test batch processing of session file."""
+        adapter.process_session_file_batch(sample_session_file)
+        session = adapter.finalize_session()
 
-        adapter._process_tool_call("mcp__zen__chat", usage)
+        # Verify tokens processed
+        assert session.token_usage.total_tokens > 0
+        assert session.token_usage.input_tokens > 0
+        assert session.token_usage.output_tokens > 0
 
-        # Check server session created
-        assert "zen" in adapter.server_sessions
+        # Verify message count
+        assert session.message_count == 2  # 2 gemini messages
 
-        # Check tool stats
-        tool_stats = adapter.server_sessions["zen"].tools["mcp__zen__chat"]
-        assert tool_stats.calls == 1
-        assert tool_stats.total_tokens == 650
-        assert tool_stats.total_duration_ms == 1500
+    def test_batch_processing_model_detection(
+        self, adapter: GeminiCLIAdapter, sample_session_file: Path
+    ) -> None:
+        """Test model detection during batch processing."""
+        adapter.process_session_file_batch(sample_session_file)
 
-    def test_multiple_tool_calls(self, adapter: GeminiCLIAdapter) -> None:
-        """Test multiple tool calls accumulate correctly"""
-        usage1 = {
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "cache_created_tokens": 0,
-            "cache_read_tokens": 0,
-            "duration_ms": 1000,
-        }
-        usage2 = {
-            "input_tokens": 200,
-            "output_tokens": 100,
-            "cache_created_tokens": 0,
-            "cache_read_tokens": 0,
-            "duration_ms": 2000,
-        }
-
-        adapter._process_tool_call("mcp__zen__chat", usage1)
-        adapter._process_tool_call("mcp__zen__chat", usage2)
-
-        tool_stats = adapter.server_sessions["zen"].tools["mcp__zen__chat"]
-        assert tool_stats.calls == 2
-        assert tool_stats.total_tokens == 450
-        assert tool_stats.avg_tokens == 225.0
+        assert adapter.detected_model == "gemini-2.5-pro"
 
 
 # ============================================================================
@@ -452,117 +539,20 @@ class TestToolCallRecording:
 
 
 class TestPlatformMetadata:
-    """Tests for platform metadata"""
+    """Tests for platform metadata."""
 
     def test_get_platform_metadata(self, adapter: GeminiCLIAdapter) -> None:
-        """Test get_platform_metadata returns correct data"""
+        """Test platform metadata includes correct fields."""
         adapter.detected_model = "gemini-2.5-pro"
-        adapter.model_name = "gemini-2.5-pro"
+        adapter.model_name = "Gemini 2.5 Pro"
         adapter.thoughts_tokens = 500
 
         metadata = adapter.get_platform_metadata()
 
         assert metadata["model"] == "gemini-2.5-pro"
-        assert metadata["model_name"] == "gemini-2.5-pro"
+        assert metadata["model_name"] == "Gemini 2.5 Pro"
         assert metadata["thoughts_tokens"] == 500
         assert "gemini_dir" in metadata
-        assert "telemetry_file" in metadata
-
-
-# ============================================================================
-# Session Finalization Tests
-# ============================================================================
-
-
-class TestSessionFinalization:
-    """Tests for session finalization"""
-
-    def test_finalize_session_includes_thoughts_tokens(self, adapter: GeminiCLIAdapter) -> None:
-        """Test thoughts_tokens available after finalization"""
-        # Parse some thought tokens
-        adapter.parse_event(json.dumps(make_token_usage_event("thought", 500)))
-
-        session = adapter.finalize_session()
-
-        # thoughts_tokens should be tracked separately
-        assert adapter.thoughts_tokens == 500
-
-    def test_finalize_session_with_tool_calls(self, adapter: GeminiCLIAdapter) -> None:
-        """Test session finalization with tool calls"""
-        usage = {
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "cache_created_tokens": 0,
-            "cache_read_tokens": 0,
-        }
-        adapter._process_tool_call("mcp__zen__chat", usage)
-
-        session = adapter.finalize_session()
-
-        assert session.mcp_tool_calls.total_calls == 1
-        assert session.mcp_tool_calls.unique_tools == 1
-        assert session.token_usage.total_tokens == 150
-
-
-# ============================================================================
-# File Monitoring Tests
-# ============================================================================
-
-
-class TestFileMonitoring:
-    """Tests for telemetry file monitoring"""
-
-    def test_process_new_telemetry(self, adapter: GeminiCLIAdapter) -> None:
-        """Test processing new telemetry from file"""
-        # Write events to telemetry file
-        events = [
-            make_token_usage_event("input", 1000),
-            make_token_usage_event("output", 500),
-            make_tool_call_count_event("mcp__zen__chat"),
-        ]
-
-        with open(adapter.telemetry_file, "w") as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-
-        # Process new telemetry
-        adapter._process_new_telemetry()
-
-        # Should have recorded the tool call
-        assert "zen" in adapter.server_sessions
-        assert adapter.server_sessions["zen"].total_calls == 1
-
-    def test_file_position_tracking(self, adapter: GeminiCLIAdapter) -> None:
-        """Test file position is tracked correctly"""
-        initial_position = adapter.file_position
-
-        # Write first batch
-        with open(adapter.telemetry_file, "w") as f:
-            f.write(json.dumps(make_token_usage_event("input", 100)) + "\n")
-
-        adapter._process_new_telemetry()
-        position_after_first = adapter.file_position
-
-        # Write second batch
-        with open(adapter.telemetry_file, "a") as f:
-            f.write(json.dumps(make_token_usage_event("output", 50)) + "\n")
-
-        adapter._process_new_telemetry()
-        position_after_second = adapter.file_position
-
-        assert position_after_first > initial_position
-        assert position_after_second > position_after_first
-
-    def test_nonexistent_file_handled(self, tmp_path: Path) -> None:
-        """Test nonexistent telemetry file is handled"""
-        adapter = GeminiCLIAdapter(
-            project="test",
-            gemini_dir=tmp_path,
-            telemetry_file=tmp_path / "nonexistent.log",
-        )
-
-        # Should not crash
-        adapter._process_new_telemetry()
 
 
 # ============================================================================
@@ -571,240 +561,26 @@ class TestFileMonitoring:
 
 
 class TestGeminiCLIAdapterIntegration:
-    """Integration tests for complete adapter workflow"""
+    """Integration tests for complete workflow."""
 
-    def test_complete_workflow(self, adapter: GeminiCLIAdapter, tmp_path: Path) -> None:
-        """Test complete tracking workflow"""
-        # Simulate a session with multiple tool calls
-        events = [
-            # First tool call
-            make_token_usage_event("input", 1000),
-            make_token_usage_event("output", 500),
-            make_token_usage_event("thought", 200),
-            make_tool_latency_event("mcp__zen__chat", 1500),
-            make_tool_call_count_event("mcp__zen__chat"),
-            # Second tool call (different server)
-            make_token_usage_event("input", 500),
-            make_token_usage_event("output", 250),
-            make_tool_latency_event("mcp__brave-search__brave_web_search", 800),
-            make_tool_call_count_event("mcp__brave-search__brave_web_search"),
-        ]
-
-        # Write events to file
-        with open(adapter.telemetry_file, "w") as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-
-        # Process telemetry
-        adapter._process_new_telemetry()
-
-        # Finalize and save
+    def test_complete_batch_workflow(
+        self, adapter: GeminiCLIAdapter, sample_session_file: Path, tmp_path: Path
+    ) -> None:
+        """Test complete batch processing workflow."""
+        adapter.process_session_file_batch(sample_session_file)
         session = adapter.finalize_session()
-        adapter.save_session(tmp_path)
+        adapter.save_session(tmp_path / "output")
 
-        # Verify results
-        assert session.mcp_tool_calls.total_calls == 2
-        assert session.mcp_tool_calls.unique_tools == 2
-        assert len(adapter.server_sessions) == 2
-        assert "zen" in adapter.server_sessions
-        assert "brave-search" in adapter.server_sessions
-        assert adapter.thoughts_tokens == 200
+        # Verify session data
+        assert session.project == "test-project"
+        assert session.platform == "gemini-cli"
+        assert session.model == "gemini-2.5-pro"
 
-        # Verify files saved (v1.1.0: single file per session)
+        # Verify MCP calls tracked (1 mcp__zen__chat call)
+        assert session.mcp_tool_calls.total_calls == 1
+
+        # Verify files saved
         assert adapter.session_dir is not None
-        session_files = list(adapter.session_dir.glob("*.json"))
-        assert len(session_files) == 1
-        assert session_files[0].name.startswith("test-project-")
-
-    def test_model_detection_and_pricing_lookup(self, adapter: GeminiCLIAdapter) -> None:
-        """Test model detection works for pricing lookup"""
-        event = make_token_usage_event("input", 100, model="gemini-2.5-pro")
-        adapter.parse_event(json.dumps(event))
-
-        # Model should be detected
-        assert adapter.detected_model == "gemini-2.5-pro"
-
-        # Platform metadata should include model
-        metadata = adapter.get_platform_metadata()
-        assert metadata["model"] == "gemini-2.5-pro"
-
-
-# ============================================================================
-# Cache Analysis Tests (task-47.5, task-47.6)
-# ============================================================================
-
-
-class TestGeminiCLICacheAnalysis:
-    """Test cache_analysis for Gemini CLI platform"""
-
-    def test_cache_analysis_efficient_read_only(self, adapter: GeminiCLIAdapter) -> None:
-        """Test cache analysis shows efficient when only cache reading (no creation)"""
-        # Gemini doesn't report cache_created_tokens, only cache_read
-        usage = {
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "cache_created_tokens": 0,  # Gemini doesn't create cache
-            "cache_read_tokens": 5000,  # But can read from cache
-        }
-        adapter._process_tool_call("mcp__zen__chat", usage)
-
-        session = adapter.finalize_session()
-        analysis = session._build_cache_analysis()
-
-        # With read-only cache, should be efficient or neutral
-        assert analysis.creation_tokens == 0
-        assert analysis.read_tokens == 5000
-        # No creation = no cost penalty
-        assert analysis.status in ["efficient", "neutral"]
-
-    def test_cache_analysis_neutral_no_cache(self, adapter: GeminiCLIAdapter) -> None:
-        """Test cache analysis shows neutral when no cache activity"""
-        usage = {
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "cache_created_tokens": 0,
-            "cache_read_tokens": 0,
-        }
-        adapter._process_tool_call("mcp__zen__chat", usage)
-
-        session = adapter.finalize_session()
-        analysis = session._build_cache_analysis()
-
-        assert analysis.status == "neutral"
-        assert analysis.creation_tokens == 0
-        assert analysis.read_tokens == 0
-        assert "No cache activity" in analysis.summary
-
-    def test_cache_analysis_in_session_dict(self, adapter: GeminiCLIAdapter) -> None:
-        """Test cache_analysis included in session.to_dict() for Gemini sessions"""
-        usage = {
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "cache_created_tokens": 0,
-            "cache_read_tokens": 1000,
-        }
-        adapter._process_tool_call("mcp__zen__chat", usage)
-
-        session = adapter.finalize_session()
-        session_dict = session.to_dict()
-
-        assert "cache_analysis" in session_dict
-        cache_analysis = session_dict["cache_analysis"]
-        assert "status" in cache_analysis
-        assert "summary" in cache_analysis
-        assert cache_analysis["read_tokens"] == 1000
-        assert cache_analysis["creation_tokens"] == 0
-
-    def test_per_tool_cache_tracking_gemini(self, adapter: GeminiCLIAdapter) -> None:
-        """Test per-tool cache tracking works for Gemini"""
-        # First tool with cache read
-        adapter._process_tool_call(
-            "mcp__zen__chat",
-            {
-                "input_tokens": 100,
-                "output_tokens": 50,
-                "cache_created_tokens": 0,
-                "cache_read_tokens": 5000,
-            },
-        )
-        # Second tool without cache
-        adapter._process_tool_call(
-            "mcp__brave-search__brave_web_search",
-            {
-                "input_tokens": 200,
-                "output_tokens": 100,
-                "cache_created_tokens": 0,
-                "cache_read_tokens": 0,
-            },
-        )
-
-        session = adapter.finalize_session()
-
-        # Verify per-tool cache tracking
-        zen_stats = adapter.server_sessions["zen"].tools["mcp__zen__chat"]
-        assert zen_stats.cache_read_tokens == 5000
-        assert zen_stats.cache_created_tokens == 0
-
-        brave_stats = adapter.server_sessions["brave-search"].tools[
-            "mcp__brave-search__brave_web_search"
-        ]
-        assert brave_stats.cache_read_tokens == 0
-        assert brave_stats.cache_created_tokens == 0
-
-
-class TestGeminiCLISourceFilesTracking:
-    """Test source_files population for Gemini CLI adapter (task-50)"""
-
-    def test_telemetry_had_events_initialized(self, adapter: GeminiCLIAdapter) -> None:
-        """Test _telemetry_had_events flag initialized as False."""
-        assert hasattr(adapter, "_telemetry_had_events")
-        assert adapter._telemetry_had_events is False
-
-    def test_source_files_empty_initially(self, adapter: GeminiCLIAdapter) -> None:
-        """Test session.source_files is empty list by default."""
-        assert adapter.session.source_files == []
-
-    def test_telemetry_had_events_set_on_parse(self, adapter: GeminiCLIAdapter) -> None:
-        """Test _telemetry_had_events set when events parsed."""
-        # Create sample token event
-        token_event = json.dumps(
-            make_token_usage_event(token_type="input", value=100, model="gemini-2.5-flash")
-        )
-
-        # Simulate parsing events (flag set in _process_new_telemetry)
-        result = adapter.parse_event(token_event)
-        if result:
-            adapter._telemetry_had_events = True
-
-        assert adapter._telemetry_had_events is True
-
-    def test_source_files_only_filename_not_path(self, adapter: GeminiCLIAdapter) -> None:
-        """Test only filename stored, not full path (privacy)."""
-        # Simulate events received
-        adapter._telemetry_had_events = True
-
-        # Populate source_files with filename only (simulating Ctrl+C behavior)
-        adapter.session.source_files = [adapter.telemetry_file.name]
-
-        # Verify only filename, no path components
-        for filename in adapter.session.source_files:
-            assert "/" not in filename
-            assert "\\" not in filename
-        assert adapter.session.source_files[0] == "telemetry.log"
-
-    def test_source_files_in_session_dict(self, adapter: GeminiCLIAdapter) -> None:
-        """Test source_files included in session.to_dict() output."""
-        # Create sample tool call event
-        tool_event = json.dumps(make_tool_call_count_event("mcp__zen__chat"))
-
-        # Process an event
-        result = adapter.parse_event(tool_event)
-        if result:
-            adapter._telemetry_had_events = True
-            tool_name, usage = result
-            adapter._process_tool_call(tool_name, usage)
-
-        # Populate source_files
-        if adapter._telemetry_had_events:
-            adapter.session.source_files = [adapter.telemetry_file.name]
-
-        session = adapter.finalize_session()
-        session_dict = session.to_dict()
-
-        assert "session" in session_dict
-        assert "source_files" in session_dict["session"]
-        assert session_dict["session"]["source_files"] == ["telemetry.log"]
-
-    def test_source_files_empty_when_no_events(self, adapter: GeminiCLIAdapter) -> None:
-        """Test source_files stays empty when no events received."""
-        # No events processed
-        assert adapter._telemetry_had_events is False
-
-        # Simulate Ctrl+C behavior
-        if adapter._telemetry_had_events:
-            adapter.session.source_files = [adapter.telemetry_file.name]
-
-        assert adapter.session.source_files == []
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # MCP Audit Architecture
 
 **Version**: 1.0.0
-**Last Updated**: 2025-11-25
+**Last Updated**: 2025-12-03
 
 This document describes the internal architecture of MCP Audit, including the storage system, data schemas, and platform adapter interface.
 
@@ -190,7 +190,7 @@ Located at: `<platform>/.index.json`
 |----------|-----------|--------|
 | Claude Code | `claude_code/` | ✅ Stable |
 | Codex CLI | `codex_cli/` | ✅ Stable |
-| Gemini CLI | `gemini_cli/` | ⏳ Planned |
+| Gemini CLI | `gemini_cli/` | ✅ Stable |
 | Ollama CLI | `ollama_cli/` | ⏳ Experimental |
 | Custom | `custom/` | ✅ Available |
 
@@ -320,8 +320,8 @@ class BaseTracker(ABC):
 ```
 BaseTracker (abstract)
 ├── ClaudeCodeAdapter    # File watcher (debug.log)
-├── CodexCliAdapter      # Process wrapper (stdout)
-├── GeminiCliAdapter     # Hybrid (debug + checkpoints)
+├── CodexCLIAdapter      # File watcher (session JSONL)
+├── GeminiCLIAdapter     # File watcher (session JSON)
 └── OllamaCliAdapter     # Process wrapper (stdout)
 ```
 
@@ -380,8 +380,8 @@ Different platforms require different interception approaches:
 | Platform | Mechanism | Details |
 |----------|-----------|---------|
 | Claude Code | File Watcher | Monitor `~/.claude/cache/*/debug.log` |
-| Codex CLI | Process Wrapper | Capture stdout/stderr from subprocess |
-| Gemini CLI | Hybrid | Debug output + checkpoint files |
+| Codex CLI | File Watcher | Parse `~/.codex/sessions/YYYY/MM/DD/*.jsonl` |
+| Gemini CLI | File Watcher | Parse `~/.gemini/tmp/<hash>/chats/session-*.json` |
 | Ollama CLI | Process Wrapper | Capture stdout with timing |
 
 See [INTERCEPTION-MECHANISM-SPEC.md](INTERCEPTION-MECHANISM-SPEC.md) for detailed specifications.
