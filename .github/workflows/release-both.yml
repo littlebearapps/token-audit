@@ -233,7 +233,7 @@ jobs:
           echo "::notice::Public repo committed and tagged as $TAG"
 
       - name: Upload sync report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sync-report
           path: ./dist/public
