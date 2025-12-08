@@ -4,7 +4,7 @@
 
 Whether you build MCP servers or use **Claude Code**, **Codex CLI**, or **Gemini CLI**, `mcp-audit` shows you exactly where your tokens go—per server, per tool, in real-time.
 
-![MCP Audit real-time TUI showing token usage](docs/images/demo.gif)
+![MCP Audit real-time TUI showing token usage](https://raw.githubusercontent.com/littlebearapps/mcp-audit/main/docs/images/demo.gif)
 > *Real-time token tracking & MCP tool profiling — understand exactly where your tokens go.*
 
 [![PyPI version](https://img.shields.io/pypi/v/mcp-audit?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/mcp-audit/)

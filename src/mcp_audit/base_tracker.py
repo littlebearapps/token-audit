@@ -880,11 +880,16 @@ class BaseTracker(ABC):
         ).total_seconds()
 
         # Update MCP tool calls summary
-        all_tools = set()
+        # Filter out "builtin" pseudo-server - these are NOT MCP tools (task-95.2)
+        mcp_server_sessions = {
+            name: session for name, session in self.server_sessions.items() if name != "builtin"
+        }
+
+        all_tools: set[str] = set()
         most_called_tool = ""
         most_called_count = 0
 
-        for server_session in self.server_sessions.values():
+        for server_session in mcp_server_sessions.values():
             for tool_name, tool_stats in server_session.tools.items():
                 all_tools.add(tool_name)
                 if tool_stats.calls > most_called_count:
@@ -892,7 +897,7 @@ class BaseTracker(ABC):
                     most_called_tool = f"{tool_name} ({tool_stats.calls} calls)"
 
         self.session.mcp_tool_calls.total_calls = sum(
-            ss.total_calls for ss in self.server_sessions.values()
+            ss.total_calls for ss in mcp_server_sessions.values()
         )
         self.session.mcp_tool_calls.unique_tools = len(all_tools)
         self.session.mcp_tool_calls.most_called = most_called_tool
