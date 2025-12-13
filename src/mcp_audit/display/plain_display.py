@@ -7,6 +7,7 @@ non-TTY environments like CI pipelines or log files.
 
 import time
 from datetime import datetime
+from typing import Optional
 
 from ..base_tracker import SCHEMA_VERSION
 from .base import DisplayAdapter
@@ -38,8 +39,8 @@ class PlainDisplay(DisplayAdapter):
         print("Tracking started. Press Ctrl+C to stop.")
         print()
 
-    def update(self, snapshot: DisplaySnapshot) -> None:
-        """Print progress update (rate-limited)."""
+    def update(self, snapshot: DisplaySnapshot) -> Optional[str]:
+        """Print progress update (rate-limited). Returns None (no keyboard input)."""
         now = time.time()
         if now - self._last_print_time >= self._print_interval:
             self._last_print_time = now
@@ -49,6 +50,7 @@ class PlainDisplay(DisplayAdapter):
                 f"MCP calls: {snapshot.total_tool_calls} | "
                 f"Cost (USD): ${snapshot.cost_estimate:.4f}"
             )
+        return None
 
     def on_event(self, tool_name: str, tokens: int, timestamp: datetime) -> None:
         """Print each tool call."""

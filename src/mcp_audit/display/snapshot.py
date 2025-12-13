@@ -7,7 +7,7 @@ allowing the display layer to be completely decoupled from tracking logic.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -153,6 +153,15 @@ class DisplaySnapshot:
     # Tokens wasted on unused zombie tools
     zombie_context_tax: int = 0
 
+    # ========================================================================
+    # Smells Detection (v0.7.0 - task-105.2)
+    # ========================================================================
+
+    # Detected smells: tuple of (pattern, severity, tool, description)
+    # severity is "warning" or "info"
+    # tool is Optional[str] - None for session-level smells
+    detected_smells: Tuple[Tuple[str, str, Optional[str], str], ...] = field(default_factory=tuple)
+
     @classmethod
     def create(
         cls,
@@ -215,6 +224,8 @@ class DisplaySnapshot:
         static_cost_source: str = "none",
         static_cost_confidence: float = 0.0,
         zombie_context_tax: int = 0,
+        # Smells detection (v0.7.0 - task-105.2)
+        detected_smells: List[Tuple[str, str, Optional[str], str]] | None = None,
     ) -> "DisplaySnapshot":
         """Factory method to create a DisplaySnapshot with proper tuple conversion."""
         # Import version if not provided
@@ -289,4 +300,6 @@ class DisplaySnapshot:
             static_cost_source=static_cost_source,
             static_cost_confidence=static_cost_confidence,
             zombie_context_tax=zombie_context_tax,
+            # Smells detection (v0.7.0 - task-105.2)
+            detected_smells=tuple(detected_smells) if detected_smells else (),
         )

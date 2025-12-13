@@ -484,6 +484,38 @@ Examples:
         help="Output file (default: stdout)",
     )
 
+    # ========================================================================
+    # ui command (v0.7.0 - task-105.1)
+    # ========================================================================
+    ui_parser = subparsers.add_parser(
+        "ui",
+        help="Interactive session browser",
+        description="""
+Launch the interactive session browser TUI.
+
+Browse past sessions, filter by platform/date/cost, and view detailed
+session breakdowns.
+
+Keyboard shortcuts:
+  q          Quit
+  j/k        Navigate down/up
+  ENTER      View session details
+  /          Search sessions
+  f          Cycle platform filter
+  s          Cycle sort order
+  r          Refresh session list
+  ESC        Back / Cancel
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    ui_parser.add_argument(
+        "--theme",
+        choices=["auto", "dark", "light", "mocha", "latte", "hc-dark", "hc-light"],
+        default="auto",
+        help="Color theme (default: auto-detect)",
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -498,6 +530,8 @@ Examples:
         return cmd_tokenizer(args)
     elif args.command == "export":
         return cmd_export(args)
+    elif args.command == "ui":
+        return cmd_ui(args)
     else:
         parser.print_help()
         return 1
@@ -904,6 +938,16 @@ def _build_snapshot_from_session(
     total_tokens = session.token_usage.total_tokens
     mcp_tokens_percent = (total_mcp_tokens / total_tokens * 100) if total_tokens > 0 else 0.0
 
+    # ================================================================
+    # Smell detection (v0.7.0 - task-105.2)
+    # ================================================================
+    from .smells import SmellDetector
+
+    detector = SmellDetector()
+    smells = detector.analyze(session)
+    # Convert to tuple format: (pattern, severity, tool, description)
+    detected_smells = [(s.pattern, s.severity, s.tool, s.description) for s in smells]
+
     return DisplaySnapshot.create(
         project=session.project,
         platform=session.platform,
@@ -931,6 +975,8 @@ def _build_snapshot_from_session(
         message_count=session.message_count,
         cache_created_tokens=cache_created,
         cache_read_tokens=cache_read,
+        # Smell detection (v0.7.0 - task-105.2)
+        detected_smells=detected_smells,
     )
 
 
@@ -1457,13 +1503,37 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
 
     # Token Usage
     token_usage = session_data.get("token_usage", {})
+    duration_seconds = session.get("duration_seconds", 0)
+    total_tokens = token_usage.get("total_tokens", 0)
+    input_tokens = token_usage.get("input_tokens", 0)
+    cache_read = token_usage.get("cache_read_tokens", 0)
+
+    # Rate metrics (v0.7.0 - task-105.12)
+    tokens_rate = "—"
+    if duration_seconds > 0:
+        tokens_per_min = total_tokens / (duration_seconds / 60)
+        if tokens_per_min >= 1_000_000:
+            tokens_rate = f"{tokens_per_min / 1_000_000:.1f}M/min"
+        elif tokens_per_min >= 1_000:
+            tokens_rate = f"{tokens_per_min / 1_000:.0f}K/min"
+        else:
+            tokens_rate = f"{int(tokens_per_min)}/min"
+
+    # Cache hit ratio (v0.7.0 - task-105.13)
+    cache_hit_ratio = 0.0
+    denominator = cache_read + input_tokens
+    if denominator > 0:
+        cache_hit_ratio = cache_read / denominator
+
     lines.append("## Token Usage")
     lines.append("")
-    lines.append(f"- **Input Tokens**: {token_usage.get('input_tokens', 0):,}")
+    lines.append(f"- **Input Tokens**: {input_tokens:,}")
     lines.append(f"- **Output Tokens**: {token_usage.get('output_tokens', 0):,}")
-    lines.append(f"- **Cache Read**: {token_usage.get('cache_read_tokens', 0):,}")
+    lines.append(f"- **Total Tokens**: {total_tokens:,}")
+    lines.append(f"- **Token Rate**: {tokens_rate}")
+    lines.append(f"- **Cache Read**: {cache_read:,}")
     lines.append(f"- **Cache Created**: {token_usage.get('cache_created_tokens', 0):,}")
-    lines.append(f"- **Total Tokens**: {token_usage.get('total_tokens', 0):,}")
+    lines.append(f"- **Cache Hit Ratio**: {cache_hit_ratio:.1%} (token-based)")
     lines.append("")
 
     # Cost
@@ -1475,10 +1545,19 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
 
     # MCP Tool Usage
     mcp_summary = session_data.get("mcp_summary", {})
+    total_calls = mcp_summary.get("total_calls", 0)
+
+    # Call rate (v0.7.0 - task-105.12)
+    calls_rate = "—"
+    if duration_seconds > 0:
+        calls_per_min = total_calls / (duration_seconds / 60)
+        calls_rate = f"{calls_per_min:.1f}/min"
+
     lines.append("## MCP Tool Usage")
     lines.append("")
-    lines.append(f"- **Total MCP Calls**: {mcp_summary.get('total_calls', 0)}")
+    lines.append(f"- **Total MCP Calls**: {total_calls}")
     lines.append(f"- **Unique Tools**: {mcp_summary.get('unique_tools', 0)}")
+    lines.append(f"- **Call Rate**: {calls_rate}")
     lines.append(f"- **Most Called**: {mcp_summary.get('most_called', 'N/A')}")
     lines.append("")
 
@@ -1645,6 +1724,32 @@ def _format_duration(seconds: float) -> str:
     hours = int(minutes / 60)
     remaining_minutes = int(minutes % 60)
     return f"{hours}h {remaining_minutes}m"
+
+
+# ============================================================================
+# UI Command (v0.7.0 - task-105.1)
+# ============================================================================
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    """Launch interactive session browser."""
+    from .display.session_browser import SessionBrowser
+
+    theme = None if args.theme == "auto" else args.theme
+
+    try:
+        browser = SessionBrowser(theme=theme)
+        browser.run()
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    except ImportError as e:
+        print(f"Error: Missing dependency - {e}")
+        print("Install with: pip install mcp-audit")
+        return 1
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
 
 
 # ============================================================================
@@ -1948,7 +2053,7 @@ def detect_project_name() -> str:
         ├── .bare/          # Bare git repository
         └── main/           # Working directory (worktree)
 
-    In this case, returns "project-name" instead of just "main".
+    Returns "project-name/main" for worktree setups to give full context.
     """
     cwd = Path.cwd()
     current_name = cwd.name
@@ -1962,12 +2067,18 @@ def detect_project_name() -> str:
         # Check for .bare directory in parent (bare repo pattern)
         bare_dir = parent / ".bare"
         if bare_dir.exists() and bare_dir.is_dir():
-            return parent.name
+            return f"{parent.name}/{current_name}"
 
         # Check if .git is a file (not directory) - indicates worktree
         git_path = cwd / ".git"
         if git_path.exists() and git_path.is_file():
-            return parent.name
+            return f"{parent.name}/{current_name}"
+
+        # Even without .bare or .git file, if parent has a meaningful name
+        # (not a system directory), include it for context
+        system_dirs = {"users", "home", "var", "tmp", "opt", "usr"}
+        if parent.name.lower() not in system_dirs and parent.name:
+            return f"{parent.name}/{current_name}"
 
     return current_name
 

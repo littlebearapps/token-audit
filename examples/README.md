@@ -30,7 +30,7 @@ session-{YYYYMMDD}T{HHMMSS}-{random}.jsonl
 Each line is a self-contained JSON event:
 
 ```json
-{"schema_version":"1.0.0","event_type":"token_usage","timestamp":"...","data":{...}}
+{"schema_version":"1.6.0","event_type":"token_usage","timestamp":"...","data":{...}}
 ```
 
 ## Event Types

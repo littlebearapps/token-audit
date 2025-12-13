@@ -1,10 +1,10 @@
-# MCP Audit v1.5.0 Session Schema
+# MCP Audit v1.6.0 Session Schema
 
-**Version**: 1.5.0
-**Last Updated**: 2025-12-11
-**Status**: Active (shipped in v0.5.0)
+**Version**: 1.6.0
+**Last Updated**: 2025-12-13
+**Status**: Active (shipped in v0.6.0)
 
-This document defines the v1.5.0 session JSON schema, extending v1.4.0 with smells and data quality metadata.
+This document defines the v1.6.0 session JSON schema, extending v1.5.0 with multi-model tracking, dynamic pricing, and static cost foundation.
 
 ---
 

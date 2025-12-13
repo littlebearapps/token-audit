@@ -1,6 +1,6 @@
 # Features & Benefits by Audience
 
-MCP Audit v0.6.0 - Features mapped to benefits for each target audience.
+MCP Audit v0.7.0 - Features mapped to benefits for each target audience.
 
 ---
 
@@ -24,6 +24,73 @@ MCP Audit v0.6.0 - Features mapped to benefits for each target audience.
 | **Multi-model tracking** (v0.6.0) | Track model switches mid-session | Per-model cost breakdown |
 | **Dynamic pricing** (v0.6.0) | Auto-fetch current pricing | Always accurate costs |
 | **Context tax tracking** (v0.6.0) | Measure MCP schema overhead | See static context cost per server |
+| **Rate metrics** (v0.7.0) | See tokens/min and calls/min | Monitor session velocity |
+| **Cache hit ratio** (v0.7.0) | Token-based cache utilization | Understand cache effectiveness |
+| **Unique tools count** (v0.7.0) | Tool diversity in MCP panel | See tool spread at a glance |
+
+---
+
+## v0.7.0 Features: UI Layer
+
+v0.7.0 introduces the "UI Layer" — enhanced TUI metrics for monitoring session velocity and cache effectiveness.
+
+### Rate Metrics
+
+Real-time tokens/min and calls/min in the Token Usage panel:
+
+```
+Token Usage
+──────────────────────────────────────
+Input:       45,231    Output:    12,345
+Cached:     125,000    Total:    182,576
+Token Rate: 15.2K/min  Call Rate: 3.2/min
+```
+
+- **Tokens/min**: Shows session velocity — how fast you're consuming context
+- **Calls/min**: Shows tool activity rate — higher rates may indicate chatty patterns
+- Formats large rates automatically (K/min, M/min)
+
+### Cache Hit Ratio
+
+Token-based cache utilization (distinct from cost-based efficiency):
+
+```
+Cache Efficiency: 11.9% (cost-based)
+Cache Hit:        95.2% (token-based)
+```
+
+| Metric | Formula | What It Shows |
+|--------|---------|---------------|
+| Cache Efficiency | Cost savings % | How much money cache saves |
+| Cache Hit Ratio | `cache_read / (cache_read + input)` | What % of input comes from cache |
+
+**Why both?** High cache hit doesn't always mean high cost savings (depends on pricing). Both metrics together give the full picture.
+
+### Unique Tools Count
+
+MCP Servers panel now shows tool diversity:
+
+```
+MCP Servers (4 servers, 12 tools, 47 calls)
+```
+
+- **Servers**: How many MCP servers are active
+- **Unique tools**: Tool diversity (vs. relying on same tools repeatedly)
+- **Total calls**: Overall MCP activity
+
+### AI Export Enhancements
+
+Rate metrics and cache hit ratio are now included in AI exports:
+
+```bash
+mcp-audit export ai-prompt
+```
+
+The export includes:
+- Token rate and call rate metrics
+- Cache hit ratio (token-based)
+- Unique tools count
+- All existing metrics and analysis
 
 ---
 
@@ -122,7 +189,7 @@ Every session now includes accuracy metadata:
 |----------------|-------------|-----------|
 | `exact` | Native platform tokens | Claude Code |
 | `estimated` | Tokenizer-based estimation | Codex CLI, Gemini CLI |
-| `calls-only` | Only call counts, no tokens | Future Ollama CLI |
+| `calls-only` | Only call counts, no tokens | Ollama CLI (v1.1.0) |
 
 ---
 
@@ -564,4 +631,4 @@ mcp-audit report ~/.mcp-audit/sessions/
 
 ---
 
-*v0.6.0 | Schema v1.6.0 | MIT License*
+*v0.7.0 | Schema v1.6.0 | MIT License*

@@ -14,7 +14,9 @@ mcp-audit tracks token usage and MCP server efficiency across multiple AI coding
 | Codex CLI | ✅ Native | ✅ Native (turn-level) | ✅ **Estimated** (v0.4.0) | ✅ `reasoning_output_tokens` | Args + results | ✅ Calls only |
 | Gemini CLI | ✅ Native | ✅ Native | ✅ **Estimated** (v0.4.0) | ✅ `thoughts` | Args + results | ✅ Calls only |
 
-**New in v0.4.0**: Token estimation for MCP tools on Codex CLI and Gemini CLI using platform-native tokenizers (~99-100% accuracy).
+**Token Estimation (v0.4.0+)**: MCP tools on Codex CLI and Gemini CLI use platform-native tokenizers (~99-100% accuracy).
+
+**New in v0.7.0**: Rate metrics (tokens/min, calls/min) and cache hit ratio tracking across all platforms.
 
 ---
 

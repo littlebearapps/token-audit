@@ -4,10 +4,10 @@ This document outlines the planned development direction for MCP Audit. For comp
 
 ## Current Status
 
-**Version**: v0.6.0
-**Stage**: Multi-Model Intelligence — Per-Model Tracking, Dynamic Pricing, Schema v1.6.0
+**Version**: v0.7.0
+**Stage**: UI Layer — Rate Metrics, Cache Hit Ratio, Unique Tools Display
 
-MCP Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v0.6.0 introduces multi-model per-session tracking, dynamic pricing via LiteLLM API, and the foundation for static cost tracking.
+MCP Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v0.7.0 adds real-time rate metrics (tokens/min, calls/min), cache hit ratio tracking, and unique tools display in the TUI.
 
 ---
 
@@ -43,7 +43,7 @@ Multi-model tracking and dynamic pricing infrastructure.
 - ✅ **Static Cost Foundation** — Infrastructure for MCP schema "context tax" (full impl deferred)
 - ✅ **Schema v1.6.0** — `models_used`, `model_usage`, `pricing_source` blocks
 
-**Note:** Ollama CLI Adapter moved to v0.6.1 (requires API proxy approach).
+**Note:** Ollama CLI Adapter moved to v1.1.0 post-1.0 (requires API proxy approach).
 
 **Success Metrics:**
 - ✅ Sessions with model switches show per-model breakdown
@@ -54,40 +54,21 @@ Multi-model tracking and dynamic pricing infrastructure.
 
 ---
 
-## v0.6.1 — Ollama CLI Support
-
-**Theme:** "Local Model Tracking"
-
-Adds support for Ollama CLI via API proxy approach.
-
-- **Ollama CLI Adapter** — Local model tracking via API proxy interception
-- **Calls-Only Tracking** — Track tool calls (no per-tool tokens from Ollama)
-- **Zero-Cost Sessions** — Sessions with $0 cost (local models)
-
-**Success Metrics:**
-- Ollama users can track local model sessions
-- 4 platforms supported: Claude Code, Codex CLI, Gemini CLI, Ollama CLI
-
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/7)
-
----
-
-## v0.7.0 — UI Layer
+## ✅ v0.7.0 — UI Layer (Released)
 
 **Theme:** "Explore Your Data"
 
-Interactive session exploration and enhanced TUI features.
+Enhanced TUI metrics and display improvements.
 
-- **TUI Session Browser** — `mcp-audit ui` command for exploring past sessions
-- **Session Pinning & Sorting** — Pin favorites, sort by date/cost/duration
-- **Accuracy Display** — Visual indicators for exact vs estimated data
-- **Smells Panel** — Real-time smell detection in live TUI
-- **TUI Keybindings** — Comprehensive keyboard navigation
+- ✅ **Rate Metrics** — Real-time tokens/min and calls/min in Token Usage panel
+- ✅ **Cache Hit Ratio** — Token-based cache utilization (distinct from cost-based efficiency)
+- ✅ **Unique Tools Count** — MCP Servers panel shows tool diversity
+- ✅ **AI Export Enhancements** — Rate metrics and cache hit included in exports
 
 **Success Metrics:**
-- Users can browse and explore past sessions interactively
-- Pinned servers highlighted in live tracking
-- Clear visual distinction between exact and estimated data
+- ✅ Users can see session velocity at a glance
+- ✅ Cache effectiveness clearly distinguished from cost efficiency
+- ✅ Tool diversity visible in MCP Servers panel
 
 ➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/3)
 
@@ -164,22 +145,39 @@ The official stable release with full marketing launch.
 
 ## Post-v1.0 Vision
 
-### v1.1+ — Developer Insight
+### v1.1.0 — Ollama CLI Support
+
+**Theme:** "Local Model Tracking"
+
+Adds support for Ollama CLI via API proxy approach.
+
+- **Ollama API Proxy** — `mcp-audit ollama-proxy` command for local model tracking
+- **Exact Token Counts** — Track via `prompt_eval_count` and `eval_count`
+- **Zero-Cost Sessions** — Sessions with $0 cost (local models)
+- **Tool Call Tracking** — Capture Ollama's native tool format
+
+**Success Metrics:**
+- Ollama users can track local model sessions via proxy
+- 4 platforms supported: Claude Code, Codex CLI, Gemini CLI, Ollama CLI
+
+➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/10)
+
+### v1.2+ — Developer Insight
 - Context window tracking (per-turn token load)
 - TUI: Tool Detail mode
 - Platform capability warnings
 
-### v1.2+ — Payload Analysis
+### v1.3+ — Payload Analysis
 - Dynamic payload heatmap
 - Full schema tokenizer
 - Description density scoring
 
-### v1.3+ — Cross-Model Analysis
+### v1.4+ — Cross-Model Analysis
 - Model behavior differences
 - Tool families/categories
 - Baseline session support
 
-### v1.4+ — Comparison Suite
+### v1.5+ — Comparison Suite
 - Session drift detection
 - Enhanced TUI comparison mode
 

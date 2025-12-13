@@ -10,7 +10,7 @@ Use create_display() factory function for automatic mode selection.
 """
 
 import sys
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from .base import DisplayAdapter
 from .null_display import NullDisplay
@@ -94,4 +94,15 @@ __all__ = [
     "create_display",
     # Type
     "DisplayMode",
+    # Session browser (v0.7.0 - task-105.1, lazy import)
+    "SessionBrowser",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy import for optional dependencies."""
+    if name == "SessionBrowser":
+        from .session_browser import SessionBrowser
+
+        return SessionBrowser
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -63,6 +63,8 @@ mcp-audit/
 │   ├── session_manager.py      # Session management
 │   ├── storage.py              # Session storage and indexing
 │   ├── pricing_config.py       # Pricing configuration
+│   ├── pricing_api.py          # LiteLLM dynamic pricing (v0.6.0)
+│   ├── schema_analyzer.py      # MCP schema analysis (v0.6.0)
 │   ├── normalization.py        # Data normalization
 │   ├── privacy.py              # Privacy utilities
 │   ├── smells.py               # Smell detection engine (v0.5.0)

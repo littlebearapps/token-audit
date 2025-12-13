@@ -561,7 +561,11 @@ class ClaudeCodeAdapter(BaseTracker):
                     if now - self._last_display_update >= 0.5:
                         self._last_display_update = now
                         snapshot = self._build_display_snapshot()
-                        display.update(snapshot)
+                        action = display.update(snapshot)
+                        # Handle [Q] quit keybinding (v0.7.0 - task-105.8)
+                        if action == "quit":
+                            self.session.source_files = sorted(self._active_source_files)
+                            break
 
                 # Sleep briefly
                 time.sleep(0.2)

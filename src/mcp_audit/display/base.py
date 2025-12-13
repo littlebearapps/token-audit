@@ -7,7 +7,7 @@ enabling multiple display backends (Rich TUI, plain text, silent mode).
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Optional
 
 if TYPE_CHECKING:
     from .snapshot import DisplaySnapshot
@@ -36,11 +36,20 @@ class DisplayAdapter(ABC):
         pass
 
     @abstractmethod
-    def update(self, snapshot: "DisplaySnapshot") -> None:
+    def update(self, snapshot: "DisplaySnapshot") -> Optional[str]:
         """Update display with new snapshot.
 
         Args:
             snapshot: Updated snapshot with current metrics
+
+        Returns:
+            Optional action string if user interaction occurred:
+            - "ai_export": User requested AI export
+            - "quit": User requested quit
+            - None: No action (default)
+
+        Note:
+            Implementations that don't support keyboard input should return None.
         """
         pass
 

@@ -11,6 +11,7 @@ terminals with limited Unicode support.
 import contextlib
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 from typing import Deque, List, Optional, Tuple
 
 from rich import box
@@ -24,6 +25,7 @@ from rich.text import Text
 from ..base_tracker import SCHEMA_VERSION
 from .ascii_mode import ascii_emoji, get_box_style, is_ascii_mode
 from .base import DisplayAdapter
+from .keyboard import check_keypress, disable_raw_mode, enable_raw_mode
 from .snapshot import DisplaySnapshot
 from .theme_detect import get_active_theme
 from .themes import _ThemeType
@@ -65,9 +67,14 @@ class RichDisplay(DisplayAdapter):
         self.ascii_mode: bool = is_ascii_mode()
         self.box_style: box.Box = get_box_style()
 
+        # Keyboard support (v0.7.0 - task-105.8)
+        self._raw_mode_enabled: bool = False
+
     def start(self, snapshot: DisplaySnapshot) -> None:
         """Start the live display."""
         self._current_snapshot = snapshot
+        # Enable raw mode for keyboard capture (v0.7.0 - task-105.8)
+        self._raw_mode_enabled = enable_raw_mode()
         self.live = Live(
             self._build_layout(snapshot),
             console=self.console,
@@ -76,9 +83,26 @@ class RichDisplay(DisplayAdapter):
         )
         self.live.start()
 
-    def update(self, snapshot: DisplaySnapshot) -> None:
-        """Update display with new snapshot."""
+    def update(self, snapshot: DisplaySnapshot) -> Optional[str]:
+        """Update display with new snapshot.
+
+        Returns:
+            Optional action string if key pressed:
+            - "ai_export": User pressed [A] for AI export
+            - "quit": User pressed [Q] to quit
+            - None: No action
+        """
         self._current_snapshot = snapshot
+
+        # Check for keypresses (non-blocking) - v0.7.0 task-105.8
+        if self._raw_mode_enabled:
+            key = check_keypress(timeout=0.0)  # Non-blocking
+            if key in ("a", "A"):
+                self._export_live_ai_prompt()
+                return "ai_export"
+            elif key in ("q", "Q"):
+                return "quit"
+
         if self.live:
             try:
                 self.live.update(self._build_layout(snapshot))
@@ -92,6 +116,7 @@ class RichDisplay(DisplayAdapter):
                         file=sys.stderr,
                     )
                     self._fallback_warned = True
+        return None
 
     def on_event(self, tool_name: str, tokens: int, timestamp: datetime) -> None:
         """Add event to recent activity feed."""
@@ -99,6 +124,10 @@ class RichDisplay(DisplayAdapter):
 
     def stop(self, snapshot: DisplaySnapshot) -> None:
         """Stop live display and show final summary."""
+        # Disable raw mode for keyboard capture (v0.7.0 - task-105.8)
+        if self._raw_mode_enabled:
+            disable_raw_mode()
+            self._raw_mode_enabled = False
         if self.live:
             with contextlib.suppress(Exception):
                 self.live.stop()
@@ -109,12 +138,24 @@ class RichDisplay(DisplayAdapter):
         """Build the dashboard layout."""
         layout = Layout()
 
-        # Build layout with conditional context tax panel
+        # Build layout with conditional panels
+        # Header size=7 to accommodate context tax line (v0.7.0 - task-105.9)
+        # Tokens size=9 to accommodate rate metrics row (v0.7.0 - task-105.12)
         panels = [
-            Layout(self._build_header(snapshot), name="header", size=6),
-            Layout(self._build_tokens(snapshot), name="tokens", size=8),
-            Layout(self._build_tools(snapshot), name="tools", size=12),
+            Layout(self._build_header(snapshot), name="header", size=7),
+            Layout(self._build_tokens(snapshot), name="tokens", size=9),
         ]
+
+        # Tools and Smells: side-by-side if smells detected, otherwise tools only
+        if snapshot.detected_smells:
+            tools_and_smells = Layout()
+            tools_and_smells.split_row(
+                Layout(self._build_tools(snapshot), name="tools", ratio=3),
+                Layout(self._build_smells(snapshot), name="smells", ratio=2),
+            )
+            panels.append(Layout(tools_and_smells, name="tools_smells", size=12))
+        else:
+            panels.append(Layout(self._build_tools(snapshot), name="tools", size=12))
 
         # Add context tax panel if static_cost data is available
         if snapshot.static_cost_total > 0:
@@ -191,9 +232,29 @@ class RichDisplay(DisplayAdapter):
         if snapshot.files_monitored > 0:
             files_emoji = ascii_emoji("📁")
             git_info.append(f"  {files_emoji} {snapshot.files_monitored} files")
+        # Session ID (v0.7.0 - task-105.11)
+        if snapshot.session_dir:
+            session_id = Path(snapshot.session_dir).name
+            display_id = session_id[:20] + "..." if len(session_id) > 20 else session_id
+            git_info.append(f"  Session: {display_id}")
 
         if git_info:
             header_text.append(f"\n{''.join(git_info)}", style=self.theme.dim_text)
+
+        # Static Cost & Zombie Tools in header (v0.7.0 - task-105.9)
+        context_metrics = []
+        if snapshot.static_cost_total > 0:
+            context_metrics.append(
+                f"Context Tax: {self._format_tokens(snapshot.static_cost_total)}"
+            )
+        if snapshot.zombie_context_tax > 0:
+            warning_emoji = ascii_emoji("⚠")
+            context_metrics.append(
+                f"{warning_emoji} Zombie Tax: {self._format_tokens(snapshot.zombie_context_tax)}"
+            )
+
+        if context_metrics:
+            header_text.append(f"\n{' | '.join(context_metrics)}", style=self.theme.warning)
 
         return Panel(header_text, border_style=self.theme.header_border, box=self.box_style)
 
@@ -277,15 +338,40 @@ class RichDisplay(DisplayAdapter):
             savings_display,
         )
 
-        # Row 4: Messages | Built-in Tools
+        # Row 4: Messages | Built-in Tools | Cache Hit Ratio (v0.7.0 - task-105.13)
         builtin_str = (
             f"{snapshot.builtin_tool_calls} ({self._format_tokens(snapshot.builtin_tool_tokens)})"
         )
+        # Cache hit ratio: what % of input came from cache (token-based, not cost-based)
+        cache_hit_ratio = 0.0
+        denominator = snapshot.cache_read_tokens + snapshot.input_tokens
+        if denominator > 0:
+            cache_hit_ratio = snapshot.cache_read_tokens / denominator
         table.add_row(
             "Messages:",
             f"{snapshot.message_count}",
             "Built-in Tools:",
             builtin_str,
+            "Cache Hit:",
+            f"{cache_hit_ratio:.1%}",
+        )
+
+        # Row 5: Rate metrics (v0.7.0 - task-105.12)
+        # Only meaningful after ~30s, show actual rate not extrapolated for short sessions
+        if snapshot.duration_seconds > 0:
+            tokens_per_min = snapshot.total_tokens / (snapshot.duration_seconds / 60)
+            calls_per_min = snapshot.total_tool_calls / (snapshot.duration_seconds / 60)
+            # Format rate: use K/M suffix for tokens
+            tokens_rate_str = f"{self._format_tokens(int(tokens_per_min))}/min"
+            calls_rate_str = f"{calls_per_min:.1f}/min"
+        else:
+            tokens_rate_str = "—"
+            calls_rate_str = "—"
+        table.add_row(
+            "Token Rate:",
+            tokens_rate_str,
+            "Call Rate:",
+            calls_rate_str,
             "",
             "",
         )
@@ -415,9 +501,9 @@ class RichDisplay(DisplayAdapter):
                 style=f"{self.theme.dim_text} italic",
             )
 
-        # Title includes server count
+        # Title includes server count and unique tools (v0.7.0 - task-105.13)
         num_servers = len(snapshot.server_hierarchy)
-        title = f"MCP Servers Usage ({num_servers} servers, {snapshot.total_tool_calls} calls)"
+        title = f"MCP Servers ({num_servers} servers, {snapshot.unique_tools} tools, {snapshot.total_tool_calls} calls)"
 
         return Panel(content, title=title, border_style=self.theme.mcp_border, box=self.box_style)
 
@@ -502,6 +588,47 @@ class RichDisplay(DisplayAdapter):
             box=self.box_style,
         )
 
+    def _build_smells(self, snapshot: DisplaySnapshot) -> Panel:
+        """Build Smells panel showing detected efficiency issues (v0.7.0 - task-105.2)."""
+        content = Text()
+
+        if not snapshot.detected_smells:
+            content.append("No smells detected", style=f"{self.theme.dim_text} italic")
+        else:
+            for pattern, severity, tool, description in snapshot.detected_smells:
+                # Severity color and emoji
+                if severity == "warning":
+                    emoji = ascii_emoji("\u26a0")  # Warning triangle
+                    style = self.theme.warning
+                else:  # "info"
+                    emoji = ascii_emoji("\u2139")  # Info circle
+                    style = self.theme.info
+
+                content.append(f"{emoji} ", style=f"bold {style}")
+                content.append(f"{pattern}", style=f"bold {style}")
+                if tool:
+                    # Truncate long tool names
+                    display_tool = tool[:14] + ".." if len(tool) > 16 else tool
+                    content.append(f" ({display_tool})", style=self.theme.dim_text)
+                content.append("\n")
+                # Show truncated description
+                desc = description[:40] + ".." if len(description) > 42 else description
+                content.append(f"   {desc}\n", style=self.theme.dim_text)
+
+        # Title with count badge
+        smell_count = len(snapshot.detected_smells)
+        title = f"Smells ({smell_count})" if smell_count > 0 else "Smells"
+
+        # Use warning border if smells exist, dim otherwise
+        border_style = self.theme.warning if smell_count > 0 else self.theme.dim_text
+
+        return Panel(
+            content,
+            title=title,
+            border_style=border_style,
+            box=self.box_style,
+        )
+
     def _build_activity(self) -> Panel:
         """Build recent activity panel."""
         if not self.recent_events:
@@ -525,10 +652,132 @@ class RichDisplay(DisplayAdapter):
             box=self.box_style,
         )
 
+    def _export_live_ai_prompt(self) -> None:
+        """Export AI analysis prompt for current live session (v0.7.0 - task-105.8)."""
+        if not self._current_snapshot:
+            return
+
+        snapshot = self._current_snapshot
+
+        # Generate markdown prompt
+        lines = [
+            "# Live Session Analysis Request",
+            "",
+            "Please analyze this live MCP Audit session data:",
+            "",
+            "## Session Overview",
+            f"- **Platform**: {snapshot.platform}",
+            f"- **Project**: {snapshot.project}",
+            f"- **Duration**: {self._format_duration_human(snapshot.duration_seconds)}",
+            f"- **Tracking Mode**: {snapshot.tracking_mode}",
+        ]
+
+        # Model info
+        if snapshot.is_multi_model and snapshot.models_used:
+            lines.append(f"- **Models**: {', '.join(snapshot.models_used)}")
+        elif snapshot.model_name:
+            lines.append(f"- **Model**: {snapshot.model_name}")
+
+        # Rate metrics (v0.7.0 - task-105.12)
+        tokens_rate = "—"
+        calls_rate = "—"
+        if snapshot.duration_seconds > 0:
+            tokens_per_min = snapshot.total_tokens / (snapshot.duration_seconds / 60)
+            calls_per_min = snapshot.total_tool_calls / (snapshot.duration_seconds / 60)
+            tokens_rate = f"{self._format_tokens(int(tokens_per_min))}/min"
+            calls_rate = f"{calls_per_min:.1f}/min"
+
+        # Cache hit ratio (v0.7.0 - task-105.13)
+        cache_hit_ratio = 0.0
+        denominator = snapshot.cache_read_tokens + snapshot.input_tokens
+        if denominator > 0:
+            cache_hit_ratio = snapshot.cache_read_tokens / denominator
+
+        lines.extend(
+            [
+                "",
+                "## Token Usage",
+                f"- **Input Tokens**: {snapshot.input_tokens:,}",
+                f"- **Output Tokens**: {snapshot.output_tokens:,}",
+                f"- **Total Tokens**: {snapshot.total_tokens:,}",
+                f"- **Token Rate**: {tokens_rate}",
+                f"- **Cache Read**: {snapshot.cache_read_tokens:,}",
+                f"- **Cache Created**: {snapshot.cache_created_tokens:,}",
+                f"- **Cache Hit Ratio**: {cache_hit_ratio:.1%} (token-based)",
+                f"- **Cache Efficiency**: {snapshot.cache_efficiency:.1%} (cost-based)",
+                "",
+                "## Cost",
+                f"- **Cost w/ Cache**: ${snapshot.cost_estimate:.4f}",
+                f"- **Cost w/o Cache**: ${snapshot.cost_no_cache:.4f}",
+                f"- **Cache Savings**: ${snapshot.cache_savings:.4f} ({snapshot.savings_percent:.1f}%)",
+                "",
+                "## MCP Tool Usage",
+                f"- **Total Calls**: {snapshot.total_tool_calls}",
+                f"- **Unique Tools**: {snapshot.unique_tools}",
+                f"- **Call Rate**: {calls_rate}",
+                f"- **MCP Token Share**: {snapshot.mcp_tokens_percent:.1f}%",
+            ]
+        )
+
+        # Server breakdown
+        if snapshot.server_hierarchy:
+            lines.append("\n### By Server:")
+            for server_data in snapshot.server_hierarchy[:5]:
+                server_name, calls, tokens, avg, _ = server_data
+                lines.append(f"- **{server_name}**: {calls} calls, {self._format_tokens(tokens)}")
+
+        # Smells
+        if snapshot.detected_smells:
+            lines.append("\n## Detected Issues (Smells)")
+            for pattern, severity, tool, desc in snapshot.detected_smells:
+                tool_info = f" ({tool})" if tool else ""
+                lines.append(f"- **[{severity.upper()}] {pattern}**{tool_info}: {desc}")
+
+        # Context tax
+        if snapshot.static_cost_total > 0:
+            lines.extend(
+                [
+                    "",
+                    "## Context Tax",
+                    f"- **Total Schema Tokens**: {snapshot.static_cost_total:,}",
+                    f"- **Source**: {snapshot.static_cost_source} ({snapshot.static_cost_confidence * 100:.0f}% confidence)",
+                ]
+            )
+            if snapshot.zombie_context_tax > 0:
+                lines.append(f"- **Zombie Tax (unused tools)**: {snapshot.zombie_context_tax:,}")
+
+        # Data quality
+        lines.extend(
+            [
+                "",
+                "## Data Quality",
+                f"- **Accuracy Level**: {snapshot.accuracy_level}",
+                f"- **Token Source**: {snapshot.token_source}",
+                f"- **Confidence**: {snapshot.data_quality_confidence * 100:.0f}%",
+                "",
+                "## Questions",
+                "1. Is this session's token usage efficient so far?",
+                "2. Are there any concerning patterns in the MCP tool usage?",
+                "3. What optimizations could reduce costs?",
+                "4. Are the detected smells actionable?",
+            ]
+        )
+
+        output = "\n".join(lines)
+
+        # Try to copy to clipboard (macOS)
+        try:
+            import subprocess
+
+            subprocess.run(["pbcopy"], input=output.encode(), check=True)
+        except Exception:
+            pass  # Silently fail if clipboard not available
+
     def _build_footer(self) -> Text:
         """Build footer with instructions."""
+        # v0.7.0 - Added keybindings (task-105.8)
         return Text(
-            "Press Ctrl+C to stop and save session",
+            "[A] Ask AI  [Q] Quit  Ctrl+C to stop and save",
             style=f"{self.theme.dim_text} italic",
             justify="center",
         )

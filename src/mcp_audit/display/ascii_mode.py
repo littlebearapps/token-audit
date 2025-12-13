@@ -5,7 +5,7 @@ in environments that don't support Unicode properly.
 """
 
 import os
-from typing import Dict
+from typing import Dict, List, Tuple
 
 from rich import box
 
@@ -38,7 +38,15 @@ EMOJI_TO_ASCII: Dict[str, str] = {
     "🌿": "branch:",
     "📁": "files:",
     "↺": "(sync)",
+    # Accuracy indicators (v0.7.0 - task-105.5)
+    "✓": "[ok]",
+    "~": "[~]",
+    "?": "[?]",
 }
+
+# Histogram block characters for token distribution (v0.7.0 - task-105.7)
+HISTOGRAM_BLOCKS = " ▁▂▃▄▅▆▇█"
+HISTOGRAM_ASCII = " _.-=+*#@"
 
 
 def ascii_emoji(emoji: str) -> str:
@@ -75,3 +83,83 @@ def format_with_emoji(emoji: str, text: str) -> str:
     else:
         # Unicode mode - emoji with space
         return f"{prefix} {text}"
+
+
+def accuracy_indicator(accuracy_level: str) -> Tuple[str, str]:
+    """Get accuracy icon and color style for given accuracy level.
+
+    Args:
+        accuracy_level: One of "exact", "estimated", or "calls-only"
+
+    Returns:
+        Tuple of (icon, color_style) for use with Rich styling.
+        Icon will be ASCII equivalent if ASCII mode is enabled.
+
+    v0.7.0 - task-105.5
+    """
+    indicators = {
+        "exact": ("✓", "green"),
+        "estimated": ("~", "yellow"),
+        "calls-only": ("?", "dim"),
+    }
+    icon, color = indicators.get(accuracy_level, ("?", "dim"))
+    return (ascii_emoji(icon), color)
+
+
+def compute_percentile(values: List[int], percentile: float) -> int:
+    """Compute percentile from a list of values.
+
+    Args:
+        values: List of numeric values
+        percentile: Percentile to compute (0-100)
+
+    Returns:
+        Value at the given percentile, or 0 if list is empty
+
+    v0.7.0 - task-105.7
+    """
+    if not values:
+        return 0
+    sorted_vals = sorted(values)
+    idx = int(len(sorted_vals) * percentile / 100)
+    return sorted_vals[min(idx, len(sorted_vals) - 1)]
+
+
+def generate_histogram(values: List[int], buckets: int = 8) -> str:
+    """Generate Unicode block histogram from token values.
+
+    Args:
+        values: List of token counts (one per call)
+        buckets: Number of histogram buckets (default 8)
+
+    Returns:
+        String of histogram block characters representing distribution.
+        Uses ASCII fallback if ASCII mode is enabled.
+
+    v0.7.0 - task-105.7
+    """
+    if not values:
+        return " " * buckets
+
+    min_val, max_val = min(values), max(values)
+    if min_val == max_val:
+        # All values same - show mid-height bars
+        blocks = HISTOGRAM_ASCII if is_ascii_mode() else HISTOGRAM_BLOCKS
+        return blocks[4] * buckets
+
+    # Count values per bucket
+    bucket_counts = [0] * buckets
+    bucket_size = (max_val - min_val) / buckets
+    for v in values:
+        bucket_idx = min(int((v - min_val) / bucket_size), buckets - 1)
+        bucket_counts[bucket_idx] += 1
+
+    # Normalize to block heights (0-8)
+    max_count = max(bucket_counts) or 1
+    blocks = HISTOGRAM_ASCII if is_ascii_mode() else HISTOGRAM_BLOCKS
+    result = ""
+    for count in bucket_counts:
+        height = int(count / max_count * 8)
+        result += blocks[height]
+
+    return result

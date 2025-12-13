@@ -91,19 +91,19 @@ A real-time MCP token profiler designed to help you understand exactly where you
 - Flags context bloat and schema overhead ("context tax")
 - Detects early auto-compaction triggers
 - Highlights payload spikes and chatty tools
-- **Smell Detection:** 5 efficiency anti-patterns (HIGH_VARIANCE, CHATTY, etc.)
-- **Zombie Tools:** Finds unused MCP tools wasting schema tokens
+- Smell Detection: 5 efficiency anti-patterns (HIGH_VARIANCE, CHATTY, etc.)
+- Zombie Tools: Finds unused MCP tools wasting schema tokens
 
 ### 📊 Analysis & Reporting
 - Generates post-session summaries for deeper optimisation
 - Supports multi-session comparisons (aggregation mode)
-- **AI Export:** Export sessions for AI assistant analysis
-- **Data Quality:** Clear accuracy labels (exact/estimated/calls-only)
+- AI Export: Export sessions for AI assistant analysis
+- Data Quality: Clear accuracy labels (exact/estimated/calls-only)
 
-### 💰 Cost Intelligence (v0.6.0)
-- **Multi-Model Tracking:** Per-model token/cost breakdown when switching models mid-session
-- **Dynamic Pricing:** Auto-fetch current pricing for 2,000+ models via LiteLLM API
-- **Context Tax:** Track MCP schema overhead per server
+### 💰 Cost Intelligence
+- Multi-Model Tracking: Per-model token/cost breakdown when switching models mid-session
+- Dynamic Pricing: Auto-fetch current pricing for 2,000+ models via LiteLLM API
+- Context Tax: Track MCP schema overhead per server
 
 ### 🔒 Privacy & Integration
 
@@ -150,12 +150,19 @@ It turns raw MCP telemetry into actionable insights you can use to optimise your
 
 ---
 
-## 🚀 What's New (v0.6.0)
+## 🚀 What's New (v0.7.0)
 
-- **Multi-Model Per-Session Tracking:** Sessions that switch between models now show per-model token/cost breakdown.
-- **Dynamic Pricing via LiteLLM:** Auto-fetch current pricing for 2,000+ models with 24h caching.
-- **Schema v1.6.0:** New `models_used`, `model_usage`, and `pricing_source` fields for multi-model intelligence.
-- **Static Cost Foundation:** Infrastructure for tracking MCP schema overhead ("context tax").
+**TUI Session Browser** — New `mcp-audit ui` command for exploring past sessions:
+- Browse, filter, and search sessions across all platforms
+- Pin important sessions for quick access
+- Sort by date, cost, duration, or tool count
+- Full keyboard navigation with help overlay (`?`)
+
+**Live TUI Enhancements:**
+- **Rate Metrics:** Real-time tokens/min and calls/min — see session velocity at a glance
+- **Cache Hit Ratio:** Token-based cache utilization distinct from cost efficiency
+- **Smells Panel:** Real-time efficiency issue detection during tracking
+- **Unique Tools Count:** Tool diversity in MCP Servers panel
 
 See the [Changelog](https://github.com/littlebearapps/mcp-audit/blob/main/CHANGELOG.md) for full version history.
 
@@ -231,7 +238,7 @@ Now that you're collecting telemetry, read [What to Look For](#-what-to-look-for
 | **Claude Code** | **Native** (100%) | Full (Per-Tool) | Shows exact server-side usage. |
 | **Codex CLI** | **Estimated** (99%+) | Session + Tool | Uses `o200k_base` tokenizer for near-perfect precision. |
 | **Gemini CLI** | **Estimated** (100%) | Session + Tool | Uses `Gemma` tokenizer (requires download) or fallback (~95%). |
-| **Ollama CLI** | — | — | Coming soon. |
+| **Ollama CLI** | — | — | [Planned for v1.1.0](ROADMAP.md#v110--ollama-cli-support) |
 
 - Session-level token accuracy is 99–100% for Codex CLI and Gemini CLI.  
   *(Per-tool token counts are estimated and highly accurate in most cases.)*
@@ -285,7 +292,7 @@ MCP Audit exposes these hidden costs and helps you build faster, cheaper, more p
 
 ## ⚙️ Configuration & Theming
 
-**New in v0.4.0:** Customize your dashboard look!
+Customize your dashboard look!
 
 ```bash
 # Use the Catppuccin Mocha theme
@@ -360,6 +367,9 @@ mcp-audit collect --theme mocha
 
 # See where your tokens went after a session
 mcp-audit report ~/.mcp-audit/sessions/
+
+# Browse past sessions interactively
+mcp-audit ui
 
 # Gemini CLI users: download tokenizer for 100% accuracy
 mcp-audit tokenizer download
@@ -438,6 +448,30 @@ Output includes:
   - Pricing source: api, cache, toml, or built-in
   - LiteLLM cache status and expiry
   - Tokenizer availability
+```
+
+### ui
+
+Browse past sessions interactively.
+
+```bash
+mcp-audit ui                   # Launch session browser
+mcp-audit ui --theme mocha     # Use specific theme
+```
+
+```
+Keybindings:
+  j/k, ↑/↓         Navigate sessions
+  Enter            View session details
+  f                Cycle platform filter
+  s                Cycle sort order (date/cost/duration/tools)
+  p                Pin/unpin session
+  r                Refresh session list
+  ?                Show help overlay
+  q                Quit
+
+Options:
+  --theme NAME     Color theme (default: auto)
 ```
 
 ### Upgrade
@@ -547,15 +581,12 @@ Yes. MCP Audit tracks schema weight, per-tool usage, and payload spikes that con
 
 ## 🗺️ Roadmap
 
-**Current**: v0.6.x — Multi-Model Intelligence (Per-Model Tracking, Dynamic Pricing, Schema v1.6.0)
+**Current**: v0.7.x — UI Layer (Rate Metrics, Cache Hit Ratio, Unique Tools Display)
 
-**Coming in v0.6.1:**
-- Ollama CLI adapter — expand platform support via API proxy
-
-**Coming in v0.7.0:**
-- TUI session browser — explore past sessions visually
-- Smells panel in live TUI — see anti-patterns as they happen
-- Cross-session smell aggregation — find patterns across sessions
+**Coming in v0.8.0:**
+- Expanded smell categories — 7+ new patterns (REDUNDANT_CALLS, BURST_PATTERN, etc.)
+- Cross-session aggregation — smell trends and frequencies across sessions
+- Improved AI export — richer context and structured recommendations
 
 See the full [Roadmap](https://github.com/littlebearapps/mcp-audit/blob/main/ROADMAP.md) for details.
 
