@@ -1,8 +1,8 @@
 # MCP Audit Data Contract
 
-**Version**: 1.6.0
-**Last Updated**: 2025-12-12
-**Status**: Active (shipped in v0.6.0)
+**Version**: 1.7.0
+**Last Updated**: 2025-12-13
+**Status**: Active (shipped in v0.8.0)
 
 This document defines the data contract for MCP Audit, including backward compatibility guarantees, versioning policy, and migration guidelines.
 
@@ -10,18 +10,382 @@ This document defines the data contract for MCP Audit, including backward compat
 
 ## Table of Contents
 
-1. [Schema v1.6.0](#schema-v160)
-2. [Schema v1.5.0](#schema-v150)
-3. [Schema v1.4.0](#schema-v140)
-4. [Schema v1.3.0](#schema-v130)
-5. [Schema v1.2.0](#schema-v120)
-6. [Schema v1.1.0](#schema-v110)
-7. [Backward Compatibility Guarantee](#backward-compatibility-guarantee)
-8. [Versioning Policy](#versioning-policy)
-9. [Schema Stability](#schema-stability)
-10. [Migration Support](#migration-support)
-11. [Breaking Changes](#breaking-changes)
-12. [Deprecation Policy](#deprecation-policy)
+1. [Schema v1.7.0](#schema-v170)
+2. [Schema v1.6.0](#schema-v160)
+3. [Schema v1.5.0](#schema-v150)
+4. [Schema v1.4.0](#schema-v140)
+5. [Schema v1.3.0](#schema-v130)
+6. [Schema v1.2.0](#schema-v120)
+7. [Schema v1.1.0](#schema-v110)
+8. [Backward Compatibility Guarantee](#backward-compatibility-guarantee)
+9. [Versioning Policy](#versioning-policy)
+10. [Schema Stability](#schema-stability)
+11. [Migration Support](#migration-support)
+12. [Breaking Changes](#breaking-changes)
+13. [Deprecation Policy](#deprecation-policy)
+
+---
+
+## Schema v1.7.0
+
+Schema v1.7.0 introduces the "Analysis Layer" - expanded smell detection patterns, AI-consumable recommendations, and cross-session aggregation capabilities.
+
+### Key Changes from v1.6.0
+
+| Change | v1.6.0 | v1.7.0 |
+|--------|--------|--------|
+| Smell patterns | 5 patterns | 12 patterns (7 new) |
+| Recommendations | Not tracked | `recommendations` block with AI-consumable suggestions |
+| Cross-session trends | Not tracked | `aggregation_metadata` block |
+| Severity enum | 3 values | 5 values (critical, high, medium/warning, low, info) |
+| Schema version | `"1.6.0"` | `"1.7.0"` |
+
+### Expanded `smells` Block
+
+v1.7.0 adds 7 new smell patterns for a total of 12:
+
+#### v1.5.0 Patterns (Existing)
+
+| Pattern | Severity | Threshold | Description |
+|---------|----------|-----------|-------------|
+| `HIGH_VARIANCE` | warning | CV > 0.5 | Tool with highly variable token counts across calls |
+| `TOP_CONSUMER` | info | >50% of MCP tokens | Single tool consuming majority of session tokens |
+| `HIGH_MCP_SHARE` | info | >80% of session | MCP tools consuming most session tokens |
+| `CHATTY` | warning | >20 calls | Tool called excessively in one session |
+| `LOW_CACHE_HIT` | warning/info | <30% ratio | Cache hit rate below efficient threshold |
+
+#### v1.7.0 Patterns (New)
+
+| Pattern | Severity | Threshold | Description |
+|---------|----------|-----------|-------------|
+| `REDUNDANT_CALLS` | warning | ≥2 identical | Same tool called with identical content (content_hash) |
+| `EXPENSIVE_FAILURES` | high | >5K tokens | Failed tool calls consuming significant tokens |
+| `UNDERUTILIZED_SERVER` | info | <10% utilization | MCP server with most tools unused |
+| `BURST_PATTERN` | warning | >5 calls/second | Rapid tool calls suggesting loops or retry storms |
+| `LARGE_PAYLOAD` | info | >10K tokens | Single tool call with excessive token consumption |
+| `SEQUENTIAL_READS` | info | ≥3 consecutive | Multiple file reads that could be batched |
+| `CACHE_MISS_STREAK` | warning | ≥5 consecutive | Consecutive cache misses indicating poor locality |
+
+#### Severity Enum
+
+v1.7.0 formalizes the severity levels:
+
+| Level | Priority | Description |
+|-------|----------|-------------|
+| `critical` | Highest | Immediate action required (reserved for future use) |
+| `high` | 2nd | Significant inefficiency, should be addressed |
+| `medium` | 3rd | Notable pattern worth investigating (alias: `warning`) |
+| `low` | 4th | Minor issue, nice to fix |
+| `info` | Lowest | Informational, no action required |
+
+**Note**: `warning` is maintained as an alias for `medium` for backward compatibility.
+
+#### Complete Smell Entry Example
+
+```json
+{
+  "smells": [
+    {
+      "pattern": "REDUNDANT_CALLS",
+      "severity": "warning",
+      "tool": "mcp__zen__chat",
+      "description": "Called 4 times with identical content",
+      "evidence": {
+        "duplicate_count": 4,
+        "content_hash": "10c4e76b1234abcd...",
+        "threshold": 2
+      }
+    },
+    {
+      "pattern": "EXPENSIVE_FAILURES",
+      "severity": "high",
+      "tool": "mcp__jina__read_url",
+      "description": "Failed call consumed 8,500 tokens",
+      "evidence": {
+        "tokens": 8500,
+        "threshold": 5000,
+        "call_index": 42,
+        "error_info": "Connection timeout"
+      }
+    },
+    {
+      "pattern": "BURST_PATTERN",
+      "severity": "warning",
+      "tool": "mcp__brave-search__brave_web_search",
+      "description": "7 tool calls within 1000ms",
+      "evidence": {
+        "call_count": 7,
+        "window_ms": 1000,
+        "threshold": 5,
+        "start_index": 15,
+        "end_index": 21,
+        "tool_breakdown": {"mcp__brave-search__brave_web_search": 7}
+      }
+    }
+  ]
+}
+```
+
+### New Block: `recommendations`
+
+AI-consumable actionable suggestions generated from detected smells:
+
+```json
+{
+  "recommendations": [
+    {
+      "type": "REMOVE_UNUSED_SERVER",
+      "confidence": 0.85,
+      "evidence": "Server 'zen' has 12 tools but only 1 used (8.3% utilization)",
+      "action": "Consider removing 'zen' from .mcp.json to reduce context overhead",
+      "impact": "Save ~6,000 tokens/turn in schema context tax",
+      "source_smell": "UNDERUTILIZED_SERVER",
+      "details": {
+        "server": "zen",
+        "utilization_percent": 8.3,
+        "tools_available": 12,
+        "tools_used": 1
+      }
+    },
+    {
+      "type": "ENABLE_CACHING",
+      "confidence": 0.75,
+      "evidence": "Cache hit rate is only 15.2% (threshold: 30%)",
+      "action": "Restructure prompts to maximize context reuse and cache hits",
+      "impact": "Potential savings of ~25,000 tokens/session with better caching",
+      "source_smell": "LOW_CACHE_HIT",
+      "details": {
+        "current_hit_rate": 15.2,
+        "target_hit_rate": 50,
+        "cache_read_tokens": 10000,
+        "input_tokens": 55000
+      }
+    },
+    {
+      "type": "BATCH_OPERATIONS",
+      "confidence": 0.9,
+      "evidence": "Tool 'Read' called 35 times (threshold: 20)",
+      "action": "Batch multiple 'Read' calls into fewer, larger requests",
+      "impact": "Reduce overhead from 35 calls to ~7 batched calls",
+      "source_smell": "CHATTY",
+      "details": {
+        "tool": "Read",
+        "call_count": 35,
+        "total_tokens": 150000,
+        "avg_tokens_per_call": 4285.7
+      }
+    },
+    {
+      "type": "OPTIMIZE_COST",
+      "confidence": 0.7,
+      "evidence": "Failed call to 'mcp__jina__read_url' consumed 8,500 tokens",
+      "action": "Add validation before calling 'mcp__jina__read_url' to prevent expensive failures",
+      "impact": "Save 8,500 tokens per prevented failure",
+      "source_smell": "EXPENSIVE_FAILURES",
+      "details": {
+        "tool": "mcp__jina__read_url",
+        "tokens_wasted": 8500,
+        "error_summary": "Connection timeout"
+      }
+    }
+  ]
+}
+```
+
+#### Recommendation Types
+
+| Type | Source Smells | Description |
+|------|---------------|-------------|
+| `REMOVE_UNUSED_SERVER` | UNDERUTILIZED_SERVER | Remove MCP servers with low tool utilization |
+| `ENABLE_CACHING` | LOW_CACHE_HIT, CACHE_MISS_STREAK, REDUNDANT_CALLS | Improve cache utilization |
+| `BATCH_OPERATIONS` | SEQUENTIAL_READS, CHATTY, BURST_PATTERN | Combine operations for efficiency |
+| `OPTIMIZE_COST` | EXPENSIVE_FAILURES, TOP_CONSUMER, LARGE_PAYLOAD, HIGH_VARIANCE, HIGH_MCP_SHARE | Reduce token consumption |
+
+#### Recommendation Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Recommendation category (see table above) |
+| `confidence` | float | Confidence score 0.0-1.0 based on evidence strength |
+| `evidence` | string | Human/AI readable explanation |
+| `action` | string | Specific action to take |
+| `impact` | string | Expected benefit from taking this action |
+| `source_smell` | string | The smell pattern that triggered this recommendation |
+| `details` | object | Context-specific data (varies by type) |
+
+### New Block: `aggregation_metadata`
+
+Cross-session smell trend analysis (included in aggregation reports):
+
+```json
+{
+  "aggregation_metadata": {
+    "query": {
+      "start_date": "2025-11-15",
+      "end_date": "2025-12-13",
+      "platform": "claude-code",
+      "project": null
+    },
+    "summary": {
+      "total_sessions": 45,
+      "sessions_with_smells": 32
+    },
+    "smell_trends": [
+      {
+        "pattern": "CHATTY",
+        "total_occurrences": 28,
+        "sessions_affected": 15,
+        "frequency_percent": 33.3,
+        "trend": "worsening",
+        "trend_change_percent": 25.0,
+        "severity_breakdown": {"warning": 28},
+        "top_tools": [["mcp__zen__chat", 12], ["Read", 8], ["Grep", 5]],
+        "first_seen": "2025-11-18T10:30:00+11:00",
+        "last_seen": "2025-12-13T09:15:00+11:00"
+      },
+      {
+        "pattern": "LOW_CACHE_HIT",
+        "total_occurrences": 18,
+        "sessions_affected": 12,
+        "frequency_percent": 26.7,
+        "trend": "improving",
+        "trend_change_percent": -15.0,
+        "severity_breakdown": {"warning": 10, "info": 8},
+        "top_tools": [],
+        "first_seen": "2025-11-15T14:00:00+11:00",
+        "last_seen": "2025-12-10T16:45:00+11:00"
+      }
+    ],
+    "generated_at": "2025-12-13T10:00:00+11:00"
+  }
+}
+```
+
+#### Aggregation Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `query.start_date` | string | Start of analysis period (ISO date) |
+| `query.end_date` | string | End of analysis period (ISO date) |
+| `query.platform` | string | Platform filter (null = all) |
+| `query.project` | string | Project filter (null = all) |
+| `summary.total_sessions` | int | Total sessions analyzed |
+| `summary.sessions_with_smells` | int | Sessions with at least one smell |
+| `smell_trends` | array | Per-pattern aggregation (see below) |
+| `generated_at` | string | When aggregation was computed |
+
+#### Smell Trend Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pattern` | string | Smell pattern identifier |
+| `total_occurrences` | int | Total times detected across all sessions |
+| `sessions_affected` | int | Number of sessions with this smell |
+| `frequency_percent` | float | `sessions_affected / total_sessions * 100` |
+| `trend` | string | `"improving"`, `"worsening"`, or `"stable"` |
+| `trend_change_percent` | float | Percentage change (negative = improving) |
+| `severity_breakdown` | object | Count by severity level |
+| `top_tools` | array | Top 5 tools triggering this smell `[[tool, count], ...]` |
+| `first_seen` | string | First occurrence timestamp |
+| `last_seen` | string | Most recent occurrence timestamp |
+
+#### Trend Detection
+
+Trends are calculated by comparing occurrence rates between first and second half of the analysis period:
+
+| Trend | Condition |
+|-------|-----------|
+| `"improving"` | Rate decreased by >10% |
+| `"worsening"` | Rate increased by >10% |
+| `"stable"` | Rate change within ±10% |
+
+### Updated Complete Schema (v1.7.0)
+
+```json
+{
+  "_file": {
+    "name": "mcp-audit-2025-12-13T14-00-00.json",
+    "type": "mcp_audit_session",
+    "purpose": "Complete MCP session log with token usage, tool statistics, and efficiency analysis for AI agent consumption",
+    "schema_version": "1.7.0",
+    "schema_docs": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md",
+    "generated_by": "mcp-audit v0.8.0",
+    "generated_at": "2025-12-13T14:00:00+11:00"
+  },
+
+  "session": {
+    "id": "mcp-audit-2025-12-13T14-00-00",
+    "project": "mcp-audit",
+    "platform": "claude-code",
+    "model": "claude-sonnet-4-20250514",
+    "models_used": ["claude-sonnet-4-20250514"],
+    "working_directory": "/Users/user/projects/mcp-audit/main",
+    "started_at": "2025-12-13T14:00:00+11:00",
+    "ended_at": "2025-12-13T14:30:00+11:00",
+    "duration_seconds": 1800.0,
+    "source_files": ["session-abc123.jsonl"],
+    "message_count": 25
+  },
+
+  "token_usage": { ... },
+  "cost_estimate_usd": 1.23,
+  "model_usage": { ... },
+  "mcp_summary": { ... },
+  "builtin_tool_summary": { ... },
+  "cache_analysis": { ... },
+  "tool_calls": [ ... ],
+
+  "smells": [
+    {
+      "pattern": "CHATTY",
+      "severity": "warning",
+      "tool": "Read",
+      "description": "Called 35 times",
+      "evidence": { ... }
+    },
+    {
+      "pattern": "REDUNDANT_CALLS",
+      "severity": "warning",
+      "tool": "mcp__zen__chat",
+      "description": "Called 4 times with identical content",
+      "evidence": { ... }
+    }
+  ],
+
+  "recommendations": [
+    {
+      "type": "BATCH_OPERATIONS",
+      "confidence": 0.9,
+      "evidence": "Tool 'Read' called 35 times",
+      "action": "Batch multiple 'Read' calls into fewer requests",
+      "impact": "Reduce from 35 to ~7 batched calls",
+      "source_smell": "CHATTY",
+      "details": { ... }
+    }
+  ],
+
+  "zombie_tools": { ... },
+
+  "data_quality": {
+    "accuracy_level": "exact",
+    "token_source": "native",
+    "confidence": 1.0,
+    "pricing_source": "api",
+    "pricing_freshness": "fresh"
+  },
+
+  "static_cost": { ... },
+
+  "analysis": { ... }
+}
+```
+
+**Backward Compatibility:**
+
+- Old readers (v1.6.0 and earlier) ignore the new fields (`recommendations`, expanded `smells` patterns)
+- Old sessions without these fields are read with defaults (empty recommendations, only v1.5.0 smell patterns)
+- Schema version in `_file.schema_version` indicates presence of new fields
+- The `warning` severity alias continues to work for backward compatibility
 
 ---
 
@@ -1256,6 +1620,27 @@ v2.0.0+6mo - v1.x support ends
 | v1.4.0 | Added token estimation fields (not breaking) | Automatic - new fields ignored by old readers |
 | v1.5.0 | Added `smells`, `data_quality`, `zombie_tools` (not breaking) | Automatic - new blocks ignored by old readers |
 | v1.6.0 | Added `models_used`, `model_usage`, `tool_calls[].model`, `static_cost` (not breaking) | Automatic - new fields ignored by old readers |
+| v1.7.0 | Added `recommendations`, expanded `smells` (12 patterns), `aggregation_metadata` (not breaking) | Automatic - new fields ignored by old readers |
+
+### v1.7.0 Changes (Non-Breaking)
+
+v1.7.0 introduces the Recommendation Engine, expanded smell detection (12 patterns), and cross-session aggregation:
+
+| Change | Type | Impact |
+|--------|------|--------|
+| Added `recommendations` block | Additive | New block, ignored by old readers |
+| Added `aggregation_metadata` block | Additive | New block for multi-session analysis |
+| Expanded `smells` to 12 patterns | Additive | 7 new patterns, old patterns unchanged |
+| Added `smells[].details` field | Additive | Tool-specific context for each smell |
+| Added 4 recommendation types | Feature | REMOVE_UNUSED_SERVER, ENABLE_CACHING, BATCH_OPERATIONS, OPTIMIZE_COST |
+| Added trend detection | Feature | Improving/worsening/stable for each pattern |
+| New patterns: REDUNDANT_CALLS | Feature | Identical content hash detection |
+| New patterns: EXPENSIVE_FAILURES | Feature | High-token failed calls |
+| New patterns: UNDERUTILIZED_SERVER | Feature | Server tool usage < 10% |
+| New patterns: BURST_PATTERN | Feature | >5 calls within 1 second |
+| New patterns: LARGE_PAYLOAD | Feature | Single call >10K tokens |
+| New patterns: SEQUENTIAL_READS | Feature | Consecutive file read detection |
+| New patterns: CACHE_MISS_STREAK | Feature | 5+ consecutive cache misses |
 
 ### v1.6.0 Changes (Non-Breaking)
 

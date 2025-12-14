@@ -10,6 +10,7 @@ Tests cover:
 import json
 import tempfile
 from pathlib import Path
+from typing import Any, Dict
 
 import pytest
 
@@ -128,7 +129,8 @@ class TestAIPromptGeneration:
         assert "## Cost" in output
         assert "$0.1500" in output
         assert "## MCP Tool Usage" in output
-        assert "## Suggested Analysis Questions" in output
+        # v0.8.0: Renamed to Context-Aware Analysis Questions (task-106.5)
+        assert "## Context-Aware Analysis Questions" in output
 
     def test_generate_markdown_with_smells(self) -> None:
         """Test markdown generation includes smells."""
@@ -212,6 +214,324 @@ class TestFormatDuration:
         from mcp_audit.cli import _format_duration
 
         assert _format_duration(3725) == "1h 2m"
+
+
+class TestPinnedMCPFocusExport:
+    """Tests for v0.8.0 Pinned MCP Focus export features (task-106.5)."""
+
+    @pytest.fixture
+    def session_data_with_servers(self) -> Dict[str, Any]:
+        """Session data with MCP server usage."""
+        return {
+            "session": {
+                "platform": "claude-code",
+                "model": "claude-opus-4-5",
+                "duration_seconds": 300,
+                "project": "test-project",
+            },
+            "token_usage": {"total_tokens": 50000},
+            "cost_estimate_usd": 0.50,
+            "mcp_summary": {"total_calls": 20},
+            "server_sessions": {
+                "backlog": {
+                    "tools": {
+                        "task_create": {"calls": 5, "total_tokens": 10000},
+                        "task_edit": {"calls": 3, "total_tokens": 6000},
+                    }
+                },
+                "brave-search": {
+                    "tools": {
+                        "brave_web_search": {"calls": 8, "total_tokens": 24000},
+                    }
+                },
+                "jina": {
+                    "tools": {
+                        "read_url": {"calls": 4, "total_tokens": 10000},
+                    }
+                },
+            },
+            "smells": [],
+            "zombie_tools": {},
+            "data_quality": {"accuracy_level": "exact"},
+        }
+
+    def test_markdown_with_pinned_focus(self, session_data_with_servers: Dict[str, Any]) -> None:
+        """Test markdown generation with --pinned-focus flag."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        output = generate_ai_prompt_markdown(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            pinned_focus=True,
+            pinned_servers=["backlog"],
+        )
+
+        assert "## Pinned Server Focus: backlog" in output
+        assert "### Usage Summary" in output
+        assert "### Tool Breakdown" in output
+        assert "task_create" in output
+        assert "task_edit" in output
+
+    def test_markdown_pinned_server_not_used(
+        self, session_data_with_servers: Dict[str, Any]
+    ) -> None:
+        """Test markdown when pinned server wasn't used."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        output = generate_ai_prompt_markdown(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            pinned_focus=True,
+            pinned_servers=["unused-server"],
+        )
+
+        assert "## Pinned Server Focus: unused-server" in output
+        assert "Pinned but not used" in output
+
+    def test_markdown_with_full_mcp_breakdown(
+        self, session_data_with_servers: Dict[str, Any]
+    ) -> None:
+        """Test markdown generation with --full-mcp-breakdown flag."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        output = generate_ai_prompt_markdown(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            full_mcp_breakdown=True,
+        )
+
+        assert "## Full MCP Server Breakdown" in output
+        assert "### Server: backlog" in output
+        assert "### Server: brave-search" in output
+        assert "### Server: jina" in output
+
+    def test_markdown_full_breakdown_shows_pinned_badge(
+        self, session_data_with_servers: Dict[str, Any]
+    ) -> None:
+        """Test that pinned servers are marked in full breakdown."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        output = generate_ai_prompt_markdown(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            full_mcp_breakdown=True,
+            pinned_servers=["backlog"],
+        )
+
+        assert "[PINNED]" in output
+
+    def test_markdown_shows_pinned_servers_in_summary(
+        self, session_data_with_servers: Dict[str, Any]
+    ) -> None:
+        """Test that pinned servers appear in session summary."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        output = generate_ai_prompt_markdown(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            pinned_servers=["backlog", "jina"],
+        )
+
+        assert "**Pinned Servers**: backlog, jina" in output
+
+    def test_json_with_pinned_servers(self, session_data_with_servers: Dict[str, Any]) -> None:
+        """Test JSON export includes pinned servers."""
+        from mcp_audit.cli import generate_ai_prompt_json
+
+        output = generate_ai_prompt_json(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            pinned_servers=["backlog"],
+        )
+
+        parsed = json.loads(output)
+        assert "pinned_servers" in parsed
+        assert parsed["pinned_servers"] == ["backlog"]
+
+    def test_json_with_pinned_focus(self, session_data_with_servers: Dict[str, Any]) -> None:
+        """Test JSON export includes pinned server analysis."""
+        from mcp_audit.cli import generate_ai_prompt_json
+
+        output = generate_ai_prompt_json(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            pinned_focus=True,
+            pinned_servers=["backlog"],
+        )
+
+        parsed = json.loads(output)
+        assert "pinned_server_analysis" in parsed
+        assert "backlog" in parsed["pinned_server_analysis"]
+        assert parsed["pinned_server_analysis"]["backlog"]["is_pinned"] is True
+
+    def test_json_with_full_breakdown(self, session_data_with_servers: Dict[str, Any]) -> None:
+        """Test JSON export includes full server breakdown."""
+        from mcp_audit.cli import generate_ai_prompt_json
+
+        output = generate_ai_prompt_json(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+            full_mcp_breakdown=True,
+            pinned_servers=["backlog"],
+        )
+
+        parsed = json.loads(output)
+        assert "full_server_breakdown" in parsed
+        assert "backlog" in parsed["full_server_breakdown"]
+        assert "brave-search" in parsed["full_server_breakdown"]
+        assert parsed["full_server_breakdown"]["backlog"]["is_pinned"] is True
+        assert parsed["full_server_breakdown"]["brave-search"]["is_pinned"] is False
+
+    def test_json_includes_context_questions(
+        self, session_data_with_servers: Dict[str, Any]
+    ) -> None:
+        """Test JSON export includes context-aware questions."""
+        from mcp_audit.cli import generate_ai_prompt_json
+
+        output = generate_ai_prompt_json(
+            session_data_with_servers,
+            Path("/tmp/test.json"),
+        )
+
+        parsed = json.loads(output)
+        assert "context_questions" in parsed
+        assert isinstance(parsed["context_questions"], list)
+
+
+class TestRecommendationsExport:
+    """Tests for v0.8.0 Recommendations in export (task-106.2)."""
+
+    def test_markdown_includes_recommendations_section(self) -> None:
+        """Test that smells generate recommendations in markdown."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        session_data = {
+            "session": {"platform": "claude-code", "duration_seconds": 300},
+            "token_usage": {"total_tokens": 50000},
+            "cost_estimate_usd": 0.50,
+            "mcp_summary": {},
+            "server_sessions": {},
+            "smells": [
+                {
+                    "pattern": "CHATTY",
+                    "severity": "warning",
+                    "tool": "mcp__backlog__task_edit",
+                    "description": "Called 35 times",
+                    "evidence": {
+                        "call_count": 35,
+                        "threshold": 20,
+                        "total_tokens": 17500,
+                        "avg_tokens_per_call": 500,
+                    },
+                }
+            ],
+            "zombie_tools": {},
+            "data_quality": {},
+        }
+
+        output = generate_ai_prompt_markdown(session_data, Path("/tmp/test.json"))
+
+        assert "## AI Recommendations" in output
+        assert "BATCH_OPERATIONS" in output
+        assert "**Confidence**:" in output
+        assert "**Evidence**:" in output
+        assert "**Action**:" in output
+        assert "**Impact**:" in output
+
+    def test_json_includes_recommendations(self) -> None:
+        """Test that smells generate recommendations in JSON."""
+        from mcp_audit.cli import generate_ai_prompt_json
+
+        session_data = {
+            "session": {"platform": "claude-code"},
+            "token_usage": {"total_tokens": 50000},
+            "cost_estimate_usd": 0.50,
+            "mcp_summary": {},
+            "server_sessions": {},
+            "smells": [
+                {
+                    "pattern": "UNDERUTILIZED_SERVER",
+                    "severity": "info",
+                    "evidence": {
+                        "server": "unused-server",
+                        "utilization_percent": 0,
+                        "available_tools": 10,
+                        "used_tools": 0,
+                    },
+                }
+            ],
+            "zombie_tools": {},
+            "data_quality": {},
+        }
+
+        output = generate_ai_prompt_json(session_data, Path("/tmp/test.json"))
+
+        parsed = json.loads(output)
+        assert "recommendations" in parsed
+        assert len(parsed["recommendations"]) > 0
+        assert parsed["recommendations"][0]["type"] == "REMOVE_UNUSED_SERVER"
+
+
+class TestContextAwareQuestions:
+    """Tests for v0.8.0 Context-Aware Questions (task-106.5)."""
+
+    def test_top_consumer_question(self) -> None:
+        """Test question generated for dominant tool."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        session_data = {
+            "session": {"platform": "claude-code", "duration_seconds": 300},
+            "token_usage": {"total_tokens": 100000},
+            "cost_estimate_usd": 1.00,
+            "mcp_summary": {},
+            "server_sessions": {
+                "jina": {
+                    "tools": {
+                        "read_url": {"calls": 10, "total_tokens": 80000},  # 80% of tokens
+                    }
+                },
+                "backlog": {
+                    "tools": {
+                        "task_view": {"calls": 5, "total_tokens": 20000},
+                    }
+                },
+            },
+            "smells": [],
+            "zombie_tools": {},
+            "data_quality": {},
+        }
+
+        output = generate_ai_prompt_markdown(session_data, Path("/tmp/test.json"))
+
+        # Should ask about dominant tool
+        assert "read_url" in output
+        assert "80%" in output
+
+    def test_unused_pinned_server_question(self) -> None:
+        """Test question when pinned server not used."""
+        from mcp_audit.cli import generate_ai_prompt_markdown
+
+        session_data = {
+            "session": {"platform": "claude-code", "duration_seconds": 300},
+            "token_usage": {"total_tokens": 10000},
+            "cost_estimate_usd": 0.10,
+            "mcp_summary": {},
+            "server_sessions": {
+                "backlog": {"tools": {"task_view": {"calls": 5, "total_tokens": 10000}}}
+            },
+            "smells": [],
+            "zombie_tools": {},
+            "data_quality": {},
+        }
+
+        output = generate_ai_prompt_markdown(
+            session_data,
+            Path("/tmp/test.json"),
+            pinned_servers=["brave-search"],  # Not in server_sessions
+        )
+
+        assert "brave-search" in output
+        assert "unpinned" in output.lower()
 
 
 if __name__ == "__main__":

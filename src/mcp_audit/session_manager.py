@@ -444,6 +444,7 @@ class SessionManager:
         from .base_tracker import (
             MCPToolCalls,
             ServerSession,
+            Smell,
             TokenUsage,
             ToolStats,
         )
@@ -522,6 +523,19 @@ class SessionManager:
                 ),
             )
 
+        # Reconstruct smells from v1.5.0+ format
+        smells_data = data.get("smells", [])
+        smells = []
+        for smell_dict in smells_data:
+            smell = Smell(
+                pattern=smell_dict.get("pattern", ""),
+                severity=smell_dict.get("severity", "info"),
+                tool=smell_dict.get("tool"),
+                description=smell_dict.get("description", ""),
+                evidence=smell_dict.get("evidence", {}),
+            )
+            smells.append(smell)
+
         # Create Session object
         session = Session(
             schema_version=schema_version,
@@ -543,6 +557,7 @@ class SessionManager:
             end_timestamp=end_timestamp,
             duration_seconds=data.get("duration_seconds", session_data.get("duration_seconds")),
             source_files=data.get("source_files", []),
+            smells=smells,
         )
 
         return session

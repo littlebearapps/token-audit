@@ -39,9 +39,13 @@ EMOJI_TO_ASCII: Dict[str, str] = {
     "📁": "files:",
     "↺": "(sync)",
     # Accuracy indicators (v0.7.0 - task-105.5)
-    "✓": "[ok]",
+    "✓": "[OK]",
     "~": "[~]",
     "?": "[?]",
+    # Notification icons (v0.8.0 - task-106.9)
+    "⚠": "[WARN]",
+    "✗": "[ERR]",
+    "ℹ": "[INFO]",
 }
 
 # Histogram block characters for token distribution (v0.7.0 - task-105.7)

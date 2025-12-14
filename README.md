@@ -150,19 +150,23 @@ It turns raw MCP telemetry into actionable insights you can use to optimise your
 
 ---
 
-## 🚀 What's New (v0.7.0)
+## 🚀 What's New (v0.8.0)
 
-**TUI Session Browser** — New `mcp-audit ui` command for exploring past sessions:
-- Browse, filter, and search sessions across all platforms
-- Pin important sessions for quick access
-- Sort by date, cost, duration, or tool count
-- Full keyboard navigation with help overlay (`?`)
+**Analysis Layer** — Deeper insights with 12 smell patterns and AI recommendations:
 
-**Live TUI Enhancements:**
-- **Rate Metrics:** Real-time tokens/min and calls/min — see session velocity at a glance
-- **Cache Hit Ratio:** Token-based cache utilization distinct from cost efficiency
-- **Smells Panel:** Real-time efficiency issue detection during tracking
-- **Unique Tools Count:** Tool diversity in MCP Servers panel
+**Expanded Smell Detection (12 Patterns):**
+- 7 new patterns: `REDUNDANT_CALLS`, `EXPENSIVE_FAILURES`, `UNDERUTILIZED_SERVER`, `BURST_PATTERN`, `LARGE_PAYLOAD`, `SEQUENTIAL_READS`, `CACHE_MISS_STREAK`
+- Automatically detect inefficient MCP usage patterns
+
+**Recommendations Engine:**
+- AI-consumable suggestions generated from detected smells
+- Confidence scores, evidence, and specific action items
+- Included in `mcp-audit export ai-prompt` output
+
+**Cross-Session Aggregation:**
+- Track smell trends across your session history
+- See which patterns are improving, worsening, or stable
+- Filter by platform, project, or date range
 
 See the [Changelog](https://github.com/littlebearapps/mcp-audit/blob/main/CHANGELOG.md) for full version history.
 
@@ -571,7 +575,7 @@ Yes. MCP Audit tracks schema weight, per-tool usage, and payload spikes that con
 |----------|-------------|
 | [Features & Benefits](https://github.com/littlebearapps/mcp-audit/blob/main/docs/FEATURES-BENEFITS.md) | Detailed feature guide |
 | [Architecture](https://github.com/littlebearapps/mcp-audit/blob/main/docs/architecture.md) | System design and adapters |
-| [Data Contract](https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md) | Schema v1.6.0 format |
+| [Data Contract](https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md) | Schema v1.7.0 format |
 | [Privacy & Security](https://github.com/littlebearapps/mcp-audit/blob/main/docs/privacy-security.md) | Data handling policies |
 | [Manual Tokenizer Install](https://github.com/littlebearapps/mcp-audit/blob/main/docs/manual-tokenizer-install.md) | For firewalled networks |
 | [Changelog](https://github.com/littlebearapps/mcp-audit/blob/main/CHANGELOG.md) | Version history |
@@ -581,12 +585,13 @@ Yes. MCP Audit tracks schema weight, per-tool usage, and payload spikes that con
 
 ## 🗺️ Roadmap
 
-**Current**: v0.7.x — UI Layer (Rate Metrics, Cache Hit Ratio, Unique Tools Display)
+**Current**: v0.8.x — Analysis Layer (12 Smell Patterns, Recommendations Engine, Cross-Session Aggregation)
 
-**Coming in v0.8.0:**
-- Expanded smell categories — 7+ new patterns (REDUNDANT_CALLS, BURST_PATTERN, etc.)
-- Cross-session aggregation — smell trends and frequencies across sessions
-- Improved AI export — richer context and structured recommendations
+**Coming in v0.9.0:**
+- Documentation overhaul — comprehensive guides for all features
+- Usage examples — 5+ real-world scenario walkthroughs
+- API cleanup — deprecate unstable APIs, document public surface
+- Performance optimization — <100ms TUI refresh, <500ms session load
 
 See the full [Roadmap](https://github.com/littlebearapps/mcp-audit/blob/main/ROADMAP.md) for details.
 

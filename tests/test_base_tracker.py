@@ -1171,21 +1171,21 @@ class TestSessionV150Fields:
         assert data["zombie_tools"] == {}
 
 
-class TestSchemaVersion160:
-    """Tests for schema version 1.6.0 (task-108.5)"""
+class TestSchemaVersion170:
+    """Tests for schema version 1.7.0 (task-106.5)"""
 
-    def test_schema_version_is_1_6_0(self) -> None:
-        """Test SCHEMA_VERSION constant is 1.6.0"""
-        assert SCHEMA_VERSION == "1.6.0"
+    def test_schema_version_is_1_7_0(self) -> None:
+        """Test SCHEMA_VERSION constant is 1.7.0"""
+        assert SCHEMA_VERSION == "1.7.0"
 
-    def test_session_uses_schema_version_1_6_0(self) -> None:
-        """Test new Session objects use schema v1.6.0"""
+    def test_session_uses_schema_version_1_7_0(self) -> None:
+        """Test new Session objects use schema v1.7.0"""
         session = Session(project="test", platform="test", session_id="test-123")
 
-        assert session.schema_version == "1.6.0"
+        assert session.schema_version == "1.7.0"
 
-    def test_tracker_saves_with_schema_1_6_0(self, tmp_path) -> None:
-        """Test saved session files have schema v1.6.0 in _file header"""
+    def test_tracker_saves_with_schema_1_7_0(self, tmp_path) -> None:
+        """Test saved session files have schema v1.7.0 in _file header"""
         import json
 
         tracker = ConcreteTestTracker()
@@ -1200,7 +1200,122 @@ class TestSchemaVersion160:
         with open(session_files[0]) as f:
             data = json.load(f)
 
-        assert data["_file"]["schema_version"] == "1.6.0"
+        assert data["_file"]["schema_version"] == "1.7.0"
+
+
+class TestPinnedMCPFocus:
+    """Tests for v1.7.0 Pinned MCP Focus features (task-106.5)"""
+
+    def test_session_has_pinned_servers_field(self) -> None:
+        """Test Session has pinned_servers field."""
+        session = Session(project="test", platform="test", session_id="test-123")
+        assert hasattr(session, "pinned_servers")
+        assert session.pinned_servers == []
+
+    def test_session_pinned_servers_can_be_set(self) -> None:
+        """Test pinned_servers can be set."""
+        session = Session(
+            project="test",
+            platform="test",
+            session_id="test-123",
+            pinned_servers=["backlog", "brave-search"],
+        )
+        assert session.pinned_servers == ["backlog", "brave-search"]
+
+    def test_session_to_dict_includes_pinned_servers(self) -> None:
+        """Test to_dict includes pinned_servers when set."""
+        session = Session(
+            project="test", platform="test", session_id="test-123", pinned_servers=["backlog"]
+        )
+        data = session.to_dict()
+        assert "pinned_servers" in data
+        assert data["pinned_servers"] == ["backlog"]
+
+    def test_session_to_dict_excludes_pinned_servers_when_empty(self) -> None:
+        """Test to_dict excludes pinned_servers when empty."""
+        session = Session(project="test", platform="test", session_id="test-123")
+        data = session.to_dict()
+        assert "pinned_servers" not in data
+
+    def test_session_to_dict_includes_mcp_servers_hierarchy(self) -> None:
+        """Test to_dict includes mcp_servers hierarchy."""
+        session = Session(project="test", platform="test", session_id="test-123")
+        # Add some server data
+        session.server_sessions["backlog"] = ServerSession(
+            server="backlog",
+            total_calls=5,
+            total_tokens=2500,
+        )
+        session.server_sessions["backlog"].tools["task_view"] = ToolStats(
+            calls=5, total_tokens=2500, avg_tokens=500.0
+        )
+
+        data = session.to_dict()
+        assert "mcp_servers" in data
+        assert "backlog" in data["mcp_servers"]
+        assert data["mcp_servers"]["backlog"]["calls"] == 5
+        assert data["mcp_servers"]["backlog"]["tokens"] == 2500
+        assert data["mcp_servers"]["backlog"]["is_pinned"] is False
+        assert "task_view" in data["mcp_servers"]["backlog"]["tools"]
+
+    def test_session_to_dict_mcp_servers_pinned_flag(self) -> None:
+        """Test mcp_servers hierarchy includes correct is_pinned flag."""
+        session = Session(
+            project="test", platform="test", session_id="test-123", pinned_servers=["backlog"]
+        )
+        session.server_sessions["backlog"] = ServerSession(
+            server="backlog", total_calls=3, total_tokens=1500
+        )
+        session.server_sessions["brave-search"] = ServerSession(
+            server="brave-search", total_calls=2, total_tokens=1000
+        )
+
+        data = session.to_dict()
+        assert data["mcp_servers"]["backlog"]["is_pinned"] is True
+        assert data["mcp_servers"]["brave-search"]["is_pinned"] is False
+
+    def test_session_to_dict_includes_tool_sequence(self) -> None:
+        """Test to_dict includes tool_sequence."""
+        session = Session(project="test", platform="test", session_id="test-123")
+        data = session.to_dict()
+        assert "tool_sequence" in data
+        assert isinstance(data["tool_sequence"], list)
+
+    def test_session_to_dict_includes_pinned_server_usage(self) -> None:
+        """Test to_dict includes pinned_server_usage when pinned servers set."""
+        session = Session(
+            project="test", platform="test", session_id="test-123", pinned_servers=["backlog"]
+        )
+        session.server_sessions["backlog"] = ServerSession(
+            server="backlog", total_calls=5, total_tokens=2500
+        )
+        session.server_sessions["brave-search"] = ServerSession(
+            server="brave-search", total_calls=3, total_tokens=1500
+        )
+
+        data = session.to_dict()
+        assert "pinned_server_usage" in data
+        assert data["pinned_server_usage"]["pinned_calls"] == 5
+        assert data["pinned_server_usage"]["pinned_tokens"] == 2500
+        assert data["pinned_server_usage"]["non_pinned_calls"] == 3
+        assert data["pinned_server_usage"]["non_pinned_tokens"] == 1500
+
+    def test_session_to_dict_includes_pinned_coverage(self) -> None:
+        """Test to_dict includes pinned_coverage percentage."""
+        session = Session(
+            project="test", platform="test", session_id="test-123", pinned_servers=["backlog"]
+        )
+        session.server_sessions["backlog"] = ServerSession(
+            server="backlog", total_calls=3, total_tokens=1500
+        )
+        session.server_sessions["brave-search"] = ServerSession(
+            server="brave-search", total_calls=1, total_tokens=500
+        )
+
+        data = session.to_dict()
+        assert "pinned_coverage" in data
+        # 3 pinned calls out of 4 total = 0.75
+        assert data["pinned_coverage"] == 0.75
 
 
 class TestDataQualityPerPlatform:

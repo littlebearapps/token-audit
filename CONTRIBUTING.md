@@ -69,6 +69,8 @@ mcp-audit/
 │   ├── privacy.py              # Privacy utilities
 │   ├── smells.py               # Smell detection engine (v0.5.0)
 │   ├── zombie_detector.py      # Zombie tool detection (v0.5.0)
+│   ├── recommendations.py      # Recommendations engine (v0.8.0)
+│   ├── smell_aggregator.py     # Cross-session smell aggregation (v0.8.0)
 │   └── display/                # TUI components
 │       ├── __init__.py
 │       ├── rich_display.py     # Rich terminal display

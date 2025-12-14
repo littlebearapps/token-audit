@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 if TYPE_CHECKING:
     from .base_tracker import BaseTracker, Session
     from .display import DisplayAdapter, DisplaySnapshot
+    from .smell_aggregator import SmellAggregationResult
 
 from . import __version__
 
@@ -287,6 +288,73 @@ This command analyzes session data and produces reports in various formats
     )
 
     # ========================================================================
+    # smells command
+    # ========================================================================
+    smells_parser = subparsers.add_parser(
+        "smells",
+        help="Analyze smell patterns across sessions",
+        description="""
+Aggregate smell patterns across multiple sessions to identify persistent issues.
+
+Shows smell frequency, trends (improving/worsening/stable), and affected tools.
+Helps identify recurring efficiency problems in your workflow.
+
+Examples:
+  # Analyze last 30 days for all platforms
+  mcp-audit smells
+
+  # Analyze last 7 days for Claude Code
+  mcp-audit smells --days 7 --platform claude-code
+
+  # Export as JSON
+  mcp-audit smells --format json --output smells.json
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    smells_parser.add_argument(
+        "--days",
+        type=int,
+        default=30,
+        help="Number of days to analyze (default: 30)",
+    )
+
+    smells_parser.add_argument(
+        "--platform",
+        choices=["claude-code", "codex-cli", "gemini-cli"],
+        default=None,
+        help="Filter by platform (default: all)",
+    )
+
+    smells_parser.add_argument(
+        "--project",
+        type=str,
+        default=None,
+        help="Filter by project name (default: all)",
+    )
+
+    smells_parser.add_argument(
+        "--format",
+        choices=["text", "json", "markdown"],
+        default="text",
+        help="Output format (default: text with progress bars)",
+    )
+
+    smells_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output file path (default: stdout)",
+    )
+
+    smells_parser.add_argument(
+        "--min-frequency",
+        type=float,
+        default=0.0,
+        help="Minimum frequency %% to display (default: 0)",
+    )
+
+    # ========================================================================
     # init command
     # ========================================================================
     init_parser = subparsers.add_parser(
@@ -484,6 +552,26 @@ Examples:
         help="Output file (default: stdout)",
     )
 
+    # v0.8.0: Pinned MCP Focus options (task-106.5)
+    export_ai_parser.add_argument(
+        "--pinned-focus",
+        action="store_true",
+        help="Add dedicated analysis section for pinned servers",
+    )
+
+    export_ai_parser.add_argument(
+        "--full-mcp-breakdown",
+        action="store_true",
+        help="Include per-server and per-tool breakdown for ALL MCP servers",
+    )
+
+    export_ai_parser.add_argument(
+        "--pinned-servers",
+        action="append",
+        metavar="SERVER",
+        help="Servers to analyze as pinned (can use multiple times)",
+    )
+
     # ========================================================================
     # ui command (v0.7.0 - task-105.1)
     # ========================================================================
@@ -532,6 +620,8 @@ Keyboard shortcuts:
         return cmd_export(args)
     elif args.command == "ui":
         return cmd_ui(args)
+    elif args.command == "smells":
+        return cmd_smells(args)
     else:
         parser.print_help()
         return 1
@@ -736,6 +826,9 @@ def cmd_collect(args: argparse.Namespace) -> int:
 
         # Set output directory from CLI args
         tracker.output_dir = args.output
+
+        # v0.8.0: Set pinned servers from CLI args (task-106.5)
+        tracker.session.pinned_servers = args.pinned_servers or []
 
         # Start tracking
         tracker.start()
@@ -1048,6 +1141,183 @@ def cmd_report(args: argparse.Namespace) -> int:
     else:
         print(f"Error: Unknown format: {args.format}")
         return 1
+
+
+def cmd_smells(args: argparse.Namespace) -> int:
+    """Execute smells command - cross-session smell aggregation."""
+    from .smell_aggregator import SmellAggregator
+
+    aggregator = SmellAggregator()
+    result = aggregator.aggregate(
+        days=args.days,
+        platform=args.platform,
+        project=args.project,
+    )
+
+    # Filter by minimum frequency
+    min_freq = getattr(args, "min_frequency", 0.0)
+    if min_freq > 0:
+        result.aggregated_smells = [
+            s for s in result.aggregated_smells if s.frequency_percent >= min_freq
+        ]
+
+    # Output based on format
+    output_format = getattr(args, "format", "text")
+    output_path = getattr(args, "output", None)
+
+    if output_format == "json":
+        return _output_smells_json(result, output_path)
+    elif output_format == "markdown":
+        return _output_smells_markdown(result, output_path)
+    else:
+        return _output_smells_text(result, output_path)
+
+
+def _output_smells_text(result: "SmellAggregationResult", output_path: Optional[Path]) -> int:
+    """Output smells report as formatted text with progress bars."""
+    lines: List[str] = []
+
+    # Header
+    days = (result.query_end - result.query_start).days + 1
+    lines.append(f"Smell Trends (last {days} days, {result.total_sessions} sessions)")
+    lines.append("=" * 70)
+    lines.append("")
+
+    if not result.aggregated_smells:
+        lines.append("No smells detected in the specified date range.")
+        lines.append("")
+        _output_lines(lines, output_path)
+        return 0
+
+    # Column headers
+    lines.append(f"{'Pattern':<18} {'Frequency':<15} {'Sessions':<12} Trend")
+    lines.append("-" * 70)
+
+    # Smell rows
+    for smell in result.aggregated_smells:
+        # Progress bar (10 chars)
+        filled = int(smell.frequency_percent / 10)
+        bar = "█" * filled + "░" * (10 - filled)
+
+        # Trend indicator
+        if smell.trend == "worsening":
+            trend = f"↑ worsening (+{abs(smell.trend_change_percent):.0f}%)"
+        elif smell.trend == "improving":
+            trend = f"↓ improving ({smell.trend_change_percent:.0f}%)"
+        else:
+            trend = "→ stable"
+
+        # Format row
+        freq_str = f"{bar} {smell.frequency_percent:>3.0f}%"
+        sessions_str = f"({smell.sessions_affected:>2}/{smell.total_sessions})"
+
+        lines.append(f"{smell.pattern:<18} {freq_str:<15} {sessions_str:<12} {trend}")
+
+    lines.append("")
+    lines.append("-" * 70)
+
+    # Top affected tools summary
+    all_tools: Dict[str, int] = {}
+    for smell in result.aggregated_smells:
+        for tool, count in smell.top_tools:
+            all_tools[tool] = all_tools.get(tool, 0) + count
+
+    if all_tools:
+        lines.append("Top Affected Tools:")
+        sorted_tools = sorted(all_tools.items(), key=lambda x: x[1], reverse=True)[:5]
+        for tool, count in sorted_tools:
+            lines.append(f"  • {tool}: {count} occurrences")
+        lines.append("")
+
+    _output_lines(lines, output_path)
+    return 0
+
+
+def _output_smells_json(result: "SmellAggregationResult", output_path: Optional[Path]) -> int:
+    """Output smells report as JSON."""
+    import json
+
+    output = json.dumps(result.to_dict(), indent=2)
+
+    if output_path:
+        output_path.write_text(output)
+        print(f"JSON report written to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+def _output_smells_markdown(result: "SmellAggregationResult", output_path: Optional[Path]) -> int:
+    """Output smells report as Markdown."""
+    lines: List[str] = []
+
+    # Header
+    days = (result.query_end - result.query_start).days + 1
+    lines.append("# Smell Trends Report")
+    lines.append("")
+    lines.append(f"**Period:** {result.query_start} to {result.query_end} ({days} days)")
+    lines.append(f"**Sessions analyzed:** {result.total_sessions}")
+    lines.append(f"**Sessions with smells:** {result.sessions_with_smells}")
+    if result.platform_filter:
+        lines.append(f"**Platform:** {result.platform_filter}")
+    if result.project_filter:
+        lines.append(f"**Project:** {result.project_filter}")
+    lines.append("")
+
+    if not result.aggregated_smells:
+        lines.append("No smells detected in the specified date range.")
+        _output_lines(lines, output_path)
+        return 0
+
+    # Table
+    lines.append("## Smell Patterns")
+    lines.append("")
+    lines.append("| Pattern | Frequency | Sessions | Trend |")
+    lines.append("|---------|-----------|----------|-------|")
+
+    for smell in result.aggregated_smells:
+        # Trend indicator
+        if smell.trend == "worsening":
+            trend = f"↑ +{abs(smell.trend_change_percent):.0f}%"
+        elif smell.trend == "improving":
+            trend = f"↓ {smell.trend_change_percent:.0f}%"
+        else:
+            trend = "→ stable"
+
+        lines.append(
+            f"| {smell.pattern} | {smell.frequency_percent:.0f}% | "
+            f"{smell.sessions_affected}/{smell.total_sessions} | {trend} |"
+        )
+
+    lines.append("")
+
+    # Top tools
+    all_tools: Dict[str, int] = {}
+    for smell in result.aggregated_smells:
+        for tool, count in smell.top_tools:
+            all_tools[tool] = all_tools.get(tool, 0) + count
+
+    if all_tools:
+        lines.append("## Top Affected Tools")
+        lines.append("")
+        sorted_tools = sorted(all_tools.items(), key=lambda x: x[1], reverse=True)[:10]
+        for tool, count in sorted_tools:
+            lines.append(f"- **{tool}**: {count} occurrences")
+        lines.append("")
+
+    _output_lines(lines, output_path)
+    return 0
+
+
+def _output_lines(lines: List[str], output_path: Optional[Path]) -> None:
+    """Output lines to file or stdout."""
+    output = "\n".join(lines)
+    if output_path:
+        output_path.write_text(output)
+        print(f"Report written to: {output_path}")
+    else:
+        print(output)
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -1444,6 +1714,11 @@ def cmd_export_ai_prompt(args: argparse.Namespace) -> int:
     output_format = getattr(args, "format", "markdown")
     output_path = getattr(args, "output", None)
 
+    # v0.8.0: Pinned MCP Focus options (task-106.5)
+    pinned_focus = getattr(args, "pinned_focus", False)
+    full_mcp_breakdown = getattr(args, "full_mcp_breakdown", False)
+    pinned_servers = getattr(args, "pinned_servers", None) or []
+
     if session_path is None:
         # Find latest session
         session_path = get_latest_session()
@@ -1461,11 +1736,27 @@ def cmd_export_ai_prompt(args: argparse.Namespace) -> int:
         print(f"Error: Could not load session file: {session_path}")
         return 1
 
+    # v0.8.0: Merge CLI pinned servers with session pinned servers
+    session_pinned = session_data.get("session", {}).get("pinned_servers", [])
+    all_pinned = list(set(pinned_servers + session_pinned))
+
     # Generate output
     if output_format == "markdown":
-        output = generate_ai_prompt_markdown(session_data, session_path)
+        output = generate_ai_prompt_markdown(
+            session_data,
+            session_path,
+            pinned_focus=pinned_focus,
+            full_mcp_breakdown=full_mcp_breakdown,
+            pinned_servers=all_pinned,
+        )
     else:
-        output = generate_ai_prompt_json(session_data, session_path)
+        output = generate_ai_prompt_json(
+            session_data,
+            session_path,
+            pinned_focus=pinned_focus,
+            full_mcp_breakdown=full_mcp_breakdown,
+            pinned_servers=all_pinned,
+        )
 
     # Write output
     if output_path:
@@ -1477,9 +1768,25 @@ def cmd_export_ai_prompt(args: argparse.Namespace) -> int:
     return 0
 
 
-def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path) -> str:
-    """Generate AI-optimized markdown prompt from session data."""
+def generate_ai_prompt_markdown(
+    session_data: Dict[str, Any],
+    session_path: Path,
+    *,
+    pinned_focus: bool = False,
+    full_mcp_breakdown: bool = False,
+    pinned_servers: Optional[List[str]] = None,
+) -> str:
+    """Generate AI-optimized markdown prompt from session data.
+
+    Args:
+        session_data: Parsed session JSON data
+        session_path: Path to the session file
+        pinned_focus: Add dedicated analysis section for pinned servers (v0.8.0)
+        full_mcp_breakdown: Include per-server and per-tool breakdown for ALL servers (v0.8.0)
+        pinned_servers: List of servers to analyze as pinned (v0.8.0)
+    """
     lines = []
+    pinned_servers = pinned_servers or []
 
     # Header
     lines.append("# MCP Session Analysis Request")
@@ -1491,6 +1798,11 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
     lines.append("4. Architecture improvements (if applicable)")
     lines.append("")
 
+    # v0.8.0: Pinned Server Focus Section (task-106.5)
+    server_sessions = session_data.get("server_sessions", {})
+    if pinned_focus and pinned_servers:
+        lines.extend(_generate_pinned_server_focus(server_sessions, pinned_servers))
+
     # Session Summary
     session = session_data.get("session", {})
     lines.append("## Session Summary")
@@ -1499,6 +1811,8 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
     lines.append(f"- **Model**: {session.get('model', 'unknown')}")
     lines.append(f"- **Duration**: {_format_duration(session.get('duration_seconds', 0))}")
     lines.append(f"- **Project**: {session.get('project', 'unknown')}")
+    if pinned_servers:
+        lines.append(f"- **Pinned Servers**: {', '.join(pinned_servers)}")
     lines.append("")
 
     # Token Usage
@@ -1561,8 +1875,7 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
     lines.append(f"- **Most Called**: {mcp_summary.get('most_called', 'N/A')}")
     lines.append("")
 
-    # Tool breakdown (top 10)
-    server_sessions = session_data.get("server_sessions", {})
+    # Tool breakdown (top 10) or full breakdown
     tool_stats = []
     for server_name, server_data in server_sessions.items():
         if server_name == "builtin":
@@ -1592,6 +1905,10 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
             )
         lines.append("")
 
+    # v0.8.0: Full MCP Server Breakdown (task-106.5)
+    if full_mcp_breakdown:
+        lines.extend(_generate_full_mcp_breakdown(server_sessions, pinned_servers))
+
     # Detected Smells
     smells = session_data.get("smells", [])
     if smells:
@@ -1616,6 +1933,10 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
         lines.append("")
         lines.append("No efficiency issues detected.")
         lines.append("")
+
+    # v0.8.0: AI Recommendations (task-106.2)
+    if smells:
+        lines.extend(_generate_recommendations_section(smells))
 
     # Zombie Tools
     zombie_tools = session_data.get("zombie_tools", {})
@@ -1643,16 +1964,12 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
             lines.append(f"- **Notes**: {data_quality['notes']}")
         lines.append("")
 
-    # Suggested Analysis Questions
-    lines.append("## Suggested Analysis Questions")
-    lines.append("")
-    lines.append("1. Which tools are consuming the most tokens? Are they necessary?")
-    lines.append("2. Is the cache being used effectively? How can cache hit rate improve?")
-    lines.append("3. Are there chatty tools that could be batched or optimized?")
-    lines.append("4. Are zombie tools contributing unnecessary context overhead?")
-    lines.append("5. What architectural changes could reduce token usage?")
-    lines.append("6. Are there alternative tools or approaches that would be more efficient?")
-    lines.append("")
+    # v0.8.0: Context-Aware Analysis Questions (task-106.5)
+    lines.extend(
+        _generate_context_aware_questions(
+            session_data, tool_stats, pinned_servers, smells, zombie_tools
+        )
+    )
 
     # Source file reference
     lines.append("---")
@@ -1661,9 +1978,301 @@ def generate_ai_prompt_markdown(session_data: Dict[str, Any], session_path: Path
     return "\n".join(lines)
 
 
-def generate_ai_prompt_json(session_data: Dict[str, Any], session_path: Path) -> str:
-    """Generate AI-optimized JSON from session data."""
+def _generate_pinned_server_focus(
+    server_sessions: Dict[str, Any], pinned_servers: List[str]
+) -> List[str]:
+    """Generate the Pinned Server Focus section for AI export (v0.8.0 - task-106.5)."""
+    lines = []
+
+    for server_name in pinned_servers:
+        server_data = server_sessions.get(server_name, {})
+        if not server_data:
+            # Server pinned but not used
+            lines.append(f"## Pinned Server Focus: {server_name}")
+            lines.append("")
+            lines.append("**Status**: Pinned but not used in this session")
+            lines.append("")
+            continue
+
+        tools = server_data.get("tools", {})
+        total_calls = sum(t.get("calls", 0) for t in tools.values())
+        total_tokens = sum(t.get("total_tokens", 0) for t in tools.values())
+
+        lines.append(f"## Pinned Server Focus: {server_name}")
+        lines.append("")
+        lines.append("### Usage Summary")
+        lines.append("")
+        lines.append(f"- **Total Calls**: {total_calls}")
+        lines.append(f"- **Total Tokens**: {total_tokens:,}")
+        lines.append(f"- **Unique Tools Used**: {len(tools)}")
+        if total_calls > 0:
+            lines.append(f"- **Avg Tokens/Call**: {total_tokens // total_calls:,}")
+        lines.append("")
+
+        if tools:
+            lines.append("### Tool Breakdown")
+            lines.append("")
+            lines.append("| Tool | Calls | Tokens | Avg/Call |")
+            lines.append("|------|-------|--------|----------|")
+
+            # Sort tools by tokens descending
+            sorted_tools = sorted(
+                tools.items(), key=lambda x: x[1].get("total_tokens", 0), reverse=True
+            )
+            for tool_name, stats in sorted_tools:
+                calls = stats.get("calls", 0)
+                tokens = stats.get("total_tokens", 0)
+                avg = tokens // calls if calls > 0 else 0
+                lines.append(f"| {tool_name} | {calls} | {tokens:,} | {avg:,} |")
+            lines.append("")
+
+        # Patterns detected for this server
+        lines.append("### Patterns Detected")
+        lines.append("")
+        if total_calls > 0:
+            avg_efficiency = total_tokens / total_calls
+            lines.append(f"- Average token efficiency: {avg_efficiency:,.0f} tokens/call")
+            if avg_efficiency > 5000:
+                lines.append("- High token usage per call - consider optimization")
+            elif avg_efficiency < 500:
+                lines.append("- Efficient token usage per call")
+        else:
+            lines.append("- No calls recorded")
+        lines.append("")
+
+    return lines
+
+
+def _generate_full_mcp_breakdown(
+    server_sessions: Dict[str, Any], pinned_servers: List[str]
+) -> List[str]:
+    """Generate full MCP server breakdown for all servers (v0.8.0 - task-106.5)."""
+    lines = []
+    lines.append("## Full MCP Server Breakdown")
+    lines.append("")
+
+    # Exclude builtin
+    mcp_servers = {k: v for k, v in server_sessions.items() if k != "builtin"}
+
+    if not mcp_servers:
+        lines.append("No MCP servers used in this session.")
+        lines.append("")
+        return lines
+
+    # Calculate totals for percentage
+    total_mcp_tokens = sum(
+        sum(t.get("total_tokens", 0) for t in s.get("tools", {}).values())
+        for s in mcp_servers.values()
+    )
+
+    for server_name, server_data in sorted(mcp_servers.items()):
+        tools = server_data.get("tools", {})
+        server_calls = sum(t.get("calls", 0) for t in tools.values())
+        server_tokens = sum(t.get("total_tokens", 0) for t in tools.values())
+
+        is_pinned = server_name in pinned_servers
+        pinned_badge = " [PINNED]" if is_pinned else ""
+        share_pct = (server_tokens / total_mcp_tokens * 100) if total_mcp_tokens > 0 else 0
+
+        lines.append(f"### Server: {server_name}{pinned_badge}")
+        lines.append("")
+        lines.append(
+            f"- **Calls**: {server_calls} | **Tokens**: {server_tokens:,} | **Share**: {share_pct:.1f}%"
+        )
+        lines.append("")
+
+        if tools:
+            lines.append("| Tool | Calls | Tokens | Avg |")
+            lines.append("|------|-------|--------|-----|")
+            sorted_tools = sorted(
+                tools.items(), key=lambda x: x[1].get("total_tokens", 0), reverse=True
+            )
+            for tool_name, stats in sorted_tools:
+                calls = stats.get("calls", 0)
+                tokens = stats.get("total_tokens", 0)
+                avg = tokens // calls if calls > 0 else 0
+                # Format large numbers with K suffix
+                tokens_fmt = f"{tokens // 1000}K" if tokens >= 1000 else str(tokens)
+                avg_fmt = f"{avg // 1000}K" if avg >= 1000 else str(avg)
+                lines.append(f"| {tool_name} | {calls} | {tokens_fmt} | {avg_fmt} |")
+            lines.append("")
+
+    return lines
+
+
+def _generate_recommendations_section(smells: List[Dict[str, Any]]) -> List[str]:
+    """Generate AI recommendations from detected smells (v0.8.0 - task-106.2)."""
+    from .base_tracker import Smell
+    from .recommendations import generate_recommendations
+
+    lines: List[str] = []
+
+    # Convert smell dicts to Smell objects
+    smell_objects: List[Smell] = []
+    for smell_dict in smells:
+        try:
+            smell_objects.append(
+                Smell(
+                    pattern=smell_dict.get("pattern", ""),
+                    severity=smell_dict.get("severity", "info"),
+                    description=smell_dict.get("description", ""),
+                    tool=smell_dict.get("tool"),
+                    evidence=smell_dict.get("evidence", {}),
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+
+    if not smell_objects:
+        return lines
+
+    recommendations = generate_recommendations(smell_objects, min_confidence=0.3)
+
+    if not recommendations:
+        return lines
+
+    lines.append("## AI Recommendations")
+    lines.append("")
+    lines.append("Based on detected efficiency issues, here are actionable recommendations:")
+    lines.append("")
+
+    for i, rec in enumerate(recommendations, 1):
+        confidence_pct = int(rec.confidence * 100)
+        lines.append(f"### {i}. {rec.type}")
+        lines.append("")
+        lines.append(f"**Confidence**: {confidence_pct}%")
+        lines.append("")
+        lines.append(f"**Evidence**: {rec.evidence}")
+        lines.append("")
+        lines.append(f"**Action**: {rec.action}")
+        lines.append("")
+        lines.append(f"**Impact**: {rec.impact}")
+        lines.append("")
+
+    return lines
+
+
+def _generate_context_aware_questions(
+    session_data: Dict[str, Any],
+    tool_stats: List[Dict[str, Any]],
+    pinned_servers: List[str],
+    smells: List[Dict[str, Any]],
+    zombie_tools: Dict[str, List[str]],
+) -> List[str]:
+    """Generate context-aware analysis questions based on actual session data (v0.8.0 - task-106.5)."""
+    lines = []
+    questions = []
+
+    # Token-based questions
+    if tool_stats:
+        top_tool = tool_stats[0]
+        total_tokens = sum(s["tokens"] for s in tool_stats)
+        if total_tokens > 0:
+            top_pct = (top_tool["tokens"] / total_tokens) * 100
+            if top_pct > 50:
+                questions.append(
+                    f"Why did `{top_tool['tool']}` consume {top_pct:.0f}% of MCP tokens? "
+                    "Is this expected for the task?"
+                )
+
+    # Pinned server questions
+    server_sessions = session_data.get("server_sessions", {})
+    used_servers = set(server_sessions.keys()) - {"builtin"}
+
+    for server in pinned_servers:
+        if server not in used_servers:
+            questions.append(
+                f"Pinned server `{server}` wasn't used in this session. "
+                "Should it be unpinned to reduce context overhead?"
+            )
+        else:
+            server_data = server_sessions.get(server, {})
+            tools = server_data.get("tools", {})
+            if len(tools) == 1:
+                tool_name = list(tools.keys())[0]
+                questions.append(
+                    f"Pinned server `{server}` only used `{tool_name}`. "
+                    "Are the other available tools needed?"
+                )
+
+    # Smell-based questions
+    for smell in smells:
+        pattern = smell.get("pattern", "")
+        tool = smell.get("tool", "")
+        evidence = smell.get("evidence", {})
+
+        if pattern == "CHATTY":
+            call_count = evidence.get("call_count", 0)
+            questions.append(
+                f"Tool `{tool}` was called {call_count} times. "
+                "Can these calls be batched or reduced?"
+            )
+        elif pattern == "REDUNDANT_CALLS":
+            dup_count = evidence.get("duplicate_count", 0)
+            questions.append(
+                f"Tool `{tool}` had {dup_count} duplicate calls. "
+                "Is caching being used effectively?"
+            )
+        elif pattern == "EXPENSIVE_FAILURES":
+            tokens = evidence.get("tokens", 0)
+            questions.append(
+                f"A failed operation consumed {tokens:,} tokens. "
+                "Should validation be added before expensive calls?"
+            )
+
+    # Zombie tool questions
+    if zombie_tools:
+        total_zombies = sum(len(tools) for tools in zombie_tools.values())
+        if total_zombies > 10:
+            questions.append(
+                f"There are {total_zombies} zombie tools defined but never used. "
+                "Consider removing unused MCP servers to reduce context size."
+            )
+
+    # Default questions if no specific ones generated
+    if not questions:
+        questions = [
+            "Which tools are consuming the most tokens? Are they necessary?",
+            "Is the cache being used effectively? How can cache hit rate improve?",
+            "Are there chatty tools that could be batched or optimized?",
+            "Are zombie tools contributing unnecessary context overhead?",
+            "What architectural changes could reduce token usage?",
+            "Are there alternative tools or approaches that would be more efficient?",
+        ]
+
+    lines.append("## Context-Aware Analysis Questions")
+    lines.append("")
+    for i, q in enumerate(questions, 1):
+        lines.append(f"{i}. {q}")
+    lines.append("")
+
+    return lines
+
+
+def generate_ai_prompt_json(
+    session_data: Dict[str, Any],
+    session_path: Path,
+    *,
+    pinned_focus: bool = False,
+    full_mcp_breakdown: bool = False,
+    pinned_servers: Optional[List[str]] = None,
+) -> str:
+    """Generate AI-optimized JSON from session data.
+
+    Args:
+        session_data: Parsed session JSON data
+        session_path: Path to the session file
+        pinned_focus: Add dedicated analysis section for pinned servers (v0.8.0)
+        full_mcp_breakdown: Include per-server and per-tool breakdown for ALL servers (v0.8.0)
+        pinned_servers: List of servers to analyze as pinned (v0.8.0)
+    """
     import json
+
+    from .base_tracker import Smell
+    from .recommendations import generate_recommendations
+
+    pinned_servers = pinned_servers or []
+    server_sessions = session_data.get("server_sessions", {})
 
     # Extract relevant fields for AI analysis
     ai_prompt_data = {
@@ -1690,8 +2299,11 @@ def generate_ai_prompt_json(session_data: Dict[str, Any], session_path: Path) ->
         "source_file": session_path.name,
     }
 
+    # v0.8.0: Add pinned servers metadata (task-106.5)
+    if pinned_servers:
+        ai_prompt_data["pinned_servers"] = pinned_servers
+
     # Add top tools by tokens
-    server_sessions = session_data.get("server_sessions", {})
     tool_stats = []
     for server_name, server_data in server_sessions.items():
         if server_name == "builtin":
@@ -1710,7 +2322,172 @@ def generate_ai_prompt_json(session_data: Dict[str, Any], session_path: Path) ->
     tool_stats.sort(key=lambda x: x["tokens"], reverse=True)
     ai_prompt_data["top_tools"] = tool_stats[:10]
 
+    # v0.8.0: Pinned server analysis (task-106.5)
+    if pinned_focus and pinned_servers:
+        pinned_analysis = {}
+        for server_name in pinned_servers:
+            server_data = server_sessions.get(server_name, {})
+            tools = server_data.get("tools", {})
+            total_calls = sum(t.get("calls", 0) for t in tools.values())
+            total_tokens = sum(t.get("total_tokens", 0) for t in tools.values())
+
+            pinned_analysis[server_name] = {
+                "calls": total_calls,
+                "tokens": total_tokens,
+                "is_pinned": True,
+                "tools": {
+                    name: {
+                        "calls": stats.get("calls", 0),
+                        "tokens": stats.get("total_tokens", 0),
+                        "avg": (
+                            stats.get("total_tokens", 0) // stats.get("calls", 1)
+                            if stats.get("calls", 0) > 0
+                            else 0
+                        ),
+                    }
+                    for name, stats in tools.items()
+                },
+            }
+        ai_prompt_data["pinned_server_analysis"] = pinned_analysis
+
+    # v0.8.0: Full server breakdown (task-106.5)
+    if full_mcp_breakdown:
+        full_breakdown = {}
+        total_mcp_tokens = sum(
+            sum(t.get("total_tokens", 0) for t in s.get("tools", {}).values())
+            for name, s in server_sessions.items()
+            if name != "builtin"
+        )
+
+        for server_name, server_data in server_sessions.items():
+            if server_name == "builtin":
+                continue
+            tools = server_data.get("tools", {})
+            server_calls = sum(t.get("calls", 0) for t in tools.values())
+            server_tokens = sum(t.get("total_tokens", 0) for t in tools.values())
+            share_pct = (server_tokens / total_mcp_tokens * 100) if total_mcp_tokens > 0 else 0
+
+            full_breakdown[server_name] = {
+                "calls": server_calls,
+                "tokens": server_tokens,
+                "share_percent": round(share_pct, 1),
+                "is_pinned": server_name in pinned_servers,
+                "tools": {
+                    name: {
+                        "calls": stats.get("calls", 0),
+                        "tokens": stats.get("total_tokens", 0),
+                        "avg": (
+                            stats.get("total_tokens", 0) // stats.get("calls", 1)
+                            if stats.get("calls", 0) > 0
+                            else 0
+                        ),
+                    }
+                    for name, stats in tools.items()
+                },
+            }
+        ai_prompt_data["full_server_breakdown"] = full_breakdown
+
+    # v0.8.0: Recommendations (task-106.2)
+    smells = session_data.get("smells", [])
+    if smells:
+        smell_objects = []
+        for smell_dict in smells:
+            try:
+                smell_objects.append(
+                    Smell(
+                        pattern=smell_dict.get("pattern", ""),
+                        severity=smell_dict.get("severity", "info"),
+                        description=smell_dict.get("description"),
+                        tool=smell_dict.get("tool"),
+                        evidence=smell_dict.get("evidence", {}),
+                    )
+                )
+            except (TypeError, ValueError):
+                continue
+
+        if smell_objects:
+            recommendations = generate_recommendations(smell_objects, min_confidence=0.3)
+            ai_prompt_data["recommendations"] = [rec.to_dict() for rec in recommendations]
+
+    # v0.8.0: Context-aware questions (task-106.5)
+    questions = _generate_context_questions_list(
+        session_data, tool_stats, pinned_servers, smells, session_data.get("zombie_tools", {})
+    )
+    ai_prompt_data["context_questions"] = questions
+
     return json.dumps(ai_prompt_data, indent=2)
+
+
+def _generate_context_questions_list(
+    session_data: Dict[str, Any],
+    tool_stats: List[Dict[str, Any]],
+    pinned_servers: List[str],
+    smells: List[Dict[str, Any]],
+    zombie_tools: Dict[str, List[str]],
+) -> List[str]:
+    """Generate context-aware questions as a list (v0.8.0 - task-106.5)."""
+    questions = []
+
+    # Token-based questions
+    if tool_stats:
+        top_tool = tool_stats[0]
+        total_tokens = sum(s["tokens"] for s in tool_stats)
+        if total_tokens > 0:
+            top_pct = (top_tool["tokens"] / total_tokens) * 100
+            if top_pct > 50:
+                questions.append(
+                    f"Why did '{top_tool['tool']}' consume {top_pct:.0f}% of MCP tokens?"
+                )
+
+    # Pinned server questions
+    server_sessions = session_data.get("server_sessions", {})
+    used_servers = set(server_sessions.keys()) - {"builtin"}
+
+    for server in pinned_servers:
+        if server not in used_servers:
+            questions.append(f"Pinned server '{server}' wasn't used - should it be unpinned?")
+        else:
+            server_data = server_sessions.get(server, {})
+            tools = server_data.get("tools", {})
+            if len(tools) == 1:
+                tool_name = list(tools.keys())[0]
+                questions.append(
+                    f"Pinned server '{server}' only used '{tool_name}' - are other tools needed?"
+                )
+
+    # Smell-based questions
+    for smell in smells:
+        pattern = smell.get("pattern", "")
+        tool = smell.get("tool", "")
+        evidence = smell.get("evidence", {})
+
+        if pattern == "CHATTY":
+            call_count = evidence.get("call_count", 0)
+            questions.append(f"Tool '{tool}' was called {call_count} times - can calls be batched?")
+        elif pattern == "REDUNDANT_CALLS":
+            questions.append(f"Tool '{tool}' has redundant calls - is caching effective?")
+        elif pattern == "EXPENSIVE_FAILURES":
+            tokens = evidence.get("tokens", 0)
+            questions.append(f"Failed operation consumed {tokens:,} tokens - add validation?")
+
+    # Zombie tool questions
+    if zombie_tools:
+        total_zombies = sum(len(tools) for tools in zombie_tools.values())
+        if total_zombies > 10:
+            questions.append(
+                f"{total_zombies} zombie tools found - consider removing unused servers"
+            )
+
+    # Default questions if none generated
+    if not questions:
+        questions = [
+            "Which tools consume the most tokens?",
+            "Is cache being used effectively?",
+            "Are there chatty tools to optimize?",
+            "Should zombie tools be removed?",
+        ]
+
+    return questions
 
 
 def _format_duration(seconds: float) -> str:

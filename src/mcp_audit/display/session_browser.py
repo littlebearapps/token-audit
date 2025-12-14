@@ -5,14 +5,16 @@ Provides list view with filtering/sorting and detail view for individual session
 Uses Rich's Live display with keyboard input for interactive navigation.
 
 v0.7.0 - task-105.1, task-105.3, task-105.4
+v0.8.0 - task-106.7 (Comparison), task-106.9 (Notifications)
 """
 
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from rich import box
 from rich.console import Console
@@ -45,6 +47,7 @@ from .keyboard import (
     disable_raw_mode,
     enable_raw_mode,
 )
+from .rich_display import Notification
 from .theme_detect import get_active_theme
 from .themes import THEMES, _ThemeType
 
@@ -58,6 +61,8 @@ class BrowserMode(Enum):
     SORT_MENU = auto()  # v0.7.0 - task-105.4
     HELP = auto()  # v0.7.0 - task-105.3
     TOOL_DETAIL = auto()  # v0.7.0 - task-105.7
+    TIMELINE = auto()  # v0.8.0 - task-106.8
+    COMPARISON = auto()  # v0.8.0 - task-106.7
 
 
 # Sort options: (display_label, sort_key, reverse)
@@ -94,7 +99,13 @@ KEYBINDINGS: List[KeybindingInfo] = [
     KeybindingInfo(
         "Esc",
         "Back/Cancel",
-        (BrowserMode.DETAIL, BrowserMode.SORT_MENU, BrowserMode.HELP, BrowserMode.TOOL_DETAIL),
+        (
+            BrowserMode.DETAIL,
+            BrowserMode.SORT_MENU,
+            BrowserMode.HELP,
+            BrowserMode.TOOL_DETAIL,
+            BrowserMode.TIMELINE,
+        ),
     ),
     KeybindingInfo("p", "Pin/unpin session", (BrowserMode.LIST,)),
     KeybindingInfo("s", "Sort menu", (BrowserMode.LIST,)),
@@ -104,8 +115,12 @@ KEYBINDINGS: List[KeybindingInfo] = [
     KeybindingInfo("d", "Drill into tool", (BrowserMode.DETAIL,)),
     # v0.7.0 - task-105.8: AI export on all screens
     KeybindingInfo(
-        "a", "AI export", (BrowserMode.LIST, BrowserMode.DETAIL, BrowserMode.TOOL_DETAIL)
+        "a",
+        "AI export",
+        (BrowserMode.LIST, BrowserMode.DETAIL, BrowserMode.TOOL_DETAIL, BrowserMode.TIMELINE),
     ),
+    # v0.8.0 - task-106.8: Timeline view
+    KeybindingInfo("T", "Timeline view", (BrowserMode.DETAIL,)),
 ]
 
 
@@ -141,6 +156,7 @@ class BrowserState:
     sort_reverse: bool = True  # newest/highest first
     sort_menu_index: int = 0  # v0.7.0 - task-105.4
     selected_tool: Optional[tuple[str, str]] = None  # v0.7.0 - task-105.7 (server, tool)
+    selected_sessions: Set[int] = field(default_factory=set)  # v0.8.0 - task-106.7 (comparison)
 
 
 @dataclass
@@ -160,6 +176,57 @@ class ToolDetailData:
     smells: List[Dict[str, Any]]
     static_cost_tokens: int
     call_history: List[Dict[str, Any]]  # For AI export
+
+
+@dataclass
+class TimelineBucket:
+    """A time bucket for timeline visualization (v0.8.0 - task-106.8)."""
+
+    bucket_index: int  # 0-based index
+    start_seconds: float  # Start time in seconds from session start
+    duration_seconds: float  # Bucket duration
+    mcp_tokens: int = 0  # Tokens from MCP tool calls
+    builtin_tokens: int = 0  # Tokens from built-in tools
+    total_tokens: int = 0  # Total tokens in this bucket
+    call_count: int = 0  # Number of calls in this bucket
+    is_spike: bool = False  # Whether this bucket is a spike
+    spike_magnitude: float = 0.0  # Z-score for spike detection
+
+
+@dataclass
+class TimelineData:
+    """Computed timeline data for visualization (v0.8.0 - task-106.8)."""
+
+    session_date: date
+    duration_seconds: float
+    bucket_duration_seconds: float  # How long each bucket represents
+    buckets: List[TimelineBucket] = field(default_factory=list)
+    spikes: List[TimelineBucket] = field(default_factory=list)
+    max_tokens_per_bucket: int = 0
+    avg_tokens_per_bucket: float = 0.0
+    total_tokens: int = 0
+    total_mcp_tokens: int = 0
+    total_builtin_tokens: int = 0
+
+
+@dataclass
+class ComparisonData:
+    """Computed comparison data for multi-session analysis (v0.8.0 - task-106.7)."""
+
+    # Session entries and their full data
+    baseline: "SessionEntry"
+    baseline_data: Dict[str, Any]
+    comparisons: List[tuple["SessionEntry", Dict[str, Any]]]
+
+    # Computed deltas (each element corresponds to a comparison session)
+    token_deltas: List[int]  # total_tokens - baseline
+    mcp_share_deltas: List[float]  # mcp% - baseline%
+
+    # Top tool changes: (tool_name, delta_tokens) sorted by absolute value
+    tool_changes: List[tuple[str, int]]
+
+    # Smell presence matrix: {pattern: [baseline_has, comp1_has, comp2_has, ...]}
+    smell_matrix: Dict[str, List[bool]]
 
 
 class SessionBrowser:
@@ -191,6 +258,9 @@ class SessionBrowser:
         self.state = BrowserState()
         self.visible_rows = 15  # Sessions visible without scrolling
         self._detail_data: Optional[Dict[str, Any]] = None
+        self._timeline_data: Optional[TimelineData] = None  # v0.8.0 - task-106.8
+        self._comparison_data: Optional[ComparisonData] = None  # v0.8.0 - task-106.7
+        self._notification: Optional[Notification] = None  # v0.8.0 - task-106.9
         self._load_preferences()  # Apply saved preferences
 
     def _load_preferences(self) -> None:
@@ -204,6 +274,29 @@ class SessionBrowser:
                 if platform == prefs.last_filter_platform:
                     self.state.filter_platform = platform
                     break
+
+    def show_notification(self, message: str, level: str = "info", timeout: float = 3.0) -> None:
+        """Show a transient notification in the browser TUI (v0.8.0 - task-106.9).
+
+        Args:
+            message: The notification message to display.
+            level: Notification type - "success", "warning", "error", or "info".
+            timeout: Seconds until auto-dismiss (default 3.0).
+        """
+        self._notification = Notification(
+            message=message,
+            level=level,
+            expires_at=time.time() + timeout,
+        )
+
+    def _format_tokens(self, tokens: int) -> str:
+        """Format token count with K/M suffix."""
+        if tokens >= 1_000_000:
+            return f"{tokens / 1_000_000:.1f}M"
+        elif tokens >= 1_000:
+            return f"{tokens / 1_000:.0f}K"
+        else:
+            return str(tokens)
 
     def run(self) -> None:
         """Run the interactive browser."""
@@ -235,6 +328,11 @@ class SessionBrowser:
                 transient=True,
             ) as live:
                 while True:
+                    # Clear expired notifications (v0.8.0 - task-106.9)
+                    if self._notification and time.time() > self._notification.expires_at:
+                        self._notification = None
+                        live.update(self._build_layout())
+
                     key = check_keypress(timeout=0.1)
                     if key:
                         if self._handle_key(key):
@@ -416,6 +514,10 @@ class SessionBrowser:
             return self._handle_detail_key(key)
         elif self.state.mode == BrowserMode.TOOL_DETAIL:
             return self._handle_tool_detail_key(key)
+        elif self.state.mode == BrowserMode.TIMELINE:
+            return self._handle_timeline_key(key)  # v0.8.0 - task-106.8
+        elif self.state.mode == BrowserMode.COMPARISON:
+            return self._handle_comparison_key(key)  # v0.8.0 - task-106.7
         elif self.state.mode == BrowserMode.SORT_MENU:
             return self._handle_sort_menu_key(key)
         elif self.state.mode == BrowserMode.HELP:
@@ -458,6 +560,12 @@ class SessionBrowser:
         elif key in ("a", "A"):
             # v0.7.0 - task-105.8: AI export for selected session
             self._export_list_ai_prompt()
+        elif key == " ":
+            # v0.8.0 - task-106.7: Toggle session selection for comparison
+            self._toggle_session_selection()
+        elif key in ("c", "C"):
+            # v0.8.0 - task-106.7: Open comparison view (requires 2+ selected)
+            self._open_comparison_view()
         # Future panel navigation (no-op for now)
         elif key in ("h", "l", KEY_LEFT, KEY_RIGHT, KEY_TAB, KEY_SHIFT_TAB):
             pass  # Reserved for future panel navigation
@@ -471,6 +579,9 @@ class SessionBrowser:
         elif key in ("d", "D"):
             # Drill into tool detail (v0.7.0 - task-105.7)
             self._select_top_tool()
+        elif key in ("T",):
+            # v0.8.0 - task-106.8: Open timeline view
+            self._open_timeline_view()
         elif key in ("a", "A"):
             # v0.7.0 - task-105.8: AI export for session detail
             self._export_session_ai_prompt()
@@ -486,6 +597,328 @@ class SessionBrowser:
             # Export AI analysis prompt for this tool
             self._export_tool_ai_prompt()
         return False
+
+    def _handle_timeline_key(self, key: str) -> bool:
+        """Handle key in timeline view (v0.8.0 - task-106.8)."""
+        if key in ("q", KEY_ESC, KEY_BACKSPACE, KEY_LEFT):
+            # Return to session detail view
+            self.state.mode = BrowserMode.DETAIL
+            self._timeline_data = None
+        elif key in ("a", "A"):
+            # Export AI analysis prompt for timeline
+            self._export_timeline_ai_prompt()
+        return False
+
+    def _handle_comparison_key(self, key: str) -> bool:
+        """Handle key in comparison view (v0.8.0 - task-106.7)."""
+        if key in ("q", KEY_ESC, KEY_BACKSPACE, KEY_LEFT):
+            # Return to list view, clear selections
+            self.state.mode = BrowserMode.LIST
+            self.state.selected_sessions.clear()
+            self._comparison_data = None
+        elif key in ("a", "A"):
+            # Export AI analysis prompt for comparison
+            self._export_comparison_ai_prompt()
+        return False
+
+    def _toggle_session_selection(self) -> None:
+        """Toggle selection of current session for comparison (v0.8.0 - task-106.7)."""
+        if not self.state.sessions:
+            return
+
+        idx = self.state.selected_index
+        if idx in self.state.selected_sessions:
+            self.state.selected_sessions.remove(idx)
+        else:
+            self.state.selected_sessions.add(idx)
+
+    def _open_comparison_view(self) -> None:
+        """Open comparison view if 2+ sessions selected (v0.8.0 - task-106.7)."""
+        if len(self.state.selected_sessions) < 2:
+            self.show_notification("Select at least 2 sessions to compare", "warning")
+            return
+
+        # Compute comparison data
+        self._comparison_data = self._compute_comparison_data()
+        if self._comparison_data:
+            self.state.mode = BrowserMode.COMPARISON
+
+    def _open_timeline_view(self) -> None:
+        """Open the timeline view for the current session (v0.8.0 - task-106.8)."""
+        if not self._detail_data:
+            return
+
+        # Compute timeline data
+        self._timeline_data = self._compute_timeline_data()
+        if self._timeline_data:
+            self.state.mode = BrowserMode.TIMELINE
+
+    def _compute_timeline_data(self) -> Optional[TimelineData]:
+        """Compute timeline data from session calls (v0.8.0 - task-106.8).
+
+        Uses adaptive bucket sizes based on session duration:
+        - < 10 min: 30-second buckets
+        - 10-60 min: 1-minute buckets
+        - 1-4 hours: 5-minute buckets
+        - > 4 hours: 15-minute buckets
+
+        Detects spikes using Z-score with threshold of 2.0 standard deviations.
+        """
+        if not self._detail_data:
+            return None
+
+        # Get session info
+        session_meta = self._detail_data.get("session", {})
+        duration_seconds = session_meta.get("duration_seconds", 0)
+        session_date = datetime.fromisoformat(
+            session_meta.get("timestamp", datetime.now().isoformat())
+        ).date()
+
+        if duration_seconds <= 0:
+            return None
+
+        # Determine bucket size based on duration
+        if duration_seconds < 600:  # < 10 min
+            bucket_duration = 30.0  # 30-second buckets
+        elif duration_seconds < 3600:  # < 1 hour
+            bucket_duration = 60.0  # 1-minute buckets
+        elif duration_seconds < 14400:  # < 4 hours
+            bucket_duration = 300.0  # 5-minute buckets
+        else:
+            bucket_duration = 900.0  # 15-minute buckets
+
+        # Calculate number of buckets
+        num_buckets = max(1, int(duration_seconds / bucket_duration) + 1)
+
+        # Initialize buckets
+        buckets: List[TimelineBucket] = []
+        for i in range(num_buckets):
+            buckets.append(
+                TimelineBucket(
+                    bucket_index=i,
+                    start_seconds=i * bucket_duration,
+                    duration_seconds=bucket_duration,
+                )
+            )
+
+        # Collect all calls with timestamps from server_sessions
+        server_sessions = self._detail_data.get("server_sessions", {})
+
+        for server_name, server_data in server_sessions.items():
+            if not isinstance(server_data, dict):
+                continue
+
+            is_builtin = server_name == "builtin"
+            tools = server_data.get("tools", {})
+
+            for _tool_name, tool_stats in tools.items():
+                if not isinstance(tool_stats, dict):
+                    continue
+
+                call_history = tool_stats.get("call_history", [])
+                for call in call_history:
+                    if not isinstance(call, dict):
+                        continue
+
+                    # Get timestamp and tokens
+                    timestamp_str = call.get("timestamp")
+                    tokens = call.get("total_tokens", 0)
+
+                    if not timestamp_str:
+                        # Distribute evenly if no timestamps
+                        continue
+
+                    # Parse timestamp and compute offset from session start
+                    try:
+                        call_time = datetime.fromisoformat(timestamp_str)
+                        session_start_str = session_meta.get(
+                            "start_time", session_meta.get("timestamp")
+                        )
+                        if session_start_str:
+                            session_start = datetime.fromisoformat(session_start_str)
+                            offset_seconds = (call_time - session_start).total_seconds()
+                        else:
+                            offset_seconds = 0
+                    except (ValueError, TypeError):
+                        continue
+
+                    # Find the bucket for this call
+                    if offset_seconds < 0:
+                        offset_seconds = 0
+                    bucket_idx = min(int(offset_seconds / bucket_duration), num_buckets - 1)
+
+                    # Add tokens to bucket
+                    buckets[bucket_idx].total_tokens += tokens
+                    buckets[bucket_idx].call_count += 1
+                    if is_builtin:
+                        buckets[bucket_idx].builtin_tokens += tokens
+                    else:
+                        buckets[bucket_idx].mcp_tokens += tokens
+
+        # If no calls with timestamps, create approximate distribution
+        if all(b.total_tokens == 0 for b in buckets):
+            # Fall back to distributing total tokens evenly
+            token_usage = self._detail_data.get("token_usage", {})
+            total_tokens = token_usage.get("total_tokens", 0)
+            if total_tokens > 0 and num_buckets > 0:
+                tokens_per_bucket = total_tokens // num_buckets
+                for bucket in buckets:
+                    bucket.total_tokens = tokens_per_bucket
+                    bucket.builtin_tokens = tokens_per_bucket
+
+        # Compute statistics for spike detection
+        token_values = [b.total_tokens for b in buckets if b.total_tokens > 0]
+        if token_values:
+            mean_tokens = sum(token_values) / len(token_values)
+            variance = sum((t - mean_tokens) ** 2 for t in token_values) / len(token_values)
+            std_dev = variance**0.5 if variance > 0 else 0
+        else:
+            mean_tokens = 0
+            std_dev = 0
+
+        # Detect spikes (Z-score > 2.0)
+        spike_threshold = 2.0
+        spikes: List[TimelineBucket] = []
+        for bucket in buckets:
+            if std_dev > 0 and bucket.total_tokens > 0:
+                z_score = (bucket.total_tokens - mean_tokens) / std_dev
+                if z_score > spike_threshold:
+                    bucket.is_spike = True
+                    bucket.spike_magnitude = z_score
+                    spikes.append(bucket)
+
+        # Compute totals
+        max_tokens = max((b.total_tokens for b in buckets), default=0)
+        total_tokens = sum(b.total_tokens for b in buckets)
+        total_mcp = sum(b.mcp_tokens for b in buckets)
+        total_builtin = sum(b.builtin_tokens for b in buckets)
+
+        return TimelineData(
+            session_date=session_date,
+            duration_seconds=duration_seconds,
+            bucket_duration_seconds=bucket_duration,
+            buckets=buckets,
+            spikes=spikes,
+            max_tokens_per_bucket=max_tokens,
+            avg_tokens_per_bucket=mean_tokens,
+            total_tokens=total_tokens,
+            total_mcp_tokens=total_mcp,
+            total_builtin_tokens=total_builtin,
+        )
+
+    def _compute_comparison_data(self) -> Optional[ComparisonData]:
+        """Compute comparison data for selected sessions (v0.8.0 - task-106.7)."""
+        if len(self.state.selected_sessions) < 2:
+            return None
+
+        # Get sorted indices (first one becomes baseline)
+        indices = sorted(self.state.selected_sessions)
+        baseline_idx = indices[0]
+        comparison_indices = indices[1:]
+
+        # Load baseline session data
+        baseline_entry = self.state.sessions[baseline_idx]
+        baseline_data = self._load_session_data(baseline_entry.path)
+        if not baseline_data:
+            return None
+
+        # Load comparison sessions
+        comparisons: List[tuple[SessionEntry, Dict[str, Any]]] = []
+        for idx in comparison_indices:
+            entry = self.state.sessions[idx]
+            data = self._load_session_data(entry.path)
+            if data:
+                comparisons.append((entry, data))
+
+        if not comparisons:
+            return None
+
+        # Compute baseline metrics
+        baseline_tokens = baseline_data.get("token_usage", {}).get("total_tokens", 0)
+        baseline_mcp = baseline_data.get("mcp_summary", {})
+        baseline_mcp_tokens = baseline_mcp.get("total_tokens", 0)
+        baseline_mcp_pct = (
+            (baseline_mcp_tokens / baseline_tokens * 100) if baseline_tokens > 0 else 0
+        )
+
+        # Compute deltas
+        token_deltas: List[int] = []
+        mcp_share_deltas: List[float] = []
+        for _entry, data in comparisons:
+            comp_tokens = data.get("token_usage", {}).get("total_tokens", 0)
+            comp_mcp = data.get("mcp_summary", {})
+            comp_mcp_tokens = comp_mcp.get("total_tokens", 0)
+            comp_mcp_pct = (comp_mcp_tokens / comp_tokens * 100) if comp_tokens > 0 else 0
+
+            token_deltas.append(comp_tokens - baseline_tokens)
+            mcp_share_deltas.append(comp_mcp_pct - baseline_mcp_pct)
+
+        # Compute tool changes (aggregate across sessions)
+        tool_tokens_baseline: Dict[str, int] = {}
+        for server_name, server_data in baseline_data.get("server_sessions", {}).items():
+            if server_name == "builtin" or not isinstance(server_data, dict):
+                continue
+            for tool_name, stats in server_data.get("tools", {}).items():
+                if isinstance(stats, dict):
+                    key = f"{server_name}.{tool_name}"
+                    tool_tokens_baseline[key] = stats.get("total_tokens", 0)
+
+        tool_changes_sum: Dict[str, int] = {}
+        for _, data in comparisons:
+            for server_name, server_data in data.get("server_sessions", {}).items():
+                if server_name == "builtin" or not isinstance(server_data, dict):
+                    continue
+                for tool_name, stats in server_data.get("tools", {}).items():
+                    if isinstance(stats, dict):
+                        key = f"{server_name}.{tool_name}"
+                        comp_tokens = stats.get("total_tokens", 0)
+                        base_tokens = tool_tokens_baseline.get(key, 0)
+                        delta = comp_tokens - base_tokens
+                        tool_changes_sum[key] = tool_changes_sum.get(key, 0) + delta
+
+        # Sort by absolute delta
+        tool_changes = sorted(tool_changes_sum.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
+
+        # Build smell matrix
+        all_smells: Set[str] = set()
+        session_smells: List[Set[str]] = []
+
+        # Baseline smells
+        baseline_smells_set = {
+            smell.get("pattern", "") for smell in baseline_data.get("detected_smells", [])
+        }
+        all_smells.update(baseline_smells_set)
+        session_smells.append(baseline_smells_set)
+
+        # Comparison smells
+        for _, data in comparisons:
+            comp_smells = {smell.get("pattern", "") for smell in data.get("detected_smells", [])}
+            all_smells.update(comp_smells)
+            session_smells.append(comp_smells)
+
+        smell_matrix: Dict[str, List[bool]] = {}
+        for pattern in sorted(all_smells):
+            if not pattern:
+                continue
+            smell_matrix[pattern] = [pattern in s for s in session_smells]
+
+        return ComparisonData(
+            baseline=baseline_entry,
+            baseline_data=baseline_data,
+            comparisons=comparisons,
+            token_deltas=token_deltas,
+            mcp_share_deltas=mcp_share_deltas,
+            tool_changes=tool_changes,
+            smell_matrix=smell_matrix,
+        )
+
+    def _load_session_data(self, path: Path) -> Optional[Dict[str, Any]]:
+        """Load full session data from path (v0.8.0 - task-106.7)."""
+        try:
+            data: Dict[str, Any] = json.loads(path.read_text())
+            return data
+        except Exception:
+            return None
 
     def _select_top_tool(self) -> None:
         """Select the top tool by tokens for detail view (v0.7.0 - task-105.7)."""
@@ -714,15 +1147,15 @@ class SessionBrowser:
         self._copy_to_clipboard(output)
 
     def _copy_to_clipboard(self, text: str) -> None:
-        """Copy text to clipboard (macOS) with fallback."""
+        """Copy text to clipboard (macOS) with notification (v0.8.0 - task-106.9)."""
         try:
             import subprocess
 
             subprocess.run(["pbcopy"], input=text.encode(), check=True)
-            # Success - prompt copied (can't show message in TUI currently)
+            self.show_notification("Ask AI prompt copied to clipboard", "success")
         except Exception:
-            # Fallback - just silently succeed since we can't show output
-            pass
+            # Fallback - prompt generated but clipboard unavailable
+            self.show_notification("Ask AI prompt exported (clipboard unavailable)", "warning")
 
     def _handle_search_key(self, key: str) -> bool:
         """Handle key in search mode."""
@@ -833,36 +1266,57 @@ class SessionBrowser:
         """Build the browser layout."""
         layout = Layout()
 
+        # Build panels list (v0.8.0: dynamically add notification bar)
+        panels: List[Layout] = []
+
         if self.state.mode == BrowserMode.DETAIL:
-            layout.split_column(
+            panels = [
                 Layout(self._build_detail_view(), name="detail"),
                 Layout(self._build_detail_footer(), name="footer", size=1),
-            )
+            ]
         elif self.state.mode == BrowserMode.TOOL_DETAIL:
             # v0.7.0 - task-105.7: Tool detail view
-            layout.split_column(
+            panels = [
                 Layout(self._build_tool_detail_view(), name="tool_detail"),
                 Layout(self._build_tool_detail_footer(), name="footer", size=1),
-            )
+            ]
+        elif self.state.mode == BrowserMode.TIMELINE:
+            # v0.8.0 - task-106.8: Timeline view
+            panels = [
+                Layout(self._build_timeline_view(), name="timeline"),
+                Layout(self._build_timeline_footer(), name="footer", size=1),
+            ]
+        elif self.state.mode == BrowserMode.COMPARISON:
+            # v0.8.0 - task-106.7: Comparison view
+            panels = [
+                Layout(self._build_comparison_view(), name="comparison"),
+                Layout(self._build_comparison_footer(), name="footer", size=1),
+            ]
         elif self.state.mode == BrowserMode.SORT_MENU:
             # v0.7.0 - task-105.4: Sort menu overlay
-            layout.split_column(
+            panels = [
                 Layout(self._build_header(), name="header", size=4),
                 Layout(self._build_sort_menu(), name="menu"),
                 Layout(self._build_sort_menu_footer(), name="footer", size=1),
-            )
+            ]
         elif self.state.mode == BrowserMode.HELP:
             # v0.7.0 - task-105.3: Help overlay
-            layout.split_column(
+            panels = [
                 Layout(self._build_help_overlay(), name="help"),
                 Layout(self._build_help_footer(), name="footer", size=1),
-            )
+            ]
         else:
-            layout.split_column(
+            panels = [
                 Layout(self._build_header(), name="header", size=4),
                 Layout(self._build_session_table(), name="table"),
                 Layout(self._build_footer(), name="footer", size=1),
-            )
+            ]
+
+        # Add notification bar if active (v0.8.0 - task-106.9)
+        if self._notification:
+            panels.append(Layout(self._build_notification(), name="notification", size=1))
+
+        layout.split_column(*panels)
 
         return layout
 
@@ -917,12 +1371,24 @@ class SessionBrowser:
 
         for i, entry in enumerate(self.state.sessions[start:end]):
             actual_idx = start + i
-            is_selected = actual_idx == self.state.selected_index
+            is_cursor = actual_idx == self.state.selected_index
+            is_selected_for_compare = actual_idx in self.state.selected_sessions
 
-            indicator = ">" if is_selected else " "
+            # v0.8.0 - task-106.7: Show both cursor and selection state
+            # Cursor: ">", Selection: checkbox [X] or [ ]
+            if is_cursor:
+                indicator = ">"
+            elif is_selected_for_compare:
+                indicator = ascii_emoji("✓")  # Checkmark for selected sessions
+            else:
+                indicator = " "
             # Pin indicator with ASCII fallback - v0.7.0 task-105.4
             pin_indicator = ascii_emoji("\U0001f4cc") if entry.is_pinned else ""
-            row_style = f"bold {self.theme.info}" if is_selected else ""
+            row_style = (
+                f"bold {self.theme.info}"
+                if is_cursor
+                else (f"{self.theme.success}" if is_selected_for_compare else "")
+            )
 
             # Truncate project name if needed
             project_display = (
@@ -983,13 +1449,47 @@ class SessionBrowser:
             session_id = entry.path.stem
             footer.append(f"Session: {session_id}\n", style=self.theme.info)
 
-        # Line 2: Keybindings (v0.7.0 - task-105.8)
+        # Line 2: Keybindings (v0.7.0 - task-105.8, v0.8.0 - task-106.7 added Space/C)
+        # Show selection count if sessions are selected
+        selection_info = ""
+        if self.state.selected_sessions:
+            count = len(self.state.selected_sessions)
+            selection_info = f"  [{count} selected] C=compare"
         footer.append(
-            "q=quit  ?=help  a=AI  p=pin  s=sort  f=filter  /=search  r=refresh  t=theme",
+            f"q=quit  ?=help  a=AI  p=pin  s=sort  f=filter  /=search  r=refresh  t=theme  Space=select{selection_info}",
             style=self.theme.dim_text,
         )
         footer.justify = "center"
         return footer
+
+    def _build_notification(self) -> Text:
+        """Build notification bar for user feedback (v0.8.0 - task-106.9)."""
+        if not self._notification:
+            return Text("")
+
+        notification = self._notification
+
+        # Map level to icon and color
+        level_config = {
+            "success": (ascii_emoji("✓"), self.theme.success),
+            "warning": (ascii_emoji("⚠"), self.theme.warning),
+            "error": (ascii_emoji("✗"), self.theme.error),
+            "info": (ascii_emoji("ℹ"), self.theme.info),
+        }
+        icon, color = level_config.get(notification.level, ("", self.theme.dim_text))
+
+        # Calculate remaining time
+        remaining = max(0, notification.expires_at - time.time())
+        remaining_str = f"[{remaining:.0f}s]" if remaining > 0 else ""
+
+        # Build notification text
+        text = Text()
+        text.append(f"{icon} ", style=f"bold {color}")
+        text.append(notification.message, style=color)
+        text.append(f"  {remaining_str}", style=self.theme.dim_text)
+        text.justify = "center"
+
+        return text
 
     def _build_sort_menu(self) -> Panel:
         """Build sort options menu. v0.7.0 - task-105.4"""
@@ -1160,9 +1660,9 @@ class SessionBrowser:
 
     def _build_detail_footer(self) -> Text:
         """Build footer for detail view."""
-        # v0.7.0 - Added AI export (task-105.8)
+        # v0.7.0 - Added AI export (task-105.8), v0.8.0 - Added timeline (task-106.8)
         return Text(
-            "a=AI  d=tool detail  q/ESC=back to list",
+            "a=AI  d=tool detail  T=timeline  q/ESC=back to list",
             style=self.theme.dim_text,
             justify="center",
         )
@@ -1244,6 +1744,455 @@ class SessionBrowser:
             style=self.theme.dim_text,
             justify="center",
         )
+
+    def _build_timeline_view(self) -> Panel:
+        """Build timeline visualization view (v0.8.0 - task-106.8)."""
+        if not self._timeline_data:
+            return Panel(
+                "No timeline data available",
+                border_style=self.theme.error,
+                box=self.box_style,
+            )
+
+        td = self._timeline_data
+        content = Text()
+
+        # Header
+        content.append("Session Timeline\n", style=f"bold {self.theme.title}")
+        content.append(f"Date: {td.session_date}  ", style=self.theme.dim_text)
+        content.append(
+            f"Duration: {self._format_duration(td.duration_seconds)}\n\n", style=self.theme.dim_text
+        )
+
+        # Summary metrics
+        content.append("Summary\n", style=f"bold {self.theme.primary_text}")
+        content.append(f"  Total Tokens: {td.total_tokens:,}\n", style=self.theme.primary_text)
+        content.append(f"  MCP Tokens: {td.total_mcp_tokens:,}\n", style=self.theme.info)
+        content.append(
+            f"  Built-in Tokens: {td.total_builtin_tokens:,}\n", style=self.theme.dim_text
+        )
+        content.append(
+            f"  Avg/Bucket: {td.avg_tokens_per_bucket:,.0f}\n", style=self.theme.dim_text
+        )
+        content.append(f"  Max/Bucket: {td.max_tokens_per_bucket:,}\n", style=self.theme.warning)
+        bucket_label = self._format_bucket_duration(td.bucket_duration_seconds)
+        content.append(f"  Bucket Size: {bucket_label}\n\n", style=self.theme.dim_text)
+
+        # Timeline graph
+        content.append("Token Usage Timeline\n", style=f"bold {self.theme.primary_text}")
+        graph = self._generate_timeline_graph(td)
+        content.append(graph)
+        content.append("\n")
+
+        # Legend
+        content.append("Legend: ", style=self.theme.dim_text)
+        content.append("\u2588 ", style=self.theme.info)
+        content.append("MCP  ", style=self.theme.dim_text)
+        content.append("\u2591 ", style=self.theme.dim_text)
+        content.append("Built-in  ", style=self.theme.dim_text)
+        content.append("\u25b2 ", style=self.theme.warning)
+        content.append("Spike\n\n", style=self.theme.warning)
+
+        # Spikes
+        if td.spikes:
+            warning_emoji = ascii_emoji("\u26a0")
+            content.append(
+                f"{warning_emoji} Detected Spikes ({len(td.spikes)})\n",
+                style=f"bold {self.theme.warning}",
+            )
+            for spike in td.spikes[:5]:
+                time_label = self._format_bucket_time(spike.start_seconds)
+                content.append(
+                    f"  {time_label}: {spike.total_tokens:,} tokens "
+                    f"(z={spike.spike_magnitude:.1f})\n",
+                    style=self.theme.warning,
+                )
+            if len(td.spikes) > 5:
+                content.append(f"  +{len(td.spikes) - 5} more\n", style=self.theme.dim_text)
+
+        return Panel(
+            content,
+            title="Timeline View",
+            border_style=self.theme.activity_border,
+            box=self.box_style,
+        )
+
+    def _generate_timeline_graph(self, td: TimelineData) -> Text:
+        """Generate Unicode timeline graph (v0.8.0 - task-106.8).
+
+        Creates a horizontal bar chart showing token usage over time.
+        Uses Unicode block characters for visualization.
+        """
+        text = Text()
+
+        if not td.buckets or td.max_tokens_per_bucket == 0:
+            text.append("  [No data to display]\n", style=self.theme.dim_text)
+            return text
+
+        # Graph dimensions
+        max_bar_width = 40  # Maximum width for the bar
+        y_scale = td.max_tokens_per_bucket
+
+        # Show Y-axis scale
+        text.append(f"  {td.max_tokens_per_bucket:>6,} ", style=self.theme.dim_text)
+        text.append("\u2502\n", style=self.theme.dim_text)
+
+        # Generate bars for each bucket (limit to ~20 buckets for display)
+        display_buckets = td.buckets
+        if len(td.buckets) > 20:
+            # Aggregate into 20 display buckets
+            step = len(td.buckets) // 20
+            display_buckets = td.buckets[::step][:20]
+
+        for bucket in display_buckets:
+            # Calculate bar widths
+            total_ratio = bucket.total_tokens / y_scale if y_scale > 0 else 0
+            mcp_ratio = bucket.mcp_tokens / y_scale if y_scale > 0 else 0
+
+            total_width = int(total_ratio * max_bar_width)
+            mcp_width = int(mcp_ratio * max_bar_width)
+            builtin_width = total_width - mcp_width
+
+            # Time label
+            time_label = self._format_bucket_time(bucket.start_seconds)
+            text.append(f"  {time_label:>6} ", style=self.theme.dim_text)
+            text.append("\u2502", style=self.theme.dim_text)
+
+            # MCP portion (solid block)
+            text.append("\u2588" * mcp_width, style=self.theme.info)
+
+            # Built-in portion (light shade)
+            text.append("\u2591" * builtin_width, style=self.theme.dim_text)
+
+            # Spike marker
+            if bucket.is_spike:
+                text.append(" \u25b2", style=self.theme.warning)
+
+            text.append("\n")
+
+        # X-axis
+        text.append("         \u2514", style=self.theme.dim_text)
+        text.append("\u2500" * max_bar_width, style=self.theme.dim_text)
+        text.append("\n")
+
+        return text
+
+    def _format_bucket_time(self, seconds: float) -> str:
+        """Format bucket time as MM:SS or HH:MM."""
+        if seconds < 3600:
+            minutes = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{minutes}:{secs:02d}"
+        else:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            return f"{hours}:{minutes:02d}"
+
+    def _format_bucket_duration(self, seconds: float) -> str:
+        """Format bucket duration in human-friendly format."""
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        elif seconds < 3600:
+            return f"{int(seconds // 60)}min"
+        else:
+            return f"{int(seconds // 3600)}hr"
+
+    def _build_timeline_footer(self) -> Text:
+        """Build footer for timeline view (v0.8.0 - task-106.8)."""
+        return Text(
+            "a=AI export  q/ESC=back to session",
+            style=self.theme.dim_text,
+            justify="center",
+        )
+
+    def _export_timeline_ai_prompt(self) -> None:
+        """Export AI analysis prompt for timeline (v0.8.0 - task-106.8)."""
+        if not self._timeline_data or not self._detail_data:
+            return
+
+        td = self._timeline_data
+        session_meta = self._detail_data.get("session", {})
+
+        # Generate markdown prompt
+        lines = [
+            "# Timeline Analysis Request",
+            "",
+            f"Please analyze this session timeline data for project "
+            f"**{session_meta.get('project', 'Unknown')}**:",
+            "",
+            "## Session Overview",
+            f"- **Date**: {td.session_date.isoformat()}",
+            f"- **Duration**: {self._format_duration(td.duration_seconds)}",
+            f"- **Bucket Size**: {self._format_bucket_duration(td.bucket_duration_seconds)}",
+            "",
+            "## Token Distribution",
+            f"- **Total Tokens**: {td.total_tokens:,}",
+            f"- **MCP Tokens**: {td.total_mcp_tokens:,} ({td.total_mcp_tokens * 100 // max(td.total_tokens, 1)}%)",
+            f"- **Built-in Tokens**: {td.total_builtin_tokens:,} ({td.total_builtin_tokens * 100 // max(td.total_tokens, 1)}%)",
+            f"- **Average per Bucket**: {td.avg_tokens_per_bucket:,.0f}",
+            f"- **Maximum per Bucket**: {td.max_tokens_per_bucket:,}",
+            "",
+        ]
+
+        # Add spike information
+        if td.spikes:
+            lines.append("## Detected Spikes")
+            lines.append(f"Found {len(td.spikes)} spike(s) (>2.0 standard deviations):")
+            lines.append("")
+            for spike in td.spikes[:10]:
+                time_label = self._format_bucket_time(spike.start_seconds)
+                lines.append(
+                    f"- **{time_label}**: {spike.total_tokens:,} tokens "
+                    f"(z-score: {spike.spike_magnitude:.2f})"
+                )
+            lines.append("")
+
+        # Add bucket data summary
+        lines.append("## Token Usage by Time")
+        lines.append("```")
+        for bucket in td.buckets[:20]:
+            time_label = self._format_bucket_time(bucket.start_seconds)
+            spike_marker = " [SPIKE]" if bucket.is_spike else ""
+            lines.append(
+                f"{time_label}: {bucket.total_tokens:>8,} tokens "
+                f"(MCP: {bucket.mcp_tokens:,}, Built-in: {bucket.builtin_tokens:,}){spike_marker}"
+            )
+        if len(td.buckets) > 20:
+            lines.append(f"... and {len(td.buckets) - 20} more buckets")
+        lines.append("```")
+        lines.append("")
+
+        lines.extend(
+            [
+                "## Questions",
+                "1. What explains the token usage patterns over time?",
+                "2. Are the detected spikes concerning or expected?",
+                "3. Is the MCP vs built-in ratio appropriate?",
+                "4. What could reduce token usage in high-activity periods?",
+                "5. Are there any inefficiency patterns in the timeline?",
+            ]
+        )
+
+        output = "\n".join(lines)
+        self._copy_to_clipboard(output)
+
+    def _build_comparison_view(self) -> Panel:
+        """Build comparison view panel (v0.8.0 - task-106.7)."""
+        if not self._comparison_data:
+            return Panel("No comparison data", border_style=self.theme.warning)
+
+        cd = self._comparison_data
+        content = Text()
+
+        # Title
+        num_sessions = 1 + len(cd.comparisons)
+        content.append(
+            f"COMPARISON ({num_sessions} sessions)\n\n", style=f"bold {self.theme.title}"
+        )
+
+        # Session list
+        baseline_tokens = cd.baseline_data.get("token_usage", {}).get("total_tokens", 0)
+        baseline_mcp = cd.baseline_data.get("mcp_summary", {})
+        baseline_mcp_tokens = baseline_mcp.get("total_tokens", 0)
+        baseline_mcp_pct = (
+            (baseline_mcp_tokens / baseline_tokens * 100) if baseline_tokens > 0 else 0
+        )
+
+        content.append("Baseline: ", style=f"bold {self.theme.info}")
+        content.append(
+            f"{cd.baseline.session_date.strftime('%Y-%m-%d')}  "
+            f"{self._format_tokens(baseline_tokens)}  MCP {baseline_mcp_pct:.0f}%\n",
+            style=self.theme.primary_text,
+        )
+
+        for _i, (entry, data) in enumerate(cd.comparisons):
+            comp_tokens = data.get("token_usage", {}).get("total_tokens", 0)
+            comp_mcp = data.get("mcp_summary", {})
+            comp_mcp_tokens = comp_mcp.get("total_tokens", 0)
+            comp_mcp_pct = (comp_mcp_tokens / comp_tokens * 100) if comp_tokens > 0 else 0
+
+            content.append("Compare:  ", style=self.theme.dim_text)
+            content.append(
+                f"{entry.session_date.strftime('%Y-%m-%d')}  "
+                f"{self._format_tokens(comp_tokens)}  MCP {comp_mcp_pct:.0f}%\n",
+                style=self.theme.primary_text,
+            )
+
+        # Deltas vs Baseline
+        content.append("\n─── DELTAS VS BASELINE ───\n", style=self.theme.dim_text)
+
+        # Token deltas
+        token_delta_strs = []
+        for delta in cd.token_deltas:
+            sign = "+" if delta >= 0 else ""
+            token_delta_strs.append(f"{sign}{self._format_tokens(delta)}")
+        content.append(
+            f"tokens:     {' / '.join(token_delta_strs)}\n", style=self.theme.primary_text
+        )
+
+        # MCP share deltas
+        mcp_delta_strs = []
+        for mcp_delta in cd.mcp_share_deltas:
+            sign = "+" if mcp_delta >= 0 else ""
+            mcp_delta_strs.append(f"{sign}{mcp_delta:.0f}%")
+        content.append(f"MCP share:  {' / '.join(mcp_delta_strs)}\n", style=self.theme.primary_text)
+
+        # Top tool changes
+        if cd.tool_changes:
+            tool_strs = []
+            for tool_name, delta in cd.tool_changes[:3]:
+                sign = "+" if delta >= 0 else ""
+                tool_strs.append(f"{tool_name} ({sign}{self._format_tokens(delta)})")
+            content.append(f"top tools:  {', '.join(tool_strs)}\n", style=self.theme.dim_text)
+
+        # Smell comparison
+        if cd.smell_matrix:
+            content.append("\n─── SMELL COMPARISON ───\n", style=self.theme.dim_text)
+            for pattern, presence_list in list(cd.smell_matrix.items())[:5]:
+                icons = ""
+                for has_smell in presence_list:
+                    icons += ascii_emoji("✓") + " " if has_smell else ascii_emoji("✗") + " "
+                count = sum(presence_list)
+                content.append(
+                    f"{pattern:20s}  {icons} ({count}/{len(presence_list)} sessions)\n",
+                    style=(
+                        self.theme.warning
+                        if count > len(presence_list) // 2
+                        else self.theme.dim_text
+                    ),
+                )
+
+        return Panel(
+            content,
+            title="Session Comparison",
+            border_style=self.theme.header_border,
+            box=self.box_style,
+        )
+
+    def _build_comparison_footer(self) -> Text:
+        """Build footer for comparison view (v0.8.0 - task-106.7)."""
+        return Text(
+            "a=AI analysis export  q/ESC=back to list (clears selection)",
+            style=self.theme.dim_text,
+            justify="center",
+        )
+
+    def _export_comparison_ai_prompt(self) -> None:
+        """Export AI analysis prompt for comparison (v0.8.0 - task-106.7)."""
+        if not self._comparison_data:
+            return
+
+        cd = self._comparison_data
+
+        # Build session info
+        baseline_tokens = cd.baseline_data.get("token_usage", {}).get("total_tokens", 0)
+        baseline_mcp = cd.baseline_data.get("mcp_summary", {})
+        baseline_mcp_tokens = baseline_mcp.get("total_tokens", 0)
+        baseline_mcp_pct = (
+            (baseline_mcp_tokens / baseline_tokens * 100) if baseline_tokens > 0 else 0
+        )
+
+        lines = [
+            "# Multi-Session Comparison Analysis Request",
+            "",
+            f"Please analyze these {1 + len(cd.comparisons)} sessions:",
+            "",
+            "## Sessions",
+            "",
+            f"### Baseline: {cd.baseline.session_date.isoformat()}",
+            f"- **Project**: {cd.baseline.project}",
+            f"- **Platform**: {cd.baseline.platform}",
+            f"- **Tokens**: {baseline_tokens:,}",
+            f"- **MCP %**: {baseline_mcp_pct:.1f}%",
+            f"- **Cost**: ${cd.baseline.cost_estimate:.4f}",
+            "",
+        ]
+
+        for i, (entry, data) in enumerate(cd.comparisons, 1):
+            comp_tokens = data.get("token_usage", {}).get("total_tokens", 0)
+            comp_mcp = data.get("mcp_summary", {})
+            comp_mcp_tokens = comp_mcp.get("total_tokens", 0)
+            comp_mcp_pct = (comp_mcp_tokens / comp_tokens * 100) if comp_tokens > 0 else 0
+
+            lines.extend(
+                [
+                    f"### Compare {i}: {entry.session_date.isoformat()}",
+                    f"- **Project**: {entry.project}",
+                    f"- **Platform**: {entry.platform}",
+                    f"- **Tokens**: {comp_tokens:,}",
+                    f"- **MCP %**: {comp_mcp_pct:.1f}%",
+                    f"- **Cost**: ${entry.cost_estimate:.4f}",
+                    "",
+                ]
+            )
+
+        # Deltas
+        lines.extend(
+            [
+                "## Deltas vs Baseline",
+                "",
+            ]
+        )
+
+        for i, (entry, _) in enumerate(cd.comparisons):
+            delta_tokens = cd.token_deltas[i]
+            delta_mcp = cd.mcp_share_deltas[i]
+            sign_t = "+" if delta_tokens >= 0 else ""
+            sign_m = "+" if delta_mcp >= 0 else ""
+            lines.append(
+                f"- **{entry.session_date.isoformat()}**: "
+                f"tokens {sign_t}{delta_tokens:,}, MCP {sign_m}{delta_mcp:.1f}%"
+            )
+        lines.append("")
+
+        # Tool changes
+        if cd.tool_changes:
+            lines.extend(
+                [
+                    "## Top Tool Changes",
+                    "",
+                ]
+            )
+            for tool_name, delta in cd.tool_changes[:5]:
+                sign = "+" if delta >= 0 else ""
+                lines.append(f"- **{tool_name}**: {sign}{delta:,} tokens")
+            lines.append("")
+
+        # Smell matrix
+        if cd.smell_matrix:
+            lines.extend(
+                [
+                    "## Smell Comparison Matrix",
+                    "",
+                    "| Pattern | "
+                    + " | ".join(
+                        [cd.baseline.session_date.strftime("%m-%d")]
+                        + [e.session_date.strftime("%m-%d") for e, _ in cd.comparisons]
+                    )
+                    + " |",
+                    "|" + "----|" * (1 + len(cd.comparisons) + 1),
+                ]
+            )
+            for pattern, presence in cd.smell_matrix.items():
+                row = f"| {pattern} | "
+                row += " | ".join(["Yes" if p else "No" for p in presence])
+                row += " |"
+                lines.append(row)
+            lines.append("")
+
+        lines.extend(
+            [
+                "## Questions",
+                "1. What factors explain the differences between these sessions?",
+                "2. Which session is most efficient and why?",
+                "3. Are the tool usage changes intentional or problematic?",
+                "4. What patterns emerge across the sessions?",
+                "5. What recommendations would you make for future sessions?",
+            ]
+        )
+
+        output = "\n".join(lines)
+        self._copy_to_clipboard(output)
 
     def _format_duration(self, seconds: float) -> str:
         """Format duration in human-friendly format."""

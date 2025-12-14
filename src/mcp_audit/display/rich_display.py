@@ -9,7 +9,9 @@ terminals with limited Unicode support.
 """
 
 import contextlib
+import time
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Deque, List, Optional, Tuple
@@ -29,6 +31,21 @@ from .keyboard import check_keypress, disable_raw_mode, enable_raw_mode
 from .snapshot import DisplaySnapshot
 from .theme_detect import get_active_theme
 from .themes import _ThemeType
+
+
+@dataclass
+class Notification:
+    """Transient notification for user feedback (v0.8.0 - task-106.9).
+
+    Attributes:
+        message: The notification message to display.
+        level: Notification type - "success", "warning", "error", or "info".
+        expires_at: Unix timestamp when notification should auto-dismiss.
+    """
+
+    message: str
+    level: str  # "success", "warning", "error", "info"
+    expires_at: float  # time.time() + timeout
 
 
 class RichDisplay(DisplayAdapter):
@@ -70,6 +87,9 @@ class RichDisplay(DisplayAdapter):
         # Keyboard support (v0.7.0 - task-105.8)
         self._raw_mode_enabled: bool = False
 
+        # Notification support (v0.8.0 - task-106.9)
+        self._notification: Optional[Notification] = None
+
     def start(self, snapshot: DisplaySnapshot) -> None:
         """Start the live display."""
         self._current_snapshot = snapshot
@@ -93,6 +113,10 @@ class RichDisplay(DisplayAdapter):
             - None: No action
         """
         self._current_snapshot = snapshot
+
+        # Clear expired notifications (v0.8.0 - task-106.9)
+        if self._notification and time.time() > self._notification.expires_at:
+            self._notification = None
 
         # Check for keypresses (non-blocking) - v0.7.0 task-105.8
         if self._raw_mode_enabled:
@@ -121,6 +145,20 @@ class RichDisplay(DisplayAdapter):
     def on_event(self, tool_name: str, tokens: int, timestamp: datetime) -> None:
         """Add event to recent activity feed."""
         self.recent_events.append((timestamp, tool_name, tokens))
+
+    def show_notification(self, message: str, level: str = "info", timeout: float = 3.0) -> None:
+        """Show a transient notification in the TUI (v0.8.0 - task-106.9).
+
+        Args:
+            message: The notification message to display.
+            level: Notification type - "success", "warning", "error", or "info".
+            timeout: Seconds until auto-dismiss (default 3.0).
+        """
+        self._notification = Notification(
+            message=message,
+            level=level,
+            expires_at=time.time() + timeout,
+        )
 
     def stop(self, snapshot: DisplaySnapshot) -> None:
         """Stop live display and show final summary."""
@@ -167,6 +205,10 @@ class RichDisplay(DisplayAdapter):
                 Layout(self._build_footer(), name="footer", size=1),
             ]
         )
+
+        # Add notification bar if active (v0.8.0 - task-106.9)
+        if self._notification:
+            panels.append(Layout(self._build_notification(), name="notification", size=1))
 
         layout.split_column(*panels)
 
@@ -765,13 +807,15 @@ class RichDisplay(DisplayAdapter):
 
         output = "\n".join(lines)
 
-        # Try to copy to clipboard (macOS)
+        # Try to copy to clipboard (macOS) - v0.8.0: show notification
         try:
             import subprocess
 
             subprocess.run(["pbcopy"], input=output.encode(), check=True)
+            self.show_notification("Ask AI prompt copied to clipboard", "success")
         except Exception:
-            pass  # Silently fail if clipboard not available
+            # Fallback: still show success since prompt was generated
+            self.show_notification("Ask AI prompt exported (clipboard unavailable)", "warning")
 
     def _build_footer(self) -> Text:
         """Build footer with instructions."""
@@ -781,6 +825,35 @@ class RichDisplay(DisplayAdapter):
             style=f"{self.theme.dim_text} italic",
             justify="center",
         )
+
+    def _build_notification(self) -> Text:
+        """Build notification bar for user feedback (v0.8.0 - task-106.9)."""
+        if not self._notification:
+            return Text("")
+
+        notification = self._notification
+
+        # Map level to icon and color
+        level_config = {
+            "success": (ascii_emoji("✓"), self.theme.success),
+            "warning": (ascii_emoji("⚠"), self.theme.warning),
+            "error": (ascii_emoji("✗"), self.theme.error),
+            "info": (ascii_emoji("ℹ"), self.theme.info),
+        }
+        icon, color = level_config.get(notification.level, ("", self.theme.dim_text))
+
+        # Calculate remaining time
+        remaining = max(0, notification.expires_at - time.time())
+        remaining_str = f"[{remaining:.0f}s]" if remaining > 0 else ""
+
+        # Build notification text
+        text = Text()
+        text.append(f"{icon} ", style=f"bold {color}")
+        text.append(notification.message, style=color)
+        text.append(f"  {remaining_str}", style=self.theme.dim_text)
+        text.justify = "center"
+
+        return text
 
     def _format_duration(self, seconds: float) -> str:
         """Format duration as HH:MM:SS."""

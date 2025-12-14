@@ -4,10 +4,10 @@ This document outlines the planned development direction for MCP Audit. For comp
 
 ## Current Status
 
-**Version**: v0.7.0
-**Stage**: UI Layer — Rate Metrics, Cache Hit Ratio, Unique Tools Display
+**Version**: v0.8.0
+**Stage**: Analysis Layer — 12 Smell Patterns, Recommendations Engine, Cross-Session Aggregation
 
-MCP Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v0.7.0 adds real-time rate metrics (tokens/min, calls/min), cache hit ratio tracking, and unique tools display in the TUI.
+MCP Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v0.8.0 adds 7 new smell patterns (12 total), a recommendations engine for AI-consumable suggestions, cross-session smell aggregation, and TUI notification bar.
 
 ---
 
@@ -74,22 +74,23 @@ Enhanced TUI metrics and display improvements.
 
 ---
 
-## v0.8.0 — Analysis Layer
+## ✅ v0.8.0 — Analysis Layer (Released)
 
 **Theme:** "Understand Your Usage"
 
 Deeper analysis capabilities and improved AI integration.
 
-- **Expanded Smell Categories** — 7+ new patterns (REDUNDANT_CALLS, BURST_PATTERN, etc.)
-- **Recommendation Context** — Non-automatic suggestions for AI consumption
-- **Cross-Session Aggregation** — Smell trends and frequencies across sessions
-- **Improved AI Export** — Richer context, comparison data, structured recommendations
-- **Schema v1.7.0** — Expanded smell taxonomy, recommendations block
+- ✅ **Expanded Smell Detection** — 12 patterns total (7 new: REDUNDANT_CALLS, EXPENSIVE_FAILURES, UNDERUTILIZED_SERVER, BURST_PATTERN, LARGE_PAYLOAD, SEQUENTIAL_READS, CACHE_MISS_STREAK)
+- ✅ **Recommendations Engine** — AI-consumable suggestions from detected smells
+- ✅ **Cross-Session Aggregation** — Smell trends, frequencies, and filtering across sessions
+- ✅ **TUI Notification Bar** — Visual feedback for actions ("Ask AI copied to clipboard")
+- ✅ **Enhanced AI Export** — Recommendations and smell context in exports
+- ✅ **Schema v1.7.0** — Expanded smell taxonomy, recommendations block
 
 **Success Metrics:**
-- 12+ smell patterns detected
-- AI exports include actionable recommendations
-- Users can see smell trends across sessions
+- ✅ 12 smell patterns detected
+- ✅ AI exports include actionable recommendations
+- ✅ Users can see smell trends across sessions
 
 ➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/4)
 

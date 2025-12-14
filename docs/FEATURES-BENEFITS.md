@@ -1,6 +1,6 @@
 # Features & Benefits by Audience
 
-MCP Audit v0.7.0 - Features mapped to benefits for each target audience.
+MCP Audit v0.8.0 - Features mapped to benefits for each target audience.
 
 ---
 

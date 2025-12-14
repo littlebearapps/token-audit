@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 from . import __version__
 
 # Schema version (see docs/data-contract.md for compatibility guarantees)
-SCHEMA_VERSION = "1.6.0"
+SCHEMA_VERSION = "1.7.0"
 
 
 def _now_with_timezone() -> datetime:
@@ -473,10 +473,12 @@ class Session:
     model_usage: Dict[str, "ModelUsage"] = field(default_factory=dict)  # Per-model breakdown
     # v1.6.0: Static cost tracking (task-108.4) - future implementation
     static_cost: Optional["StaticCost"] = None  # MCP schema context tax (when available)
+    # v1.7.0: Pinned server tracking (task-106.5)
+    pinned_servers: List[str] = field(default_factory=list)  # Servers pinned by user
     _call_index: int = field(default=0, repr=False)  # Internal counter for call indices
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to v1.6.0 JSON-serializable dict with Multi-Model Intelligence"""
+        """Convert to v1.7.0 JSON-serializable dict with Pinned MCP Focus"""
         # Build flat tool_calls array from all server sessions
         tool_calls = []
         for server_session in self.server_sessions.values():
@@ -486,6 +488,9 @@ class Session:
 
         # Sort by index (sequential order)
         tool_calls.sort(key=lambda x: x.get("index", 0))
+
+        # v1.7.0: Build tool sequence for pattern analysis (task-106.5)
+        tool_sequence = self._build_tool_sequence()
 
         # Build MCP summary
         mcp_summary = self._build_mcp_summary()
@@ -499,7 +504,7 @@ class Session:
         # v1.5.0: Build data quality block
         data_quality_dict = self.data_quality.to_dict() if self.data_quality else None
 
-        result = {
+        result: Dict[str, Any] = {
             "_file": None,  # To be set by save_session()
             "session": {
                 "id": self.session_id,
@@ -546,6 +551,22 @@ class Session:
         # v1.6.0: Add static_cost only if available (task-108.4)
         if self.static_cost:
             result["static_cost"] = self.static_cost.to_dict()
+
+        # v1.7.0: Pinned MCP Focus (task-106.5)
+        if self.pinned_servers:
+            result["pinned_servers"] = self.pinned_servers
+            pinned_usage = self._build_pinned_server_usage()
+            result["pinned_server_usage"] = pinned_usage
+            total_calls = pinned_usage["pinned_calls"] + pinned_usage["non_pinned_calls"]
+            result["pinned_coverage"] = (
+                pinned_usage["pinned_calls"] / total_calls if total_calls > 0 else 0.0
+            )
+
+        # v1.7.0: MCP servers hierarchy with per-tool stats (task-106.5)
+        result["mcp_servers"] = self._build_mcp_servers_hierarchy()
+
+        # v1.7.0: Tool sequence for pattern analysis (task-106.5)
+        result["tool_sequence"] = tool_sequence
 
         return result
 
@@ -767,6 +788,113 @@ class Session:
             total_tokens=total_tokens,
             tools=tools_list,
         )
+
+    def _build_tool_sequence(self) -> List[Dict[str, Any]]:
+        """Build chronological tool sequence for pattern analysis (v1.7.0 - task-106.5).
+
+        Creates a compact timeline of all tool calls in execution order,
+        useful for identifying patterns like burst calls, sequential reads,
+        or create-then-edit sequences.
+
+        Returns:
+            List of dicts with ts, server, tool, tokens, index
+        """
+        all_calls: List[Call] = []
+
+        # Collect all calls from MCP servers (exclude builtin)
+        for server_name, server_session in self.server_sessions.items():
+            if server_name == "builtin":
+                continue
+            for tool_stats in server_session.tools.values():
+                all_calls.extend(tool_stats.call_history)
+
+        # Sort by index (execution order)
+        all_calls.sort(key=lambda c: c.index)
+
+        # Build compact sequence
+        sequence = []
+        for call in all_calls:
+            sequence.append(
+                {
+                    "ts": _format_timestamp(call.timestamp),
+                    "server": call.server,
+                    "tool": call.tool_name,
+                    "tokens": call.total_tokens,
+                    "index": call.index,
+                }
+            )
+
+        return sequence
+
+    def _build_pinned_server_usage(self) -> Dict[str, Any]:
+        """Build aggregate stats for pinned vs non-pinned servers (v1.7.0 - task-106.5).
+
+        Calculates how much of the session's MCP usage went to pinned servers
+        vs non-pinned servers.
+
+        Returns:
+            Dict with pinned_calls, pinned_tokens, non_pinned_calls, non_pinned_tokens
+        """
+        pinned_calls = 0
+        pinned_tokens = 0
+        non_pinned_calls = 0
+        non_pinned_tokens = 0
+
+        pinned_set = set(self.pinned_servers)
+
+        for server_name, server_session in self.server_sessions.items():
+            if server_name == "builtin":
+                continue
+
+            if server_name in pinned_set:
+                pinned_calls += server_session.total_calls
+                pinned_tokens += server_session.total_tokens
+            else:
+                non_pinned_calls += server_session.total_calls
+                non_pinned_tokens += server_session.total_tokens
+
+        return {
+            "pinned_calls": pinned_calls,
+            "pinned_tokens": pinned_tokens,
+            "non_pinned_calls": non_pinned_calls,
+            "non_pinned_tokens": non_pinned_tokens,
+        }
+
+    def _build_mcp_servers_hierarchy(self) -> Dict[str, Any]:
+        """Build full MCP servers hierarchy with per-tool stats (v1.7.0 - task-106.5).
+
+        Creates a structured view of all MCP servers and their tools,
+        including is_pinned flag for each server.
+
+        Returns:
+            Dict mapping server names to their tool breakdowns
+        """
+        pinned_set = set(self.pinned_servers)
+        hierarchy: Dict[str, Any] = {}
+
+        for server_name, server_session in self.server_sessions.items():
+            if server_name == "builtin":
+                continue
+
+            tools_dict: Dict[str, Any] = {}
+            for tool_name, tool_stats in server_session.tools.items():
+                avg_tokens = (
+                    tool_stats.total_tokens / tool_stats.calls if tool_stats.calls > 0 else 0
+                )
+                tools_dict[tool_name] = {
+                    "calls": tool_stats.calls,
+                    "tokens": tool_stats.total_tokens,
+                    "avg": round(avg_tokens, 1),
+                }
+
+            hierarchy[server_name] = {
+                "calls": server_session.total_calls,
+                "tokens": server_session.total_tokens,
+                "is_pinned": server_name in pinned_set,
+                "tools": tools_dict,
+            }
+
+        return hierarchy
 
     def next_call_index(self) -> int:
         """Get next sequential call index"""

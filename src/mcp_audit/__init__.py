@@ -69,6 +69,15 @@ def __getattr__(name: str) -> Any:
 
         return locals()[name]
 
+    if name in ("SmellAggregator", "AggregatedSmell", "SmellAggregationResult"):
+        from .smell_aggregator import (  # noqa: F401
+            AggregatedSmell,
+            SmellAggregationResult,
+            SmellAggregator,
+        )
+
+        return locals()[name]
+
     if name in ("ClaudeCodeAdapter",):
         from .claude_code_adapter import ClaudeCodeAdapter
 
@@ -140,6 +149,10 @@ __all__ = [
     # Storage
     "StorageManager",
     "SessionIndex",
+    # Smell aggregation
+    "SmellAggregator",
+    "AggregatedSmell",
+    "SmellAggregationResult",
     # Platform adapters
     "ClaudeCodeAdapter",
     "CodexCLIAdapter",

@@ -450,5 +450,427 @@ class TestSessionFinalizationIntegration:
         assert len(chatty_smells) == 1
 
 
+# ============================================================================
+# v1.7.0 Pattern Tests (task-106.1)
+# ============================================================================
+
+
+def add_call_to_session(
+    session: Session,
+    server_name: str,
+    tool_name: str,
+    total_tokens: int = 100,
+    content_hash: str = None,
+    platform_data: dict = None,
+    cache_read_tokens: int = 0,
+    timestamp: "datetime" = None,
+) -> None:
+    """Add a call with full details to a session's call history."""
+    from datetime import datetime, timezone
+    from mcp_audit.base_tracker import Call
+
+    if server_name not in session.server_sessions:
+        session.server_sessions[server_name] = ServerSession(server=server_name)
+
+    server = session.server_sessions[server_name]
+    if tool_name not in server.tools:
+        server.tools[tool_name] = ToolStats()
+
+    # Calculate session-level index (across all tools)
+    total_calls = sum(
+        sum(len(ts.call_history) for ts in ss.tools.values())
+        for ss in session.server_sessions.values()
+    )
+
+    tool_stats = server.tools[tool_name]
+    call = Call(
+        timestamp=timestamp or datetime.now(timezone.utc),
+        tool_name=tool_name,
+        server=server_name,
+        index=total_calls,  # Session-level index
+        total_tokens=total_tokens,
+        input_tokens=total_tokens // 2,
+        output_tokens=total_tokens // 2,
+        content_hash=content_hash,
+        platform_data=platform_data,
+        cache_read_tokens=cache_read_tokens,
+    )
+    tool_stats.call_history.append(call)
+    tool_stats.calls += 1
+    tool_stats.total_tokens += total_tokens
+    server.total_calls += 1
+    server.total_tokens += total_tokens
+
+
+class TestRedundantCallsDetection:
+    """Tests for REDUNDANT_CALLS smell detection."""
+
+    def test_detects_redundant_calls(self) -> None:
+        """Test detection of calls with identical content_hash."""
+        session = create_test_session()
+
+        # Add calls with same content_hash
+        add_call_to_session(
+            session, "zen", "mcp__zen__chat", total_tokens=500, content_hash="abc123def456"
+        )
+        add_call_to_session(
+            session, "zen", "mcp__zen__chat", total_tokens=500, content_hash="abc123def456"
+        )
+        add_call_to_session(
+            session, "zen", "mcp__zen__chat", total_tokens=500, content_hash="different_hash"
+        )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        redundant_smells = [s for s in smells if s.pattern == "REDUNDANT_CALLS"]
+        assert len(redundant_smells) == 1
+        assert redundant_smells[0].evidence["duplicate_count"] == 2
+
+    def test_no_redundant_when_unique(self) -> None:
+        """Test no detection when all calls have unique hashes."""
+        session = create_test_session()
+
+        add_call_to_session(
+            session, "zen", "mcp__zen__chat", total_tokens=500, content_hash="hash1"
+        )
+        add_call_to_session(
+            session, "zen", "mcp__zen__chat", total_tokens=500, content_hash="hash2"
+        )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        redundant_smells = [s for s in smells if s.pattern == "REDUNDANT_CALLS"]
+        assert len(redundant_smells) == 0
+
+    def test_no_redundant_when_no_hash(self) -> None:
+        """Test no detection when calls have no content_hash."""
+        session = create_test_session()
+
+        add_call_to_session(session, "zen", "mcp__zen__chat", total_tokens=500, content_hash=None)
+        add_call_to_session(session, "zen", "mcp__zen__chat", total_tokens=500, content_hash=None)
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        redundant_smells = [s for s in smells if s.pattern == "REDUNDANT_CALLS"]
+        assert len(redundant_smells) == 0
+
+
+class TestExpensiveFailuresDetection:
+    """Tests for EXPENSIVE_FAILURES smell detection."""
+
+    def test_detects_expensive_failure(self) -> None:
+        """Test detection of high-token failed calls."""
+        session = create_test_session()
+
+        add_call_to_session(
+            session,
+            "zen",
+            "mcp__zen__thinkdeep",
+            total_tokens=6000,
+            platform_data={"error": "Connection timeout", "is_error": True},
+        )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        failure_smells = [s for s in smells if s.pattern == "EXPENSIVE_FAILURES"]
+        assert len(failure_smells) == 1
+        assert failure_smells[0].severity == "high"
+        assert failure_smells[0].evidence["tokens"] == 6000
+
+    def test_no_expensive_failure_when_small(self) -> None:
+        """Test no detection when failed call is below threshold."""
+        session = create_test_session()
+
+        add_call_to_session(
+            session,
+            "zen",
+            "mcp__zen__chat",
+            total_tokens=1000,  # Below 5000 threshold
+            platform_data={"error": "Some error"},
+        )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        failure_smells = [s for s in smells if s.pattern == "EXPENSIVE_FAILURES"]
+        assert len(failure_smells) == 0
+
+    def test_no_expensive_failure_when_success(self) -> None:
+        """Test no detection when call succeeded."""
+        session = create_test_session()
+
+        add_call_to_session(
+            session,
+            "zen",
+            "mcp__zen__thinkdeep",
+            total_tokens=10000,
+            platform_data={"status": "success"},
+        )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        failure_smells = [s for s in smells if s.pattern == "EXPENSIVE_FAILURES"]
+        assert len(failure_smells) == 0
+
+
+class TestUnderutilizedServerDetection:
+    """Tests for UNDERUTILIZED_SERVER smell detection."""
+
+    def test_detects_underutilized_server(self) -> None:
+        """Test detection of server with low tool utilization."""
+        session = create_test_session()
+
+        # Add one tool being used
+        add_tool_to_session(
+            session, "backlog", "mcp__backlog__task_view", calls=5, total_tokens=1000
+        )
+
+        # Add zombie tools (available but unused)
+        session.zombie_tools["backlog"] = [
+            "mcp__backlog__task_create",
+            "mcp__backlog__task_edit",
+            "mcp__backlog__task_delete",
+            "mcp__backlog__task_list",
+            "mcp__backlog__task_search",
+            "mcp__backlog__document_view",
+            "mcp__backlog__document_create",
+            "mcp__backlog__document_edit",
+            "mcp__backlog__document_list",
+        ]  # 1 used out of 10 = 10% - at threshold
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        underutilized_smells = [s for s in smells if s.pattern == "UNDERUTILIZED_SERVER"]
+        # 10% is at threshold, should trigger if <10%
+        # Let's add more zombie tools to go below 10%
+        session.zombie_tools["backlog"].append("mcp__backlog__extra_tool")  # 1/11 = 9%
+
+        smells = detector.analyze(session)
+        underutilized_smells = [s for s in smells if s.pattern == "UNDERUTILIZED_SERVER"]
+        assert len(underutilized_smells) == 1
+        assert "backlog" in underutilized_smells[0].description
+
+    def test_detects_zero_usage_server(self) -> None:
+        """Test detection of server with zero usage."""
+        session = create_test_session()
+
+        # Server with tools but no usage
+        session.zombie_tools["unused-server"] = ["tool1", "tool2", "tool3"]
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        underutilized_smells = [s for s in smells if s.pattern == "UNDERUTILIZED_SERVER"]
+        assert len(underutilized_smells) == 1
+        assert underutilized_smells[0].evidence["used_tools"] == 0
+
+
+class TestBurstPatternDetection:
+    """Tests for BURST_PATTERN smell detection."""
+
+    def test_detects_burst_pattern(self) -> None:
+        """Test detection of rapid tool calls."""
+        from datetime import datetime, timezone, timedelta
+
+        session = create_test_session()
+
+        # Add 6 calls within 500ms (under 1 second threshold)
+        base_time = datetime.now(timezone.utc)
+        for i in range(6):
+            add_call_to_session(
+                session,
+                "zen",
+                "mcp__zen__chat",
+                total_tokens=100,
+                timestamp=base_time
+                + timedelta(milliseconds=i * 100),  # 0, 100, 200, 300, 400, 500ms
+            )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        burst_smells = [s for s in smells if s.pattern == "BURST_PATTERN"]
+        assert len(burst_smells) == 1
+        assert burst_smells[0].evidence["call_count"] == 6
+
+    def test_no_burst_when_spread_out(self) -> None:
+        """Test no detection when calls are spread over time."""
+        from datetime import datetime, timezone, timedelta
+
+        session = create_test_session()
+
+        # Add 6 calls spread over 6 seconds
+        base_time = datetime.now(timezone.utc)
+        for i in range(6):
+            add_call_to_session(
+                session,
+                "zen",
+                "mcp__zen__chat",
+                total_tokens=100,
+                timestamp=base_time + timedelta(seconds=i),  # 1 second apart
+            )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        burst_smells = [s for s in smells if s.pattern == "BURST_PATTERN"]
+        assert len(burst_smells) == 0
+
+
+class TestLargePayloadDetection:
+    """Tests for LARGE_PAYLOAD smell detection."""
+
+    def test_detects_large_payload(self) -> None:
+        """Test detection of large token calls."""
+        session = create_test_session()
+
+        add_call_to_session(
+            session, "zen", "mcp__zen__thinkdeep", total_tokens=15000  # Above 10K threshold
+        )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        large_smells = [s for s in smells if s.pattern == "LARGE_PAYLOAD"]
+        assert len(large_smells) == 1
+        assert large_smells[0].evidence["tokens"] == 15000
+
+    def test_no_large_payload_when_small(self) -> None:
+        """Test no detection when calls are below threshold."""
+        session = create_test_session()
+
+        add_call_to_session(
+            session, "zen", "mcp__zen__chat", total_tokens=5000  # Below 10K threshold
+        )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        large_smells = [s for s in smells if s.pattern == "LARGE_PAYLOAD"]
+        assert len(large_smells) == 0
+
+
+class TestSequentialReadsDetection:
+    """Tests for SEQUENTIAL_READS smell detection."""
+
+    def test_detects_sequential_reads(self) -> None:
+        """Test detection of consecutive read operations."""
+        from datetime import datetime, timezone
+
+        session = create_test_session()
+
+        # Add 4 consecutive Read calls
+        for i in range(4):
+            add_call_to_session(
+                session, "builtin", "Read", total_tokens=500, timestamp=datetime.now(timezone.utc)
+            )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        sequential_smells = [s for s in smells if s.pattern == "SEQUENTIAL_READS"]
+        assert len(sequential_smells) == 1
+        assert sequential_smells[0].evidence["read_count"] == 4
+
+    def test_no_sequential_reads_when_interrupted(self) -> None:
+        """Test no detection when reads are interrupted by other calls."""
+        from datetime import datetime, timezone
+
+        session = create_test_session()
+
+        # Add 2 reads, then a write, then 2 more reads
+        add_call_to_session(session, "builtin", "Read", total_tokens=500)
+        add_call_to_session(session, "builtin", "Read", total_tokens=500)
+        add_call_to_session(session, "builtin", "Write", total_tokens=500)  # Interrupts
+        add_call_to_session(session, "builtin", "Read", total_tokens=500)
+        add_call_to_session(session, "builtin", "Read", total_tokens=500)
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        sequential_smells = [s for s in smells if s.pattern == "SEQUENTIAL_READS"]
+        assert len(sequential_smells) == 0  # No sequence of 3+
+
+
+class TestCacheMissStreakDetection:
+    """Tests for CACHE_MISS_STREAK smell detection."""
+
+    def test_detects_cache_miss_streak(self) -> None:
+        """Test detection of consecutive cache misses."""
+        session = create_test_session()
+
+        # Add 6 calls with no cache hits
+        for i in range(6):
+            add_call_to_session(
+                session,
+                "zen",
+                "mcp__zen__chat",
+                total_tokens=500,
+                cache_read_tokens=0,  # No cache hit
+            )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        miss_smells = [s for s in smells if s.pattern == "CACHE_MISS_STREAK"]
+        assert len(miss_smells) == 1
+        assert miss_smells[0].evidence["miss_count"] == 6
+
+    def test_no_miss_streak_when_cache_hits(self) -> None:
+        """Test no detection when there are cache hits."""
+        session = create_test_session()
+
+        # Add calls with cache hits interspersed
+        for i in range(6):
+            add_call_to_session(
+                session,
+                "zen",
+                "mcp__zen__chat",
+                total_tokens=500,
+                cache_read_tokens=100 if i % 2 == 0 else 0,  # Every other has cache hit
+            )
+
+        detector = SmellDetector()
+        smells = detector.analyze(session)
+
+        miss_smells = [s for s in smells if s.pattern == "CACHE_MISS_STREAK"]
+        assert len(miss_smells) == 0
+
+
+class TestNewThresholdsConfiguration:
+    """Tests for v1.7.0 threshold configuration."""
+
+    def test_new_default_thresholds(self) -> None:
+        """Test default values for new thresholds."""
+        thresholds = SmellThresholds()
+
+        assert thresholds.redundant_call_min_duplicates == 2
+        assert thresholds.expensive_failure_token_threshold == 5000
+        assert thresholds.underutilized_server_percent == 10.0
+        assert thresholds.burst_pattern_calls == 5
+        assert thresholds.burst_pattern_window_ms == 1000
+        assert thresholds.large_payload_tokens == 10000
+        assert thresholds.sequential_read_threshold == 3
+        assert thresholds.cache_miss_streak_threshold == 5
+
+    def test_custom_new_thresholds(self) -> None:
+        """Test custom values for new thresholds."""
+        thresholds = SmellThresholds(
+            large_payload_tokens=5000,
+            burst_pattern_calls=3,
+        )
+
+        assert thresholds.large_payload_tokens == 5000
+        assert thresholds.burst_pattern_calls == 3
+        # Others should be default
+        assert thresholds.redundant_call_min_duplicates == 2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
