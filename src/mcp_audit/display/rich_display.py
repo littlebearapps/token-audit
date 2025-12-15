@@ -14,7 +14,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Deque, List, Optional, Tuple
+from typing import Any, Deque, List, Optional, Tuple
 
 from rich import box
 from rich.console import Console
@@ -89,6 +89,20 @@ class RichDisplay(DisplayAdapter):
 
         # Notification support (v0.8.0 - task-106.9)
         self._notification: Optional[Notification] = None
+
+        # Performance optimization: dirty-flag caching (v0.9.0 - task-107.3)
+        # Only rebuild panels that have changed between snapshots
+        self._last_snapshot: Optional[DisplaySnapshot] = None
+        self._cached_panels: dict[str, Any] = {}
+        self._dirty_flags: dict[str, bool] = {
+            "header": True,
+            "tokens": True,
+            "tools": True,
+            "smells": True,
+            "context_tax": True,
+            "activity": True,
+            "notification": True,
+        }
 
     def start(self, snapshot: DisplaySnapshot) -> None:
         """Start the live display."""
@@ -172,45 +186,172 @@ class RichDisplay(DisplayAdapter):
             self.live = None
         self._print_final_summary(snapshot)
 
+    def _detect_changes(self, old: DisplaySnapshot, new: DisplaySnapshot) -> None:
+        """Detect which panels need rebuilding based on snapshot changes.
+
+        Sets dirty flags for panels where relevant data has changed.
+        This optimization avoids rebuilding unchanged panels (v0.9.0 - task-107.3).
+        """
+        # Header changes: project, platform, model, duration, git info
+        if any(
+            [
+                old.project != new.project,
+                old.platform != new.platform,
+                old.model_name != new.model_name,
+                old.model_id != new.model_id,
+                old.is_multi_model != new.is_multi_model,
+                abs(old.duration_seconds - new.duration_seconds) >= 1.0,  # Only on second change
+                old.git_branch != new.git_branch,
+                old.git_commit_short != new.git_commit_short,
+                old.git_status != new.git_status,
+                old.files_monitored != new.files_monitored,
+                old.static_cost_total != new.static_cost_total,
+                old.zombie_context_tax != new.zombie_context_tax,
+            ]
+        ):
+            self._dirty_flags["header"] = True
+
+        # Token panel changes
+        if any(
+            [
+                old.total_tokens != new.total_tokens,
+                old.input_tokens != new.input_tokens,
+                old.output_tokens != new.output_tokens,
+                old.cache_tokens != new.cache_tokens,
+                abs(old.cost_estimate - new.cost_estimate) >= 0.001,
+                abs(old.cache_efficiency - new.cache_efficiency) >= 0.01,
+                old.message_count != new.message_count,
+                old.builtin_tool_calls != new.builtin_tool_calls,
+            ]
+        ):
+            self._dirty_flags["tokens"] = True
+
+        # Tools panel changes (check call counts, not full hierarchy)
+        if any(
+            [
+                old.total_tool_calls != new.total_tool_calls,
+                old.unique_tools != new.unique_tools,
+                len(old.server_hierarchy) != len(new.server_hierarchy),
+            ]
+        ):
+            self._dirty_flags["tools"] = True
+
+        # Smells panel changes
+        if old.detected_smells != new.detected_smells:
+            self._dirty_flags["smells"] = True
+
+        # Context tax panel changes
+        if any(
+            [
+                old.static_cost_total != new.static_cost_total,
+                old.static_cost_by_server != new.static_cost_by_server,
+                old.zombie_context_tax != new.zombie_context_tax,
+            ]
+        ):
+            self._dirty_flags["context_tax"] = True
+
+        # Activity always updates if there are recent events
+        # (handled separately since it uses self.recent_events)
+        self._dirty_flags["activity"] = True  # Always rebuild activity
+
+        # Notification changes
+        if self._notification:
+            self._dirty_flags["notification"] = True
+
     def _build_layout(self, snapshot: DisplaySnapshot) -> Layout:
-        """Build the dashboard layout."""
+        """Build the dashboard layout with dirty-flag caching (v0.9.0 - task-107.3).
+
+        Only rebuilds panels whose underlying data has changed, using cached
+        versions for unchanged panels to improve refresh performance.
+        """
         layout = Layout()
 
-        # Build layout with conditional panels
+        # Detect which panels need rebuilding
+        if self._last_snapshot is not None:
+            self._detect_changes(self._last_snapshot, snapshot)
+        else:
+            # First build - everything is dirty
+            for key in self._dirty_flags:
+                self._dirty_flags[key] = True
+
+        # Build or use cached header panel
+        if self._dirty_flags["header"] or "header" not in self._cached_panels:
+            self._cached_panels["header"] = self._build_header(snapshot)
+            self._dirty_flags["header"] = False
+
+        # Build or use cached tokens panel
+        if self._dirty_flags["tokens"] or "tokens" not in self._cached_panels:
+            self._cached_panels["tokens"] = self._build_tokens(snapshot)
+            self._dirty_flags["tokens"] = False
+
+        # Build or use cached tools panel
+        if self._dirty_flags["tools"] or "tools" not in self._cached_panels:
+            self._cached_panels["tools"] = self._build_tools(snapshot)
+            self._dirty_flags["tools"] = False
+
+        # Build or use cached smells panel (if applicable)
+        if snapshot.detected_smells and (
+            self._dirty_flags["smells"] or "smells" not in self._cached_panels
+        ):
+            self._cached_panels["smells"] = self._build_smells(snapshot)
+            self._dirty_flags["smells"] = False
+
+        # Build or use cached context tax panel (if applicable)
+        if snapshot.static_cost_total > 0 and (
+            self._dirty_flags["context_tax"] or "context_tax" not in self._cached_panels
+        ):
+            self._cached_panels["context_tax"] = self._build_context_tax(snapshot)
+            self._dirty_flags["context_tax"] = False
+
+        # Activity panel always rebuilds (uses self.recent_events which isn't in snapshot)
+        self._cached_panels["activity"] = self._build_activity()
+
+        # Footer is static, only build once
+        if "footer" not in self._cached_panels:
+            self._cached_panels["footer"] = self._build_footer()
+
+        # Notification panel (if active)
+        if self._notification:
+            self._cached_panels["notification"] = self._build_notification()
+
+        # Assemble layout using cached panels
         # Header size=7 to accommodate context tax line (v0.7.0 - task-105.9)
         # Tokens size=9 to accommodate rate metrics row (v0.7.0 - task-105.12)
         panels = [
-            Layout(self._build_header(snapshot), name="header", size=7),
-            Layout(self._build_tokens(snapshot), name="tokens", size=9),
+            Layout(self._cached_panels["header"], name="header", size=7),
+            Layout(self._cached_panels["tokens"], name="tokens", size=9),
         ]
 
         # Tools and Smells: side-by-side if smells detected, otherwise tools only
         if snapshot.detected_smells:
             tools_and_smells = Layout()
             tools_and_smells.split_row(
-                Layout(self._build_tools(snapshot), name="tools", ratio=3),
-                Layout(self._build_smells(snapshot), name="smells", ratio=2),
+                Layout(self._cached_panels["tools"], name="tools", ratio=3),
+                Layout(self._cached_panels["smells"], name="smells", ratio=2),
             )
             panels.append(Layout(tools_and_smells, name="tools_smells", size=12))
         else:
-            panels.append(Layout(self._build_tools(snapshot), name="tools", size=12))
+            panels.append(Layout(self._cached_panels["tools"], name="tools", size=12))
 
         # Add context tax panel if static_cost data is available
         if snapshot.static_cost_total > 0:
-            panels.append(Layout(self._build_context_tax(snapshot), name="context_tax", size=6))
+            panels.append(Layout(self._cached_panels["context_tax"], name="context_tax", size=6))
 
         panels.extend(
             [
-                Layout(self._build_activity(), name="activity", size=6),
-                Layout(self._build_footer(), name="footer", size=1),
+                Layout(self._cached_panels["activity"], name="activity", size=6),
+                Layout(self._cached_panels["footer"], name="footer", size=1),
             ]
         )
 
         # Add notification bar if active (v0.8.0 - task-106.9)
         if self._notification:
-            panels.append(Layout(self._build_notification(), name="notification", size=1))
+            panels.append(Layout(self._cached_panels["notification"], name="notification", size=1))
 
         layout.split_column(*panels)
+
+        # Update last snapshot reference for next comparison
+        self._last_snapshot = snapshot
 
         return layout
 

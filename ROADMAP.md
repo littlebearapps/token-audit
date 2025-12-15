@@ -4,10 +4,10 @@ This document outlines the planned development direction for MCP Audit. For comp
 
 ## Current Status
 
-**Version**: v0.8.0
-**Stage**: Analysis Layer — 12 Smell Patterns, Recommendations Engine, Cross-Session Aggregation
+**Version**: v0.9.0
+**Stage**: Polish + Stability — Performance Optimization, API Stability, Profiling Guide
 
-MCP Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v0.8.0 adds 7 new smell patterns (12 total), a recommendations engine for AI-consumable suggestions, cross-session smell aggregation, and TUI notification bar.
+MCP Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v0.9.0 adds sub-millisecond TUI refresh, 14 performance benchmarks in CI, explicit API stability tiers for all 30 public exports, and comprehensive profiling documentation.
 
 ---
 
@@ -96,24 +96,25 @@ Deeper analysis capabilities and improved AI integration.
 
 ---
 
-## v0.9.0 — Polish + Stability
+## ✅ v0.9.0 — Polish + Stability (Released)
 
 **Theme:** "Ready for Production"
 
-Prepares for v1.0 with documentation, examples, and API stability.
+Performance optimization and API stability for production readiness.
 
-- **Documentation Overhaul** — Comprehensive guides for all features
-- **Usage Examples** — 5+ real-world scenario walkthroughs
-- **API Cleanup** — Deprecate unstable APIs, document public surface
-- **Final Schema v1.0.0** — Stability guarantees, JSON Schema validation
-- **Performance Optimization** — <100ms TUI refresh, <500ms session load
-- **Landing Page Content** — Draft copy and assets for website
+- ✅ **Performance Optimization** — Sub-millisecond TUI refresh, <500ms session load, <100MB memory
+  - TUI dirty-flag caching: Only rebuild panels whose data changed (15x faster refresh)
+  - Storage mtime caching: 60-second TTL reduces stat() calls (33% faster listing)
+  - Header peeking: 4KB reads for metadata (10-100x faster metadata queries)
+- ✅ **Performance Benchmarks** — 14 CI-integrated benchmark tests
+- ✅ **API Stability Tiers** — 30 public exports classified (stable/evolving/deprecated)
+- ✅ **API-STABILITY.md** — Comprehensive stability policy documentation
+- ✅ **Profiling Guide** — `docs/profiling.md` with cProfile/tracemalloc examples
 
 **Success Metrics:**
-- Complete documentation for all features
-- 5+ real-world usage examples
-- No breaking API changes after this release
-- Sub-100ms TUI refresh performance
+- ✅ Sub-100ms TUI refresh performance (achieved <1ms)
+- ✅ API stability classification for all public exports
+- ✅ Deprecation warnings for unstable APIs
 
 ➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/5)
 
@@ -146,6 +147,8 @@ The official stable release with full marketing launch.
 
 ## Post-v1.0 Vision
 
+> **Note:** The following roadmap items represent our current thinking and are subject to change based on community feedback, ecosystem developments (particularly AAIF governance decisions), and technical discoveries during implementation. Features may be added, removed, reordered, or combined as we learn more.
+
 ### v1.1.0 — Ollama CLI Support
 
 **Theme:** "Local Model Tracking"
@@ -163,30 +166,105 @@ Adds support for Ollama CLI via API proxy approach.
 
 ➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/10)
 
-### v1.2+ — Developer Insight
-- Context window tracking (per-turn token load)
-- TUI: Tool Detail mode
-- Platform capability warnings
+### v1.2.0 — Platform Expansion
 
-### v1.3+ — Payload Analysis
+**Theme:** "More Platforms"
+
+Adds support for AAIF reference runtime and market-leading IDE.
+
+- **goose Adapter** — Block's AAIF founding project (MCP-native, 24k+ GitHub stars)
+- **Cursor Adapter** — Market-leading AI IDE (session format research required)
+- **AGENTS.md Parsing** — Extract project context from OpenAI's agent config standard
+
+**Success Metrics:**
+- goose sessions fully tracked
+- Cursor sessions tracked
+- 6 platforms supported: Claude Code, Codex CLI, Gemini CLI, Ollama, goose, Cursor
+
+### v1.3.0 — Developer Insight
+
+**Theme:** "Deeper Analysis"
+
+- Context window tracking (per-turn token load)
+- Platform capability warnings
+- TUI: Tool Detail mode
+
+### v1.4.0 — IDE Extensions
+
+**Theme:** "VS Code Ecosystem"
+
+- **Cline Adapter** — Open source VS Code extension (2M+ installs)
+- **Aider Adapter** — Popular open source CLI
+- 8 platforms total
+
+### v1.5.0 — Security Research (P0)
+
+**Theme:** "Security Foundation"
+
+**Why Security is Critical:** MCP security is the #1 ecosystem concern in 2025. Key vulnerabilities include CVE-2025-6515 (Prompt Hijacking), CVE-2025-6514 (mcp-remote RCE), and tool poisoning attacks. 88% of MCP servers require credentials; 53% use insecure long-lived tokens.
+
+**Approach:** Hybrid — research both MCP-scan integration AND custom security patterns, then decide based on findings.
+
+- **MCP-scan Integration Evaluation** — Assess Invariant Labs' detection capabilities
+- **Custom Security Smells** — Design 5 new patterns:
+  - `SUSPICIOUS_DESCRIPTION` — Hidden instructions in tool descriptions
+  - `EXFILTRATION_RISK` — Data flow to external endpoints
+  - `CREDENTIAL_EXPOSURE` — Plaintext secrets in tool calls
+  - `CROSS_SERVER_SHADOWING` — Tool name conflicts
+  - `UNAUTHORIZED_SCOPE` — Tools accessing unexpected resources
+- **Tool Description Scanner** — Flag suspicious patterns in MCP tool definitions
+- **Security Posture Scoring Prototype** — Per-session security rating (0-100)
+
+### v1.6.0 — Payload Analysis
+
+**Theme:** "Schema Intelligence"
+
 - Dynamic payload heatmap
 - Full schema tokenizer
 - Description density scoring
 
-### v1.4+ — Cross-Model Analysis
-- Model behavior differences
-- Tool families/categories
-- Baseline session support
+### v1.7.0 — Cross-Platform Analysis
 
-### v1.5+ — Comparison Suite
+**Theme:** "Compare Everything"
+
+- Platform efficiency comparison (Claude vs Cursor vs Gemini)
+- Baseline session support
+- Model behavior differences
+
+### v1.8.0 — Security Implementation (P0)
+
+**Theme:** "Security Layer"
+
+Full implementation of security features based on v1.5.0 research findings.
+
+- **Toxic Flow Analysis** — Map data exfiltration risks across tool calls
+- **Security Posture Scoring** — Production-ready per-session security rating
+- **Credential Exposure Detection** — Identify plaintext credentials in tool parameters
+- **Security Panel in TUI** — Visual security indicators and alerts
+- **Security Recommendations** — AI-consumable security suggestions
+
+### v1.9.0 — Comparison Suite
+
+**Theme:** "Session Intelligence"
+
 - Session drift detection
 - Enhanced TUI comparison mode
+- Cross-session trend engine (time-series)
 
-### v2.0+ — Long-Term Vision
-- Cross-session trend engine (time-series analysis)
-- Team/enterprise features (aggregate tracking)
-- Plugin architecture (dynamic adapters)
-- Cross-platform unified dashboard
+### v2.0.0 — Enterprise Platform
+
+**Theme:** "Enterprise Ready"
+
+Major platform release with breaking changes.
+
+- **Plugin Architecture** — Dynamic adapter loading for community contributions
+- **Schema v2.0** — Security blocks, multi-platform metadata (breaking changes)
+- **Cross-Platform Dashboard** — Unified view across all platforms
+- **Team Features** — Aggregate tracking, governance reports, cost allocation
+- **Security Suite** — Full toxic flow analysis, security posture, credential detection
+- **AAIF Compliance** — Verify sessions against MCP spec versions
+
+**Context:** MCP was donated to the Linux Foundation's Agentic AI Foundation (AAIF) in December 2025. goose (Block) and AGENTS.md (OpenAI) are co-founding projects. v2.0 aligns mcp-audit with this vendor-neutral ecosystem.
 
 ---
 
@@ -206,4 +284,4 @@ This roadmap represents our current development plans and is subject to change. 
 
 ---
 
-**Last Updated**: December 2025
+**Last Updated**: December 14, 2025

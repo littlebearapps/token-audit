@@ -6,6 +6,19 @@ This guide explains how to use MCP Audit with [Codex CLI](https://github.com/ope
 
 ---
 
+## Quick Facts
+
+| Aspect | Value |
+|--------|-------|
+| **Token Accuracy** | Session: Native / Per-tool: Estimated (99%+) |
+| **Per-tool Attribution** | Estimated via tiktoken `o200k_base` |
+| **Cache Tracking** | Read only (cache creation not reported) |
+| **Reasoning Tokens** | Yes — O-series models (o1, o3, o4-mini) |
+| **Session Location** | `~/.codex/sessions/YYYY/MM/DD/*.jsonl` |
+| **Special Features** | Tool duration tracking, reasoning tokens |
+
+---
+
 ## Prerequisites
 
 - **Codex CLI** installed (`npm install -g @openai/codex`)
@@ -246,7 +259,10 @@ head -20 ~/.codex/sessions/2025/12/08/session.jsonl | grep turn_context
 
 ## See Also
 
+- [Getting Started](../GETTING-STARTED.md) - Installation and first session
+- [Feature Reference](../FEATURES.md) - Complete feature guide
+- [Configuration Reference](../CONFIGURATION.md) - CLI options and pricing
+- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues and solutions
 - [Complete Setup Guide](../codex-cli-setup.md) - Detailed configuration options
 - [Architecture](../architecture.md) - How MCP Audit works internally
-- [Pricing Configuration](../PRICING-CONFIGURATION.md) - Custom model pricing
 - [Data Contract](../data-contract.md) - Session schema documentation

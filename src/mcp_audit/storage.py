@@ -13,6 +13,7 @@ This module provides:
 """
 
 import json
+import time
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -201,6 +202,12 @@ class StorageManager:
         """
         self.base_dir = base_dir or get_default_base_dir()
         self.base_dir.mkdir(parents=True, exist_ok=True)
+
+        # Performance optimization: mtime caching (v0.9.0 - task-107.3)
+        # Cache file modification times to reduce stat() calls in list_sessions
+        self._mtime_cache: Dict[Path, float] = {}
+        self._mtime_cache_timestamp: float = 0.0
+        self._mtime_cache_ttl: float = 60.0  # Refresh cache every 60 seconds
 
     # =========================================================================
     # Path Generation
@@ -561,6 +568,96 @@ class StorageManager:
         dates.sort(reverse=True)
         return dates
 
+    # =========================================================================
+    # Performance Optimizations (v0.9.0 - task-107.3)
+    # =========================================================================
+
+    def _get_cached_mtime(self, path: Path) -> float:
+        """Get file modification time with caching.
+
+        Uses a cache with TTL to reduce stat() system calls during list_sessions.
+        Cache is invalidated after _mtime_cache_ttl seconds (default 60s).
+
+        Args:
+            path: Path to get mtime for
+
+        Returns:
+            File modification time as Unix timestamp
+        """
+        now = time.time()
+
+        # Invalidate cache if TTL expired
+        if now - self._mtime_cache_timestamp > self._mtime_cache_ttl:
+            self._mtime_cache.clear()
+            self._mtime_cache_timestamp = now
+
+        # Return cached value or compute and cache
+        if path not in self._mtime_cache:
+            try:
+                self._mtime_cache[path] = path.stat().st_mtime
+            except OSError:
+                # File might have been deleted, use 0
+                self._mtime_cache[path] = 0.0
+
+        return self._mtime_cache[path]
+
+    def peek_session_header(
+        self, session_path: Path, max_bytes: int = 4096
+    ) -> Optional[Dict[str, Any]]:
+        """Read session file header without loading full JSON.
+
+        Extracts the _file metadata block from the first few KB of a session file.
+        Much faster than json.load() for large sessions when only metadata is needed.
+
+        Args:
+            session_path: Path to session JSON file
+            max_bytes: Maximum bytes to read (default 4096)
+
+        Returns:
+            The _file metadata dict if found, None otherwise
+        """
+        if not session_path.exists():
+            return None
+
+        try:
+            with open(session_path) as f:
+                # Read first chunk
+                chunk = f.read(max_bytes)
+
+            # Quick check for _file key
+            if '"_file"' not in chunk:
+                return None
+
+            # Try to extract just the _file block using string parsing
+            # This is faster than parsing the entire JSON
+            import re
+
+            # Match "_file": { ... } where braces are balanced at the first level
+            # This regex finds the _file block up to the first closing brace
+            match = re.search(r'"_file"\s*:\s*\{[^{}]*\}', chunk)
+            if match:
+                # Wrap in braces to make valid JSON
+                header_json = "{" + match.group() + "}"
+                header_data = json.loads(header_json)
+                result = header_data.get("_file")
+                if isinstance(result, dict):
+                    return result
+                return None
+
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
+
+        return None
+
+    def invalidate_mtime_cache(self) -> None:
+        """Force invalidation of the mtime cache.
+
+        Call this after creating or modifying session files to ensure
+        subsequent list_sessions calls see fresh data.
+        """
+        self._mtime_cache.clear()
+        self._mtime_cache_timestamp = 0.0
+
     def list_sessions(
         self,
         platform: Optional[Platform] = None,
@@ -598,7 +695,8 @@ class StorageManager:
                         sessions.append(session_file)
 
         # Sort by modification time (newest first)
-        sessions.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        # Uses cached mtimes to reduce stat() calls (v0.9.0 - task-107.3)
+        sessions.sort(key=lambda p: self._get_cached_mtime(p), reverse=True)
 
         if limit:
             sessions = sessions[:limit]

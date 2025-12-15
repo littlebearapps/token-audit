@@ -5,7 +5,9 @@ Track token usage, costs, and efficiency across AI coding sessions
 for Claude Code, Codex CLI, and other MCP-enabled tools.
 """
 
+import warnings
 from importlib.metadata import PackageNotFoundError, version
+from typing import Any, Literal
 
 try:
     __version__ = version("mcp-audit")
@@ -16,11 +18,68 @@ except PackageNotFoundError:
 __author__ = "Little Bear Apps"
 __email__ = "help@littlebearapps.com"
 
+# API Stability Classification
+# See docs/API-STABILITY.md for full policy
+StabilityTier = Literal["stable", "evolving", "deprecated", "unknown"]
+
+API_STABILITY: dict[str, StabilityTier] = {
+    # === STABLE (v1.0.0+ guaranteed) ===
+    "StorageManager": "stable",
+    "SessionIndex": "stable",
+    "PricingConfig": "stable",
+    "load_pricing_config": "stable",
+    "get_model_cost": "stable",
+    "normalize_tool_name": "stable",
+    "normalize_server_name": "stable",
+    "extract_server_and_tool": "stable",
+    "TokenEstimator": "stable",
+    "count_tokens": "stable",
+    "get_estimator_for_platform": "stable",
+    "FUNCTION_CALL_OVERHEAD": "stable",
+    "DisplayAdapter": "stable",
+    "DisplaySnapshot": "stable",
+    "create_display": "stable",
+    "DisplayMode": "stable",
+    # === EVOLVING (interface stable, implementation may change) ===
+    "BaseTracker": "evolving",
+    "Session": "evolving",
+    "ServerSession": "evolving",
+    "Call": "evolving",
+    "ToolStats": "evolving",
+    "TokenUsage": "evolving",
+    "MCPToolCalls": "evolving",
+    "ClaudeCodeAdapter": "evolving",
+    "CodexCLIAdapter": "evolving",
+    "GeminiCLIAdapter": "evolving",
+    "SmellAggregator": "evolving",
+    "AggregatedSmell": "evolving",
+    "SmellAggregationResult": "evolving",
+    # === DEPRECATED (remove in v1.1.0) ===
+    "estimate_tool_tokens": "deprecated",
+}
+
+
+def get_api_stability(name: str) -> StabilityTier:
+    """Get the stability tier of a public API export.
+
+    Args:
+        name: The name of the API export to check.
+
+    Returns:
+        One of: "stable", "evolving", "deprecated", or "unknown".
+
+    Example:
+        >>> from mcp_audit import get_api_stability
+        >>> get_api_stability("StorageManager")
+        'stable'
+        >>> get_api_stability("estimate_tool_tokens")
+        'deprecated'
+    """
+    return API_STABILITY.get(name, "unknown")
+
+
 # Lazy imports to avoid circular dependencies
 # Users can import directly: from mcp_audit import BaseTracker
-
-
-from typing import Any
 
 
 def __getattr__(name: str) -> Any:
@@ -97,7 +156,6 @@ def __getattr__(name: str) -> Any:
     if name in (
         "TokenEstimator",
         "count_tokens",
-        "estimate_tool_tokens",
         "get_estimator_for_platform",
         "FUNCTION_CALL_OVERHEAD",
     ):
@@ -105,11 +163,23 @@ def __getattr__(name: str) -> Any:
             FUNCTION_CALL_OVERHEAD,
             TokenEstimator,
             count_tokens,
-            estimate_tool_tokens,
             get_estimator_for_platform,
         )
 
         return locals()[name]
+
+    # Deprecated: estimate_tool_tokens (use TokenEstimator.estimate_tool_call instead)
+    if name == "estimate_tool_tokens":
+        warnings.warn(
+            "estimate_tool_tokens is deprecated and will be removed in v1.1.0. "
+            "Use TokenEstimator.estimate_tool_call() instead. "
+            "See docs/API-STABILITY.md for migration guide.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .token_estimator import estimate_tool_tokens
+
+        return estimate_tool_tokens
 
     # Display module
     if name in ("DisplayAdapter", "DisplaySnapshot", "create_display", "DisplayMode"):
@@ -126,41 +196,29 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
-    # Version info
+    # === Package Metadata ===
     "__version__",
     "__author__",
     "__email__",
-    # Core classes
-    "BaseTracker",
-    "Session",
-    "ServerSession",
-    "Call",
-    "ToolStats",
-    "TokenUsage",
-    "MCPToolCalls",
-    # Normalization
-    "normalize_tool_name",
-    "normalize_server_name",
-    "extract_server_and_tool",
+    # === API Stability (v0.9.0+) ===
+    "API_STABILITY",
+    "StabilityTier",
+    "get_api_stability",
+    # === STABLE APIs (v1.0.0+ guaranteed) ===
+    # Storage
+    "StorageManager",
+    "SessionIndex",
     # Pricing
     "PricingConfig",
     "load_pricing_config",
     "get_model_cost",
-    # Storage
-    "StorageManager",
-    "SessionIndex",
-    # Smell aggregation
-    "SmellAggregator",
-    "AggregatedSmell",
-    "SmellAggregationResult",
-    # Platform adapters
-    "ClaudeCodeAdapter",
-    "CodexCLIAdapter",
-    "GeminiCLIAdapter",
+    # Normalization
+    "normalize_tool_name",
+    "normalize_server_name",
+    "extract_server_and_tool",
     # Token estimation
     "TokenEstimator",
     "count_tokens",
-    "estimate_tool_tokens",
     "get_estimator_for_platform",
     "FUNCTION_CALL_OVERHEAD",
     # Display
@@ -168,4 +226,23 @@ __all__ = [
     "DisplaySnapshot",
     "create_display",
     "DisplayMode",
+    # === EVOLVING APIs (interface stable, implementation may change) ===
+    # Core data classes
+    "BaseTracker",
+    "Session",
+    "ServerSession",
+    "Call",
+    "ToolStats",
+    "TokenUsage",
+    "MCPToolCalls",
+    # Platform adapters
+    "ClaudeCodeAdapter",
+    "CodexCLIAdapter",
+    "GeminiCLIAdapter",
+    # Smell aggregation
+    "SmellAggregator",
+    "AggregatedSmell",
+    "SmellAggregationResult",
+    # === DEPRECATED (remove in v1.1.0) ===
+    "estimate_tool_tokens",  # Use TokenEstimator.estimate_tool_call()
 ]

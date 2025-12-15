@@ -4,6 +4,19 @@ This guide explains how to use MCP Audit with [Claude Code](https://claude.ai/cl
 
 ---
 
+## Quick Facts
+
+| Aspect | Value |
+|--------|-------|
+| **Token Accuracy** | Native (100%) — exact counts from Anthropic |
+| **Per-tool Attribution** | Yes — native per-tool token breakdown |
+| **Cache Tracking** | Full (create + read) |
+| **Reasoning Tokens** | Not exposed |
+| **Session Location** | `~/.claude/projects/<hash>/session.jsonl` |
+| **Special Features** | Highest accuracy, full cache visibility |
+
+---
+
 ## Prerequisites
 
 - **Claude Code** installed and configured
@@ -399,7 +412,9 @@ Estimated cost:   $0.23
 
 ## See Also
 
+- [Getting Started](../GETTING-STARTED.md) - Installation and first session
+- [Feature Reference](../FEATURES.md) - Complete feature guide
+- [Configuration Reference](../CONFIGURATION.md) - CLI options and pricing
+- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues and solutions
 - [Architecture](../architecture.md) - How MCP Audit works internally
 - [Data Contract](../data-contract.md) - Session schema documentation
-- [Privacy & Security](../privacy-security.md) - What data is collected
-- [Features & Benefits](../FEATURES-BENEFITS.md) - Full feature guide

@@ -10,19 +10,60 @@ This document defines the data contract for MCP Audit, including backward compat
 
 ## Table of Contents
 
-1. [Schema v1.7.0](#schema-v170)
-2. [Schema v1.6.0](#schema-v160)
-3. [Schema v1.5.0](#schema-v150)
-4. [Schema v1.4.0](#schema-v140)
-5. [Schema v1.3.0](#schema-v130)
-6. [Schema v1.2.0](#schema-v120)
-7. [Schema v1.1.0](#schema-v110)
-8. [Backward Compatibility Guarantee](#backward-compatibility-guarantee)
-9. [Versioning Policy](#versioning-policy)
-10. [Schema Stability](#schema-stability)
-11. [Migration Support](#migration-support)
-12. [Breaking Changes](#breaking-changes)
-13. [Deprecation Policy](#deprecation-policy)
+1. [JSON Schema Validation](#json-schema-validation)
+2. [Schema v1.7.0](#schema-v170)
+3. [Schema v1.6.0](#schema-v160)
+4. [Schema v1.5.0](#schema-v150)
+5. [Schema v1.4.0](#schema-v140)
+6. [Schema v1.3.0](#schema-v130)
+7. [Schema v1.2.0](#schema-v120)
+8. [Schema v1.1.0](#schema-v110)
+9. [Backward Compatibility Guarantee](#backward-compatibility-guarantee)
+10. [Versioning Policy](#versioning-policy)
+11. [Schema Stability](#schema-stability)
+12. [Migration Support](#migration-support)
+13. [Breaking Changes](#breaking-changes)
+14. [Deprecation Policy](#deprecation-policy)
+
+---
+
+## JSON Schema Validation
+
+mcp-audit provides a formal JSON Schema for validating session files:
+
+**Schema File**: [`docs/schema/session-v1.7.0.json`](schema/session-v1.7.0.json)
+
+### Validate Command
+
+```bash
+# Validate a session file against the schema
+mcp-audit validate /path/to/session.json
+
+# Show schema file location and version
+mcp-audit validate --schema-only
+
+# Verbose output with detailed error messages
+mcp-audit validate session.json --verbose
+```
+
+### Programmatic Validation
+
+```python
+import json
+import jsonschema
+from pathlib import Path
+
+# Load schema
+schema_path = Path("docs/schema/session-v1.7.0.json")
+with open(schema_path) as f:
+    schema = json.load(f)
+
+# Validate session
+with open("session.json") as f:
+    session = json.load(f)
+
+jsonschema.validate(session, schema)  # Raises on error
+```
 
 ---
 

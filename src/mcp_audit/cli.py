@@ -604,6 +604,50 @@ Keyboard shortcuts:
         help="Color theme (default: auto-detect)",
     )
 
+    # ========================================================================
+    # validate command (v0.9.0 - task-107.6)
+    # ========================================================================
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Validate session files against JSON Schema",
+        description="""
+Validate mcp-audit session files against the official JSON Schema.
+
+This command checks that session files conform to the schema specification,
+helping identify malformed or corrupted session data.
+
+Examples:
+  # Validate a single session file
+  mcp-audit validate ~/.mcp-audit/sessions/claude-code/2025-12-14/session.json
+
+  # Show schema file path
+  mcp-audit validate --schema-only
+
+  # Validate with verbose output
+  mcp-audit validate session.json --verbose
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    validate_parser.add_argument(
+        "session_file",
+        type=Path,
+        nargs="?",
+        help="Session file to validate (JSON format)",
+    )
+
+    validate_parser.add_argument(
+        "--schema-only",
+        action="store_true",
+        help="Print schema file path and exit (no validation)",
+    )
+
+    validate_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed validation errors",
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -622,6 +666,8 @@ Keyboard shortcuts:
         return cmd_ui(args)
     elif args.command == "smells":
         return cmd_smells(args)
+    elif args.command == "validate":
+        return cmd_validate(args)
     else:
         parser.print_help()
         return 1
@@ -2858,6 +2904,110 @@ def detect_project_name() -> str:
             return f"{parent.name}/{current_name}"
 
     return current_name
+
+
+# ============================================================================
+# validate command (v0.9.0 - task-107.6)
+# ============================================================================
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """
+    Validate session files against JSON Schema.
+
+    Args:
+        args: CLI arguments with session_file, schema_only, verbose
+
+    Returns:
+        0 on success, 1 on validation failure
+    """
+    import json
+
+    try:
+        import jsonschema  # type: ignore[import-untyped]
+    except ImportError:
+        print("Error: jsonschema package not installed.", file=sys.stderr)
+        print("Install with: pip install jsonschema", file=sys.stderr)
+        return 1
+
+    # Schema file path - check multiple locations
+    # 1. Development: relative to source (../../../docs/schema/)
+    # 2. Installed package: same-level schema/ directory
+    schema_name = "session-v1.7.0.json"
+    possible_paths = [
+        Path(__file__).parent.parent.parent / "docs" / "schema" / schema_name,  # Development
+        Path(__file__).parent / "schema" / schema_name,  # Installed (src/mcp_audit/schema/)
+    ]
+    schema_path = next((p for p in possible_paths if p.exists()), possible_paths[0])
+
+    # Handle --schema-only
+    if args.schema_only:
+        if schema_path.exists():
+            print(f"Schema file: {schema_path}")
+            print("Schema version: 1.7.0")
+            print(
+                "Docs: https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md"
+            )
+            return 0
+        else:
+            print(f"Error: Schema file not found at {schema_path}", file=sys.stderr)
+            return 1
+
+    # Validate session_file is provided
+    if not args.session_file:
+        print("Error: session_file is required (or use --schema-only)", file=sys.stderr)
+        return 1
+
+    session_file: Path = args.session_file
+
+    if not session_file.exists():
+        print(f"Error: File not found: {session_file}", file=sys.stderr)
+        return 1
+
+    if not schema_path.exists():
+        print(f"Error: Schema file not found at {schema_path}", file=sys.stderr)
+        return 1
+
+    # Load schema
+    try:
+        with open(schema_path, encoding="utf-8") as f:
+            schema = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid schema JSON: {e}", file=sys.stderr)
+        return 1
+
+    # Load session file
+    try:
+        with open(session_file, encoding="utf-8") as f:
+            session_data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid session JSON: {e}", file=sys.stderr)
+        return 1
+
+    # Validate
+    validator = jsonschema.Draft7Validator(schema)
+    errors = list(validator.iter_errors(session_data))
+
+    if not errors:
+        print(f"✓ Valid: {session_file}")
+        schema_version = session_data.get("_file", {}).get("schema_version", "unknown")
+        print(f"  Schema version: {schema_version}")
+        return 0
+
+    # Validation failed
+    print(f"✗ Invalid: {session_file}")
+    print(f"  {len(errors)} validation error(s) found:")
+    print()
+
+    for i, error in enumerate(errors, 1):
+        path = ".".join(str(p) for p in error.absolute_path) if error.absolute_path else "(root)"
+        print(f"  {i}. Path: {path}")
+        print(f"     Error: {error.message}")
+        if args.verbose and error.context:
+            print(f"     Context: {error.context}")
+        print()
+
+    return 1
 
 
 if __name__ == "__main__":

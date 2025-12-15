@@ -150,23 +150,23 @@ It turns raw MCP telemetry into actionable insights you can use to optimise your
 
 ---
 
-## 🚀 What's New (v0.8.0)
+## 🚀 What's New (v0.9.0)
 
-**Analysis Layer** — Deeper insights with 12 smell patterns and AI recommendations:
+**Polish + Stability** — Performance optimization and API stability for production readiness:
 
-**Expanded Smell Detection (12 Patterns):**
-- 7 new patterns: `REDUNDANT_CALLS`, `EXPENSIVE_FAILURES`, `UNDERUTILIZED_SERVER`, `BURST_PATTERN`, `LARGE_PAYLOAD`, `SEQUENTIAL_READS`, `CACHE_MISS_STREAK`
-- Automatically detect inefficient MCP usage patterns
+**Performance Optimization:**
+- Sub-millisecond TUI refresh with dirty-flag caching
+- Storage performance: mtime caching, header peeking for fast metadata reads
+- 14 benchmark tests in CI (TUI <100ms, session load <500ms, memory <100MB)
 
-**Recommendations Engine:**
-- AI-consumable suggestions generated from detected smells
-- Confidence scores, evidence, and specific action items
-- Included in `mcp-audit export ai-prompt` output
+**API Stability:**
+- 30 public exports with explicit stability tiers (stable/evolving/deprecated)
+- `API_STABILITY` dictionary for programmatic stability checking
+- Comprehensive `API-STABILITY.md` documentation
+- Deprecation warnings for APIs scheduled for removal
 
-**Cross-Session Aggregation:**
-- Track smell trends across your session history
-- See which patterns are improving, worsening, or stable
-- Filter by platform, project, or date range
+**Profiling Guide:**
+- `docs/profiling.md` with cProfile and tracemalloc examples
 
 See the [Changelog](https://github.com/littlebearapps/mcp-audit/blob/main/CHANGELOG.md) for full version history.
 
@@ -561,39 +561,58 @@ Yes. MCP Audit tracks schema weight, per-tool usage, and payload spikes that con
 
 ## 📚 Documentation
 
-### 🚀 Getting Started Guides
+### 🚀 Getting Started
+
+- [**Getting Started Guide**](docs/GETTING-STARTED.md) — Install and run your first session
+
+### 📖 Platform Guides
 
 | Platform | Guide |
 |----------|-------|
-| **Claude Code** | [Setup & Troubleshooting](https://github.com/littlebearapps/mcp-audit/blob/main/docs/platforms/claude-code.md) |
-| **Codex CLI** | [Setup & Troubleshooting](https://github.com/littlebearapps/mcp-audit/blob/main/docs/platforms/codex-cli.md) |
-| **Gemini CLI** | [Setup & Troubleshooting](https://github.com/littlebearapps/mcp-audit/blob/main/docs/platforms/gemini-cli.md) |
+| Claude Code | [Setup & Troubleshooting](docs/platforms/claude-code.md) |
+| Codex CLI | [Setup & Troubleshooting](docs/platforms/codex-cli.md) |
+| Gemini CLI | [Setup & Troubleshooting](docs/platforms/gemini-cli.md) |
 
-### 📖 Reference
+### 📋 Reference
+
+- [Feature Reference](docs/FEATURES.md) — TUI, smells, exports, recommendations
+- [Configuration Reference](docs/CONFIGURATION.md) — CLI options, themes, pricing
+- [API Reference](docs/API.md) — Programmatic usage
+
+### 🛠️ Help
+
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — Common issues and solutions
+- [FAQ](docs/FAQ.md) — 25+ answered questions
+
+### 📝 Usage Examples
+
+- [Debugging a Slow Session](docs/examples/debugging-slow-session.md)
+- [Optimizing MCP Config](docs/examples/optimizing-mcp-config.md)
+- [Comparing Platform Costs](docs/examples/comparing-platform-costs.md)
+- [All Examples...](docs/examples/)
+
+### 📐 Technical
 
 | Document | Description |
 |----------|-------------|
-| [Features & Benefits](https://github.com/littlebearapps/mcp-audit/blob/main/docs/FEATURES-BENEFITS.md) | Detailed feature guide |
-| [Architecture](https://github.com/littlebearapps/mcp-audit/blob/main/docs/architecture.md) | System design and adapters |
-| [Data Contract](https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md) | Schema v1.7.0 format |
-| [Privacy & Security](https://github.com/littlebearapps/mcp-audit/blob/main/docs/privacy-security.md) | Data handling policies |
-| [Manual Tokenizer Install](https://github.com/littlebearapps/mcp-audit/blob/main/docs/manual-tokenizer-install.md) | For firewalled networks |
-| [Changelog](https://github.com/littlebearapps/mcp-audit/blob/main/CHANGELOG.md) | Version history |
-| [Roadmap](https://github.com/littlebearapps/mcp-audit/blob/main/ROADMAP.md) | Planned features |
+| [Architecture](docs/architecture.md) | System design |
+| [Data Contract](docs/data-contract.md) | Schema v1.7.0 |
+| [Privacy & Security](docs/privacy-security.md) | Data policies |
+| [Changelog](CHANGELOG.md) | Version history |
+| [Roadmap](ROADMAP.md) | Planned features |
 
 ---
 
 ## 🗺️ Roadmap
 
-**Current**: v0.8.x — Analysis Layer (12 Smell Patterns, Recommendations Engine, Cross-Session Aggregation)
+**Current**: v0.9.x — Polish + Stability (Performance Optimization, API Stability, Profiling Guide)
 
-**Coming in v0.9.0:**
-- Documentation overhaul — comprehensive guides for all features
-- Usage examples — 5+ real-world scenario walkthroughs
-- API cleanup — deprecate unstable APIs, document public surface
-- Performance optimization — <100ms TUI refresh, <500ms session load
+**Coming in v1.0.0:**
+- Product Hunt Launch — Landing page, press kit, video demos
+- Documentation completion — Comprehensive guides for all features
+- Usage examples — Real-world scenario walkthroughs
 
-See the full [Roadmap](https://github.com/littlebearapps/mcp-audit/blob/main/ROADMAP.md) for details.
+See the full [Roadmap](ROADMAP.md) for details.
 
 **Have an idea or feature request?** [Start a discussion](https://github.com/littlebearapps/mcp-audit/discussions/new?category=ideas)
 

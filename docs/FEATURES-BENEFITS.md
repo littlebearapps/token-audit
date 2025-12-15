@@ -1,6 +1,6 @@
 # Features & Benefits by Audience
 
-MCP Audit v0.8.0 - Features mapped to benefits for each target audience.
+MCP Audit v0.9.0 - Features mapped to benefits for each target audience.
 
 ---
 
@@ -27,6 +27,35 @@ MCP Audit v0.8.0 - Features mapped to benefits for each target audience.
 | **Rate metrics** (v0.7.0) | See tokens/min and calls/min | Monitor session velocity |
 | **Cache hit ratio** (v0.7.0) | Token-based cache utilization | Understand cache effectiveness |
 | **Unique tools count** (v0.7.0) | Tool diversity in MCP panel | See tool spread at a glance |
+| **Performance optimization** (v0.9.0) | Sub-ms TUI refresh for production | Smooth real-time monitoring |
+| **API stability tiers** (v0.9.0) | Stable APIs for integration | Know which APIs won't break |
+| **Profiling guide** (v0.9.0) | cProfile/tracemalloc docs | Optimize your own MCP tools |
+
+---
+
+## v0.9.0 Features: Polish + Stability
+
+v0.9.0 introduces the "Polish + Stability" theme — performance optimization and API stability for production readiness.
+
+### Performance Optimization
+
+Sub-millisecond TUI refresh with dirty-flag caching:
+
+- **TUI dirty-flag caching**: Only rebuild panels whose data changed (15x faster)
+- **Storage mtime caching**: 60-second TTL reduces stat() calls (33% faster)
+- **Header peeking**: 4KB reads for metadata (10-100x faster metadata queries)
+
+### API Stability Tiers
+
+30 public exports with explicit stability classification:
+
+- **stable** (16 APIs): Guaranteed backward-compatible through v1.x
+- **evolving** (13 APIs): Stable interface, implementation may change
+- **deprecated** (1 API): `estimate_tool_tokens` → use `TokenEstimator.estimate_tool_call()`
+
+### Profiling Guide
+
+`docs/profiling.md` with cProfile and tracemalloc examples for profiling your own MCP tools.
 
 ---
 

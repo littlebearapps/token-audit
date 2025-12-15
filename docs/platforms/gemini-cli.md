@@ -6,6 +6,19 @@ This guide explains how to use MCP Audit with [Gemini CLI](https://github.com/go
 
 ---
 
+## Quick Facts
+
+| Aspect | Value |
+|--------|-------|
+| **Token Accuracy** | Session: Native / Per-tool: Estimated (100% with Gemma, 95% without) |
+| **Per-tool Attribution** | Estimated via Gemma tokenizer or tiktoken fallback |
+| **Cache Tracking** | Read only (cache creation not reported) |
+| **Reasoning Tokens** | Yes — Gemini 2.0+ models (`thoughts` field) |
+| **Session Location** | `~/.gemini/tmp/<hash>/chats/session-*.json` |
+| **Special Features** | Gemma tokenizer for 100% accuracy, reasoning tokens |
+
+---
+
 ## Prerequisites
 
 - **Gemini CLI** installed (`npm install -g @google/gemini-cli`)
@@ -282,8 +295,11 @@ mcp-audit tokenizer download
 
 ## See Also
 
+- [Getting Started](../GETTING-STARTED.md) - Installation and first session
+- [Feature Reference](../FEATURES.md) - Complete feature guide
+- [Configuration Reference](../CONFIGURATION.md) - CLI options and pricing
+- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues and solutions
 - [Complete Setup Guide](../gemini-cli-setup.md) - Detailed configuration options
 - [Manual Tokenizer Install](../manual-tokenizer-install.md) - For corporate networks
 - [Architecture](../architecture.md) - How MCP Audit works internally
-- [Pricing Configuration](../PRICING-CONFIGURATION.md) - Custom model pricing
 - [Data Contract](../data-contract.md) - Session schema documentation

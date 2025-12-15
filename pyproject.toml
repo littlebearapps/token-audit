@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp-audit"
-version = "0.8.1.dev0"
+version = "0.9.0"
 description = "Real-time MCP token tracker for Claude Code, Codex CLI & Gemini CLI. Investigate context bloat and high token usage at the source."
 readme = "README.md"
 license = "MIT"
@@ -33,6 +33,7 @@ dependencies = [
     "rich>=13.0.0",
     "tiktoken>=0.7.0",       # Token estimation for Codex CLI (o200k_base encoding)
     "sentencepiece>=0.2.0",  # Token estimation for Gemini CLI (100% accurate with Gemma)
+    "jsonschema>=4.0.0",     # Schema validation for mcp-audit validate command
 ]
 
 [project.optional-dependencies]
@@ -69,6 +70,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mcp_audit = ["py.typed", "tokenizers/NOTICE"]
+
+# Include schema files in distribution (for mcp-audit validate command)
+[tool.setuptools.data-files]
+"share/mcp-audit/schema" = ["docs/schema/session-v1.7.0.json"]
 
 [tool.setuptools.exclude-package-data]
 mcp_audit = ["tokenizers/*.model"]
