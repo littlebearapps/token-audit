@@ -3,13 +3,13 @@
 **Date**: 2025-12-03
 **Status**: ✅ Research Validated
 **Validated**: 2025-12-03 via brave-search, jina MCP, and local config/session file analysis
-**Purpose**: Investigate requirements for mcp-audit to support Codex CLI and Gemini CLI platforms
+**Purpose**: Investigate requirements for token-audit to support Codex CLI and Gemini CLI platforms
 
 ---
 
 ## Executive Summary
 
-mcp-audit already has adapters for both Codex CLI and Gemini CLI, but they need updates to work with actual CLI session data formats discovered on this macbook.
+token-audit already has adapters for both Codex CLI and Gemini CLI, but they need updates to work with actual CLI session data formats discovered on this macbook.
 
 **Key Findings**:
 - **Codex CLI Adapter**: Functional but uses subprocess wrapper; needs file-based session reading
@@ -85,7 +85,7 @@ Observed in local `~/.codex/config.toml`:
 - Model reasoning effort configurable: `model_reasoning_effort = "high"`
 
 ### Current Adapter Status
-**File**: `src/mcp_audit/codex_cli_adapter.py`
+**File**: `src/token_audit/codex_cli_adapter.py`
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -232,7 +232,7 @@ Contains message history without full token data:
 ```
 
 ### Current Adapter Status
-**File**: `src/mcp_audit/gemini_cli_adapter.py`
+**File**: `src/token_audit/gemini_cli_adapter.py`
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -296,47 +296,47 @@ Need to add/verify pricing for:
 
 ## User Setup Instructions
 
-### Installing mcp-audit in Codex CLI Environment
+### Installing token-audit in Codex CLI Environment
 
 **Installation**:
 ```bash
-pip install mcp-audit
+pip install token-audit
 ```
 
 **Current Limitations**:
 - Codex CLI runs as a subprocess wrapper, not integrated
-- User would need to run: `mcp-audit collect --platform codex-cli -- codex <args>`
+- User would need to run: `token-audit collect --platform codex-cli -- codex <args>`
 - This wraps the codex command and monitors stdout
 
 **What Codex CLI Would Need**:
-1. **No Codex config changes required** - mcp-audit wraps the process
+1. **No Codex config changes required** - token-audit wraps the process
 2. **Alternative**: Read existing session files post-session:
    ```bash
-   mcp-audit report ~/.codex/sessions/2025/12/03/
+   token-audit report ~/.codex/sessions/2025/12/03/
    ```
 
 **Ideal Future State**:
-1. Run `mcp-audit collect --platform codex-cli` in background
-2. mcp-audit watches `~/.codex/sessions/` for new JSONL files
+1. Run `token-audit collect --platform codex-cli` in background
+2. token-audit watches `~/.codex/sessions/` for new JSONL files
 3. Real-time tracking without wrapping codex command
 4. Or: Codex CLI native integration via its OTEL export feature
 
-**Required mcp-audit Changes**:
+**Required token-audit Changes**:
 - Add file watcher mode for `~/.codex/sessions/`
 - Add CLI flag: `--watch-sessions` for live monitoring
-- Add session auto-discovery: `mcp-audit report --platform codex-cli --latest`
+- Add session auto-discovery: `token-audit report --platform codex-cli --latest`
 
 ---
 
-### Installing mcp-audit in Gemini CLI Environment
+### Installing token-audit in Gemini CLI Environment
 
 **Installation**:
 ```bash
-pip install mcp-audit
+pip install token-audit
 ```
 
 **Current Limitations (Critical)**:
-- mcp-audit expects OpenTelemetry telemetry export
+- token-audit expects OpenTelemetry telemetry export
 - Gemini CLI does NOT export OTEL by default
 - Session data is in different format than adapter expects
 - **Current adapter will NOT work**
@@ -353,18 +353,18 @@ pip install mcp-audit
    }
    ```
 2. Run OTEL collector locally
-3. Run mcp-audit to monitor collector output
+3. Run token-audit to monitor collector output
 
 **This is impractical** - requires OTEL infrastructure.
 
 **Ideal Future State** (after adapter rewrite):
-1. Install mcp-audit: `pip install mcp-audit`
-2. Run: `mcp-audit collect --platform gemini-cli`
-3. mcp-audit auto-discovers project hash from CWD
-4. mcp-audit watches `~/.gemini/tmp/<hash>/chats/` for session files
+1. Install token-audit: `pip install token-audit`
+2. Run: `token-audit collect --platform gemini-cli`
+3. token-audit auto-discovers project hash from CWD
+4. token-audit watches `~/.gemini/tmp/<hash>/chats/` for session files
 5. Parses rich token data from JSON (input/output/cached/thoughts/tool)
 
-**Required mcp-audit Changes**:
+**Required token-audit Changes**:
 - Rewrite GeminiCLIAdapter to parse session JSON format
 - Auto-detect project hash from CWD
 - Watch session directory for new files

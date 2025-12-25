@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from urllib.error import URLError
 
-from mcp_audit.pricing_api import PricingAPI, LITELLM_PRICING_URL
+from token_audit.pricing_api import PricingAPI, LITELLM_PRICING_URL
 
 
 class TestPricingAPICacheLayer:
@@ -21,7 +21,7 @@ class TestPricingAPICacheLayer:
     @pytest.fixture
     def temp_cache_file(self, tmp_path: Path) -> Path:
         """Create a temporary cache file path."""
-        return tmp_path / ".mcp-audit" / "pricing-cache.json"
+        return tmp_path / ".token-audit" / "pricing-cache.json"
 
     @pytest.fixture
     def api_with_temp_cache(self, temp_cache_file: Path) -> PricingAPI:
@@ -304,7 +304,7 @@ class TestPricingAPIRefresh:
 
         assert result is False
 
-    @patch("mcp_audit.pricing_api.urlopen")
+    @patch("token_audit.pricing_api.urlopen")
     def test_refresh_success(self, mock_urlopen: MagicMock, temp_cache_file: Path) -> None:
         """Test successful refresh from API."""
         mock_response = MagicMock()
@@ -323,7 +323,7 @@ class TestPricingAPIRefresh:
         assert api.model_count == 1
         assert temp_cache_file.exists()
 
-    @patch("mcp_audit.pricing_api.urlopen")
+    @patch("token_audit.pricing_api.urlopen")
     def test_refresh_network_error(self, mock_urlopen: MagicMock, temp_cache_file: Path) -> None:
         """Test refresh handles network error gracefully."""
         mock_urlopen.side_effect = URLError("Network unreachable")

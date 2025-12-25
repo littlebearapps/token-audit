@@ -6,7 +6,7 @@ Tests cross-platform MCP tool name normalization.
 """
 
 import pytest
-from mcp_audit.normalization import (
+from token_audit.normalization import (
     normalize_server_name,
     normalize_tool_name,
     extract_server_and_tool,

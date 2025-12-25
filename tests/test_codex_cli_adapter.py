@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from mcp_audit.codex_cli_adapter import CodexCLIAdapter, MODEL_DISPLAY_NAMES
+from token_audit.codex_cli_adapter import CodexCLIAdapter, MODEL_DISPLAY_NAMES
 
 
 # ============================================================================
@@ -965,7 +965,7 @@ class TestTokenDuplicateEventHandling:
 
         Based on actual Task 76 evidence:
         Native final: input=16,422, output=533+128 reasoning, cached=10,240, total=16,955
-        (Note: mcp-audit was reporting 43,249 before fix)
+        (Note: token-audit was reporting 43,249 before fix)
         """
         # Simulate sequence from Task 76 evidence (simplified)
         events = [
@@ -1028,7 +1028,7 @@ class TestTokenDuplicateEventHandling:
     def test_total_tokens_matches_openai_formula(self, adapter: CodexCLIAdapter) -> None:
         """Task 69.23: Verify total_tokens = input_tokens + output_tokens (OpenAI formula).
 
-        This test ensures mcp-audit matches native Codex CLI behavior exactly:
+        This test ensures token-audit matches native Codex CLI behavior exactly:
         - cache_read_tokens is a SUBSET of input_tokens, not additive
         - reasoning_tokens is tracked separately, excluded from total per OpenAI API
         """

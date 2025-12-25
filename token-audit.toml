@@ -1,0 +1,202 @@
+# Token Audit Configuration File
+# Last Updated: 2025-12-04
+#
+# This file defines pricing for AI models used in your sessions.
+# All prices are in USD per million tokens.
+#
+# Pricing sources (verified 2025-12-04):
+# - Anthropic: https://www.anthropic.com/pricing#api
+# - OpenAI: https://openai.com/api/pricing/
+# - Google: https://ai.google.dev/gemini-api/docs/pricing
+
+# ============================================================================
+# Claude Models (Anthropic)
+# Pricing: https://www.anthropic.com/pricing#api
+# ============================================================================
+
+[pricing.claude]
+# Claude Opus 4.5 (most capable, latest)
+"claude-opus-4-5-20251101" = { input = 5.0, output = 25.0, cache_create = 6.25, cache_read = 0.50 }
+
+# Claude Sonnet 4.5 (balanced performance) - prices for prompts ≤200K tokens
+"claude-sonnet-4-5-20250929" = { input = 3.0, output = 15.0, cache_create = 3.75, cache_read = 0.30 }
+
+# Claude Haiku 4.5 (fastest, most cost-efficient)
+"claude-haiku-4-5" = { input = 1.0, output = 5.0, cache_create = 1.25, cache_read = 0.10 }
+"claude-haiku-4-5-20251001" = { input = 1.0, output = 5.0, cache_create = 1.25, cache_read = 0.10 }
+
+# Legacy Claude Models
+# Claude Opus 4.1
+"claude-opus-4-1" = { input = 15.0, output = 75.0, cache_create = 18.75, cache_read = 1.50 }
+
+# Claude Sonnet 4
+"claude-sonnet-4-20250514" = { input = 3.0, output = 15.0, cache_create = 3.75, cache_read = 0.30 }
+
+# Claude Opus 4
+"claude-opus-4-20250514" = { input = 15.0, output = 75.0, cache_create = 18.75, cache_read = 1.50 }
+
+# Claude Sonnet 3.7
+"claude-sonnet-3-7" = { input = 3.0, output = 15.0, cache_create = 3.75, cache_read = 0.30 }
+
+# Claude Haiku 3.5
+"claude-3-5-haiku-20241022" = { input = 0.80, output = 4.0, cache_create = 1.0, cache_read = 0.08 }
+
+# Claude Opus 3
+"claude-opus-3" = { input = 15.0, output = 75.0, cache_create = 18.75, cache_read = 1.50 }
+
+# Claude Haiku 3
+"claude-3-haiku" = { input = 0.25, output = 1.25, cache_create = 0.30, cache_read = 0.03 }
+
+# ============================================================================
+# OpenAI Models
+# Pricing: https://openai.com/api/pricing/
+# ============================================================================
+
+[pricing.openai]
+# GPT-5.1 Series (Latest - November 2025)
+"gpt-5.1" = { input = 1.25, output = 10.0, cache_read = 0.125 }
+"gpt-5.1-chat-latest" = { input = 1.25, output = 10.0, cache_read = 0.125 }
+
+# GPT-5.1 Codex Models (Codex CLI default models)
+"gpt-5.1-codex-max" = { input = 1.25, output = 10.0, cache_read = 0.125 }
+"gpt-5.1-codex" = { input = 1.25, output = 10.0, cache_read = 0.125 }
+"gpt-5.1-codex-mini" = { input = 0.25, output = 2.0, cache_read = 0.025 }
+
+# GPT-5 Series
+"gpt-5" = { input = 1.25, output = 10.0, cache_read = 0.125 }
+"gpt-5-codex" = { input = 1.25, output = 10.0, cache_read = 0.125 }
+"gpt-5-codex-mini" = { input = 0.25, output = 2.0, cache_read = 0.025 }
+"gpt-5-mini" = { input = 0.25, output = 2.0, cache_read = 0.025 }
+"gpt-5-nano" = { input = 0.05, output = 0.40, cache_read = 0.005 }
+"gpt-5-pro" = { input = 15.0, output = 120.0 }
+
+# GPT-4.1 Series
+"gpt-4.1" = { input = 3.0, output = 12.0, cache_read = 0.75 }
+"gpt-4.1-mini" = { input = 0.80, output = 3.20, cache_read = 0.20 }
+"gpt-4.1-nano" = { input = 0.20, output = 0.80, cache_read = 0.05 }
+
+# O-Series (Reasoning Models)
+"o4-mini" = { input = 4.0, output = 16.0, cache_read = 1.0 }
+"o3-mini" = { input = 1.1, output = 4.4, cache_read = 0.55 }
+"o1-preview" = { input = 15.0, output = 60.0, cache_read = 7.5 }
+"o1-mini" = { input = 3.0, output = 12.0, cache_read = 1.5 }
+
+# GPT-4o Series (Legacy)
+"gpt-4o" = { input = 2.5, output = 10.0, cache_read = 1.25 }
+"gpt-4o-mini" = { input = 0.15, output = 0.6, cache_read = 0.075 }
+
+# ============================================================================
+# Google Gemini Models
+# Pricing: https://ai.google.dev/gemini-api/docs/pricing
+# ============================================================================
+
+[pricing.gemini]
+# Gemini 3 Series (Latest - December 2025)
+# Pricing for prompts ≤200K tokens
+"gemini-3-pro-preview" = { input = 2.0, output = 12.0, cache_read = 0.20 }
+"gemini-3-pro-image-preview" = { input = 1.0, output = 6.0, cache_read = 0.20 }
+
+# Gemini 2.5 Series
+"gemini-2.5-pro" = { input = 1.25, output = 10.0, cache_create = 0.3125, cache_read = 0.125 }
+"gemini-2.5-pro-preview" = { input = 1.25, output = 10.0, cache_create = 0.3125, cache_read = 0.125 }
+"gemini-2.5-flash" = { input = 0.30, output = 2.50, cache_create = 0.03, cache_read = 0.03 }
+"gemini-2.5-flash-preview" = { input = 0.30, output = 2.50, cache_create = 0.03, cache_read = 0.03 }
+"gemini-2.5-flash-lite" = { input = 0.10, output = 0.40, cache_create = 0.01, cache_read = 0.01 }
+"gemini-2.5-flash-lite-preview" = { input = 0.10, output = 0.40, cache_create = 0.01, cache_read = 0.01 }
+"gemini-2.5-computer-use-preview" = { input = 1.25, output = 10.0 }
+
+# Gemini 2.0 Series
+"gemini-2.0-flash" = { input = 0.10, output = 0.40, cache_create = 0.025, cache_read = 0.025 }
+"gemini-2.0-flash-lite" = { input = 0.075, output = 0.30 }
+
+# ============================================================================
+# Custom Models
+# ============================================================================
+
+[pricing.custom]
+# Add your custom models here. Examples:
+#
+# Local models (no API cost):
+# "llama-3-70b" = { input = 0.0, output = 0.0, cache_create = 0.0, cache_read = 0.0 }
+#
+# Custom API models:
+# "my-fine-tuned-gpt4" = { input = 5.0, output = 20.0, cache_read = 2.5 }
+#
+# Format:
+# "model-name" = { input = X.X, output = Y.Y, cache_create = Z.Z, cache_read = W.W }
+#
+# Note: cache_create and cache_read are optional if your model doesn't support caching
+
+# ============================================================================
+# Zombie Tool Detection (v1.5.0)
+# ============================================================================
+#
+# Configure known tools per MCP server for zombie detection.
+# Zombie tools are tools defined in a server's schema but never called.
+# They contribute to context overhead without providing value.
+#
+# Format:
+# [zombie_tools.<server_name>]
+# tools = ["tool_name_1", "tool_name_2", ...]
+#
+# Example configuration:
+#
+# [zombie_tools.zen]
+# tools = [
+#     "mcp__zen__thinkdeep",
+#     "mcp__zen__chat",
+#     "mcp__zen__debug",
+#     "mcp__zen__codereview",
+#     "mcp__zen__precommit",
+#     "mcp__zen__refactor",
+#     "mcp__zen__planner",
+#     "mcp__zen__consensus",
+# ]
+#
+# [zombie_tools.backlog]
+# tools = [
+#     "mcp__backlog__task_create",
+#     "mcp__backlog__task_list",
+#     "mcp__backlog__task_view",
+#     "mcp__backlog__task_edit",
+#     "mcp__backlog__task_archive",
+#     "mcp__backlog__task_search",
+#     "mcp__backlog__document_list",
+#     "mcp__backlog__document_view",
+#     "mcp__backlog__document_create",
+#     "mcp__backlog__document_update",
+#     "mcp__backlog__document_search",
+# ]
+
+# ============================================================================
+# Dynamic Pricing API (v0.6.0)
+# ============================================================================
+#
+# Enable dynamic pricing from LiteLLM API for automatic model pricing updates.
+# When enabled, API pricing is checked first, then falls back to TOML config.
+
+[pricing.api]
+# Enable dynamic pricing from LiteLLM API (default: true)
+enabled = true
+
+# Cache TTL in hours - how long to cache pricing data (default: 24)
+cache_ttl_hours = 24
+
+# Offline mode: never fetch from API, only use cache/TOML (default: false)
+# Useful when you want full control over pricing or work offline
+offline_mode = false
+
+# ============================================================================
+# Configuration Metadata
+# ============================================================================
+
+[metadata]
+currency = "USD"
+pricing_unit = "per_million_tokens"
+last_updated = "2025-12-11"
+
+# Exchange rates (optional - for display purposes only)
+[metadata.exchange_rates]
+USD_to_AUD = 1.54
+USD_to_EUR = 0.92
+USD_to_GBP = 0.79

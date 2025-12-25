@@ -9,11 +9,11 @@ import pytest
 import json
 from pathlib import Path
 from datetime import datetime
-from mcp_audit.base_tracker import BaseTracker, SCHEMA_VERSION
-from mcp_audit.claude_code_adapter import ClaudeCodeAdapter
-from mcp_audit.codex_cli_adapter import CodexCLIAdapter
-from mcp_audit.session_manager import SessionManager
-from mcp_audit.normalization import normalize_tool_name, normalize_server_name
+from token_audit.base_tracker import BaseTracker, SCHEMA_VERSION
+from token_audit.claude_code_adapter import ClaudeCodeAdapter
+from token_audit.codex_cli_adapter import CodexCLIAdapter
+from token_audit.session_manager import SessionManager
+from token_audit.normalization import normalize_tool_name, normalize_server_name
 
 
 # ============================================================================
@@ -695,7 +695,7 @@ class TestTUISummaryDisplay:
 
     def test_build_snapshot_from_session_includes_model(self, tmp_path) -> None:
         """Test that snapshot includes model information from session"""
-        from mcp_audit.cli import _build_snapshot_from_session
+        from token_audit.cli import _build_snapshot_from_session
 
         # Create session with model
         adapter = ClaudeCodeAdapter(project="test", claude_dir=tmp_path)
@@ -718,7 +718,7 @@ class TestTUISummaryDisplay:
 
     def test_build_snapshot_from_session_includes_cost_fields(self, tmp_path) -> None:
         """Test that snapshot includes enhanced cost fields"""
-        from mcp_audit.cli import _build_snapshot_from_session
+        from token_audit.cli import _build_snapshot_from_session
 
         # Create session with tokens
         adapter = ClaudeCodeAdapter(project="test", claude_dir=tmp_path)
@@ -742,7 +742,7 @@ class TestTUISummaryDisplay:
 
     def test_build_snapshot_from_session_includes_server_hierarchy(self, tmp_path) -> None:
         """Test that snapshot includes server hierarchy"""
-        from mcp_audit.cli import _build_snapshot_from_session
+        from token_audit.cli import _build_snapshot_from_session
 
         # Create session with multiple servers
         adapter = ClaudeCodeAdapter(project="test", claude_dir=tmp_path)
@@ -769,7 +769,7 @@ class TestTUISummaryDisplay:
 
     def test_build_snapshot_from_session_handles_empty_model(self, tmp_path) -> None:
         """Test that snapshot handles missing model gracefully"""
-        from mcp_audit.cli import _build_snapshot_from_session
+        from token_audit.cli import _build_snapshot_from_session
 
         # Create session without model
         adapter = ClaudeCodeAdapter(project="test", claude_dir=tmp_path)
@@ -792,7 +792,7 @@ class TestTUISummaryDisplay:
 
     def test_build_snapshot_from_session_codex_cli(self) -> None:
         """Test that snapshot works with Codex CLI sessions (task-42.3)"""
-        from mcp_audit.cli import _build_snapshot_from_session
+        from token_audit.cli import _build_snapshot_from_session
 
         # Create Codex CLI session
         adapter = CodexCLIAdapter(project="test", codex_args=[])
@@ -824,8 +824,8 @@ class TestTUISummaryDisplay:
 
     def test_build_snapshot_from_session_gemini_cli(self, tmp_path) -> None:
         """Test that snapshot works with Gemini CLI sessions (task-42.4)"""
-        from mcp_audit.cli import _build_snapshot_from_session
-        from mcp_audit.gemini_cli_adapter import GeminiCLIAdapter
+        from token_audit.cli import _build_snapshot_from_session
+        from token_audit.gemini_cli_adapter import GeminiCLIAdapter
 
         # Create Gemini CLI session
         adapter = GeminiCLIAdapter(project="test", gemini_dir=tmp_path)

@@ -3,7 +3,7 @@
 **Task**: 69.21 - Gemini CLI Token Estimation Validation
 **Date**: 2025-12-07
 **Validator**: Claude (Opus 4.5)
-**mcp-audit Version**: 0.3.14
+**token-audit Version**: 0.3.14
 **Gemini CLI Version**: 0.19.1
 
 ---
@@ -42,7 +42,7 @@ gemini "Search the web for 'MCP Model Context Protocol' and summarize the first 
 
 ### Comparison Table
 
-| Metric | Native Gemini CLI | mcp-audit | Variance | Status |
+| Metric | Native Gemini CLI | token-audit | Variance | Status |
 |--------|-------------------|-----------|----------|--------|
 | `input_tokens` | 33,779 | 33,779 | 0 (0.0%) | ✅ PASS |
 | `output_tokens` | 390 | 390 | 0 (0.0%) | ✅ PASS |
@@ -59,7 +59,7 @@ input + output = 33,779 + 390 = 34,169
 input + output + thoughts = 33,779 + 390 + 2,111 = 36,280 ✓
 ```
 
-Gemini CLI's `total` includes reasoning/thoughts tokens, which mcp-audit correctly captures.
+Gemini CLI's `total` includes reasoning/thoughts tokens, which token-audit correctly captures.
 
 ---
 
@@ -70,9 +70,9 @@ Gemini CLI's `total` includes reasoning/thoughts tokens, which mcp-audit correct
 | Source | Field | Value | Status |
 |--------|-------|-------|--------|
 | Native Gemini CLI | `thoughts` | 2,111 | - |
-| mcp-audit | `reasoning_tokens` | 2,111 | ✅ PASS |
+| token-audit | `reasoning_tokens` | 2,111 | ✅ PASS |
 
-The `thoughts` field from native Gemini CLI is correctly mapped to `reasoning_tokens` in mcp-audit.
+The `thoughts` field from native Gemini CLI is correctly mapped to `reasoning_tokens` in token-audit.
 
 ### Native `tool` Field Verification
 
@@ -88,7 +88,7 @@ Confirmed: Native Gemini CLI `tool` field is always 0, confirming token estimati
 
 ### Built-in Tools Called
 
-| Tool | Call Count | Native Tokens | mcp-audit Tokens | Status |
+| Tool | Call Count | Native Tokens | token-audit Tokens | Status |
 |------|------------|---------------|------------------|--------|
 | `google_web_search` | 2 | 0 (native always 0) | 0 | ❌ FAIL |
 | `web_fetch` | 1 | 0 (native always 0) | 0 | ❌ FAIL |
@@ -114,7 +114,7 @@ Confirmed: Native Gemini CLI `tool` field is always 0, confirming token estimati
 ```
 ╭──────────────────────────────────────────────────────────────────────────────────╮
 │ MCP Audit v0.3.14 - Full Session ↺  [gemini-cli]                                 │
-│ Project: mcp-audit  Started: 15:14:34  Duration: 21s                             │
+│ Project: token-audit  Started: 15:14:34  Duration: 21s                             │
 │ Model: Gemini 3 Pro Preview                                                      │
 │ 🌿 v0.4.0-token-estimation@10e45d2*  📁 1 files                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────╯
@@ -151,7 +151,7 @@ Confirmed: Native Gemini CLI `tool` field is always 0, confirming token estimati
 ```json
 "_file": {
   "schema_version": "1.4.0",
-  "generated_by": "mcp-audit v0.3.14"
+  "generated_by": "token-audit v0.3.14"
 }
 ```
 
@@ -180,7 +180,7 @@ Confirmed: Native Gemini CLI `tool` field is always 0, confirming token estimati
 
 ### Issue #1: Built-in Tool Token Estimation Missing (HIGH SEVERITY)
 
-**Location**: `src/mcp_audit/gemini_cli_adapter.py` lines 892-921
+**Location**: `src/token_audit/gemini_cli_adapter.py` lines 892-921
 
 **Problem**: Token estimation is only applied to MCP tools (`mcp__*` prefix), not built-in tools (`google_web_search`, `web_fetch`, `read_file`, etc.).
 
@@ -284,13 +284,13 @@ Confirmed: Native Gemini CLI `tool` field is always 0, confirming token estimati
 }
 ```
 
-### mcp-audit Session Log (excerpt)
+### token-audit Session Log (excerpt)
 
 ```json
 {
   "_file": {
     "schema_version": "1.4.0",
-    "generated_by": "mcp-audit v0.3.14"
+    "generated_by": "token-audit v0.3.14"
   },
   "token_usage": {
     "input_tokens": 33779,
@@ -310,5 +310,5 @@ Confirmed: Native Gemini CLI `tool` field is always 0, confirming token estimati
 ### Test Files
 
 - Native session: `~/.gemini/tmp/76c62a47.../chats/session-2025-12-07T04-11-61d29c4e.json`
-- mcp-audit session: `~/.mcp-audit/sessions/gemini-cli/2025-12-07/mcp-audit-2025-12-07T15-14-34.json`
+- token-audit session: `~/.token-audit/sessions/gemini-cli/2025-12-07/token-audit-2025-12-07T15-14-34.json`
 - TUI capture: `/tmp/gemini-tui-capture.txt`

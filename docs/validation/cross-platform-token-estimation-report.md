@@ -1,7 +1,7 @@
 # Cross-Platform Token Estimation Validation Report
 
 **Date**: 2025-12-08
-**mcp-audit Version**: 0.3.14
+**token-audit Version**: 0.3.14
 **Schema Version**: 1.4.0
 **Status**: **PASS**
 **Task Reference**: Task 69.22
@@ -25,7 +25,7 @@ Both CLI platforms demonstrate 100% session-level token accuracy compared to the
 
 | Component | Version |
 |-----------|---------|
-| mcp-audit | 0.3.14 |
+| token-audit | 0.3.14 |
 | tiktoken | 0.7.0+ |
 | sentencepiece | 0.2.0+ |
 | Codex CLI | 0.64.0 |
@@ -44,7 +44,7 @@ Both CLI platforms demonstrate 100% session-level token accuracy compared to the
 
 ### 3.1 Session Token Accuracy
 
-| Metric | Native Codex CLI | mcp-audit | Variance | % Diff | Status |
+| Metric | Native Codex CLI | token-audit | Variance | % Diff | Status |
 |--------|------------------|-----------|----------|--------|--------|
 | input_tokens | 27,143 | 27,143 | 0 | 0.0% | **PASS** |
 | output_tokens | 2,635 | 2,635 | 0 | 0.0% | **PASS** |
@@ -103,7 +103,7 @@ Both CLI platforms demonstrate 100% session-level token accuracy compared to the
 
 ### 4.1 Session Token Accuracy
 
-| Metric | Native Gemini CLI | mcp-audit | Variance | % Diff | Status |
+| Metric | Native Gemini CLI | token-audit | Variance | % Diff | Status |
 |--------|-------------------|-----------|----------|--------|--------|
 | input / input_tokens | 25,357 | 25,357 | 0 | 0.0% | **PASS** |
 | output / output_tokens | 316 | 316 | 0 | 0.0% | **PASS** |
@@ -130,7 +130,7 @@ Both CLI platforms demonstrate 100% session-level token accuracy compared to the
 | Source | Value | Status |
 |--------|-------|--------|
 | Native Gemini `thoughts` | 1,049 | Captured |
-| mcp-audit `reasoning_tokens` | 1,049 | **PASS** |
+| token-audit `reasoning_tokens` | 1,049 | **PASS** |
 | Match? | Yes (0% variance) | **PASS** |
 
 ### 4.5 Cost Calculations
@@ -231,7 +231,7 @@ No issues found during final validation run.
 
 ### Documentation Updates Completed
 
-1. `docs/PLATFORM-TOKEN-CAPABILITIES.md` - Updated with validation results
+1. `docs/platform-token-capabilities.md` - Updated with validation results
 2. Platform-specific validation reports generated
 3. Cross-platform comparison documented
 
@@ -253,7 +253,7 @@ No issues found during final validation run.
 
 ## 10. Conclusion
 
-The mcp-audit token estimation feature for v0.4.0 is **production-ready** across both supported CLI platforms:
+The token-audit token estimation feature for v0.4.0 is **production-ready** across both supported CLI platforms:
 
 ### Codex CLI
 - 100% session-level token accuracy (0% variance)
@@ -292,6 +292,6 @@ The mcp-audit token estimation feature for v0.4.0 is **production-ready** across
 - Task 69.26 - Gemini CLI Token Estimation Retest
 - Task 69.27 - Fix Gemini CLI Token Double-Counting
 - Task 69.28 - Fix Gemini CLI MCP Tool Detection
-- `docs/PLATFORM-TOKEN-CAPABILITIES.md`
+- `docs/platform-token-capabilities.md`
 - `docs/validation/codex-cli-token-estimation-retest-report.md`
 - `docs/validation/gemini-cli-token-estimation-retest-report.md`

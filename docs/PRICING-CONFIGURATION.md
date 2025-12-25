@@ -2,13 +2,13 @@
 
 **Last Updated**: 2025-12-13
 
-This guide explains how to configure model pricing for cost calculation in MCP Audit.
+This guide explains how to configure model pricing for cost calculation in Token Audit.
 
 ---
 
 ## Overview
 
-MCP Audit provides accurate cost estimation through a multi-tier pricing system:
+Token Audit provides accurate cost estimation through a multi-tier pricing system:
 
 **Key Features**:
 - **Dynamic Pricing (v0.6.0)**: Auto-fetch current pricing for 2,000+ models via LiteLLM API
@@ -21,13 +21,13 @@ MCP Audit provides accurate cost estimation through a multi-tier pricing system:
 
 ## Pricing Sources (Lookup Order)
 
-MCP Audit uses the following priority order for pricing:
+Token Audit uses the following priority order for pricing:
 
 | Priority | Source | Description |
 |----------|--------|-------------|
 | 1 | **LiteLLM API** | Fresh pricing from [LiteLLM's pricing database](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) (2,000+ models) |
 | 2 | **API Cache** | Cached API data (valid for 24 hours by default) |
-| 3 | **TOML config** | `./mcp-audit.toml` or `~/.mcp-audit/mcp-audit.toml` |
+| 3 | **TOML config** | `./token-audit.toml` or `~/.token-audit/token-audit.toml` |
 | 4 | **Built-in defaults** | Hardcoded pricing for common models |
 
 ### How It Works
@@ -41,7 +41,7 @@ MCP Audit uses the following priority order for pricing:
 
 ## Dynamic Pricing Configuration (v0.6.0)
 
-Control LiteLLM API behavior in `mcp-audit.toml`:
+Control LiteLLM API behavior in `token-audit.toml`:
 
 ```toml
 [pricing.api]
@@ -89,11 +89,11 @@ cache_ttl_hours = 6
 
 ### Cache Location
 
-API pricing is cached at: `~/.mcp-audit/pricing-cache.json`
+API pricing is cached at: `~/.token-audit/pricing-cache.json`
 
 Check cache status with:
 ```bash
-mcp-audit init
+token-audit tokenizer setup
 ```
 
 ---
@@ -140,8 +140,8 @@ Session logs now include pricing source information in `data_quality`:
 
 | Priority | Location | Use Case |
 |----------|----------|----------|
-| 1 | `./mcp-audit.toml` | Project-specific override |
-| 2 | `~/.mcp-audit/mcp-audit.toml` | User-level custom pricing |
+| 1 | `./token-audit.toml` | Project-specific override |
+| 2 | `~/.token-audit/token-audit.toml` | User-level custom pricing |
 
 ### Configuration Format
 
@@ -180,10 +180,10 @@ TOML pricing overrides API pricing for the same model:
 
 ```bash
 # Create config directory
-mkdir -p ~/.mcp-audit
+mkdir -p ~/.token-audit
 
 # Create minimal config (API + custom overrides)
-cat > ~/.mcp-audit/mcp-audit.toml << 'EOF'
+cat > ~/.token-audit/token-audit.toml << 'EOF'
 [pricing.api]
 enabled = true
 cache_ttl_hours = 24
@@ -199,7 +199,7 @@ EOF
 
 ### Automatic (Recommended)
 
-With dynamic pricing enabled, MCP Audit automatically fetches current pricing for:
+With dynamic pricing enabled, Token Audit automatically fetches current pricing for:
 - **Anthropic**: Claude Opus, Sonnet, Haiku (all versions)
 - **OpenAI**: GPT-4o, GPT-5.1, O-series models
 - **Google**: Gemini Pro, Flash, and experimental models
@@ -222,13 +222,13 @@ If you need to verify or override pricing:
 ### Check Pricing Status
 
 ```bash
-mcp-audit init
+token-audit tokenizer setup
 ```
 
 Example output:
 ```
-MCP Audit Configuration Status
-==============================
+Token Audit Configuration Status
+================================
 Version: 0.6.0
 
 Pricing:
@@ -242,7 +242,7 @@ Tokenizer:
 
 ### Automatic Warnings
 
-MCP Audit warns when a model has no pricing configured:
+Token Audit warns when a model has no pricing configured:
 
 ```
 WARNING: No pricing found for model: unknown-model-xyz
@@ -307,8 +307,8 @@ offline_mode = true
 **Solution**: Check network connectivity, or manually refresh:
 ```bash
 # Clear cache to force refresh
-rm ~/.mcp-audit/pricing-cache.json
-mcp-audit init
+rm ~/.token-audit/pricing-cache.json
+token-audit tokenizer setup
 ```
 
 ### Issue 4: "TOML support not available"
@@ -328,7 +328,7 @@ pip install toml
 1. **Use dynamic pricing** (default) for automatic updates
 2. **Override specific models** in TOML when needed
 3. **Use offline mode** for air-gapped environments
-4. **Check `mcp-audit init`** to verify pricing source
+4. **Check `token-audit tokenizer setup`** to verify pricing source
 5. **Monitor `pricing_source`** in session logs for accuracy
 
 ---
@@ -369,7 +369,7 @@ pip install toml
 ## Support
 
 **Issues**: Report configuration problems to:
-- GitHub: https://github.com/littlebearapps/mcp-audit/issues
+- GitHub: https://github.com/littlebearapps/token-audit/issues
 - Label: `pricing-config`
 
 **Documentation**: See README.md for general usage

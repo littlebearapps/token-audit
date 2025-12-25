@@ -1,6 +1,6 @@
 # Example: CI/CD Integration
 
-Integrate MCP Audit into your CI/CD pipeline for automated cost monitoring.
+Integrate Token Audit into your CI/CD pipeline for automated cost monitoring.
 
 ---
 
@@ -11,13 +11,13 @@ You want to:
 - Fail builds if AI usage exceeds thresholds
 - Generate reports automatically after AI-assisted work
 
-**Goal:** Automate MCP Audit tracking and alerting in CI/CD pipelines.
+**Goal:** Automate Token Audit tracking and alerting in CI/CD pipelines.
 
 ---
 
 ## Prerequisites
 
-- MCP Audit installed (`pip install mcp-audit`)
+- Token Audit installed (`pip install token-audit`)
 - CI/CD platform (GitHub Actions, GitLab CI, Jenkins, etc.)
 - AI coding assistant configured in CI environment
 
@@ -29,8 +29,8 @@ You want to:
 
 ```yaml
 # GitHub Actions example
-- name: Install MCP Audit
-  run: pip install mcp-audit
+- name: Install Token Audit
+  run: pip install token-audit
 ```
 
 ### Step 2: Create Cost Threshold Check
@@ -92,8 +92,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install MCP Audit
-        run: pip install mcp-audit
+      - name: Install Token Audit
+        run: pip install token-audit
 
       - name: Download session artifact
         uses: actions/download-artifact@v4
@@ -103,7 +103,7 @@ jobs:
 
       - name: Generate report
         run: |
-          mcp-audit report ./session-data/*.jsonl --format json > report.json
+          token-audit report ./session-data/*.jsonl --format json > report.json
           cat report.json
 
       - name: Check cost threshold
@@ -126,7 +126,7 @@ When running AI-assisted tasks, capture session data:
 - name: Run AI task
   run: |
     # Start background tracking
-    mcp-audit collect --platform claude-code --headless &
+    token-audit collect --platform claude-code --headless &
     TRACKER_PID=$!
 
     # Run your AI-assisted task
@@ -137,7 +137,7 @@ When running AI-assisted tasks, capture session data:
 
 - name: Export session
   run: |
-    mcp-audit export json > session-export.json
+    token-audit export json > session-export.json
 
 - name: Upload session artifact
   uses: actions/upload-artifact@v4
@@ -164,10 +164,10 @@ jobs:
     steps:
       - name: Aggregate weekly costs
         run: |
-          pip install mcp-audit
+          pip install token-audit
 
           # Aggregate all sessions from past week
-          mcp-audit report --since "1 week ago" --format json > weekly.json
+          token-audit report --since "1 week ago" --format json > weekly.json
 
           COST=$(jq '.cost_usd' weekly.json)
           echo "Weekly cost: $COST"
@@ -208,10 +208,10 @@ jobs:
     steps:
       - name: Generate summary
         run: |
-          pip install mcp-audit
+          pip install token-audit
 
           # Get sessions from PR branch work
-          mcp-audit report --format markdown > summary.md
+          token-audit report --format markdown > summary.md
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -299,10 +299,10 @@ For CI environments without TTY:
 
 ```bash
 # Run in headless mode (no TUI)
-mcp-audit collect --platform claude-code --headless --output session.jsonl
+token-audit collect --platform claude-code --headless --output session.jsonl
 
 # Generate report from captured data
-mcp-audit report session.jsonl
+token-audit report session.jsonl
 ```
 
 ---
@@ -314,4 +314,4 @@ mcp-audit report session.jsonl
 
 ---
 
-*See [API Reference](../API.md) for programmatic integration options.*
+*See [API Reference](../api.md) for programmatic integration options.*

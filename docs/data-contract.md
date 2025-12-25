@@ -1,10 +1,10 @@
-# MCP Audit Data Contract
+# Token Audit Data Contract
 
 **Version**: 1.7.0
 **Last Updated**: 2025-12-13
-**Status**: Active (shipped in v0.8.0)
+**Status**: Active (shipped in v1.0.0)
 
-This document defines the data contract for MCP Audit, including backward compatibility guarantees, versioning policy, and migration guidelines.
+This document defines the data contract for Token Audit, including backward compatibility guarantees, versioning policy, and migration guidelines.
 
 ---
 
@@ -29,7 +29,7 @@ This document defines the data contract for MCP Audit, including backward compat
 
 ## JSON Schema Validation
 
-mcp-audit provides a formal JSON Schema for validating session files:
+token-audit provides a formal JSON Schema for validating session files:
 
 **Schema File**: [`docs/schema/session-v1.7.0.json`](schema/session-v1.7.0.json)
 
@@ -37,13 +37,13 @@ mcp-audit provides a formal JSON Schema for validating session files:
 
 ```bash
 # Validate a session file against the schema
-mcp-audit validate /path/to/session.json
+token-audit validate /path/to/session.json
 
 # Show schema file location and version
-mcp-audit validate --schema-only
+token-audit validate --schema-only
 
 # Verbose output with detailed error messages
-mcp-audit validate session.json --verbose
+token-audit validate session.json --verbose
 ```
 
 ### Programmatic Validation
@@ -345,22 +345,22 @@ Trends are calculated by comparing occurrence rates between first and second hal
 ```json
 {
   "_file": {
-    "name": "mcp-audit-2025-12-13T14-00-00.json",
-    "type": "mcp_audit_session",
+    "name": "token-audit-2025-12-13T14-00-00.json",
+    "type": "token_audit_session",
     "purpose": "Complete MCP session log with token usage, tool statistics, and efficiency analysis for AI agent consumption",
     "schema_version": "1.7.0",
-    "schema_docs": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md",
-    "generated_by": "mcp-audit v0.8.0",
+    "schema_docs": "https://github.com/littlebearapps/token-audit/blob/main/docs/data-contract.md",
+    "generated_by": "token-audit v0.8.0",
     "generated_at": "2025-12-13T14:00:00+11:00"
   },
 
   "session": {
-    "id": "mcp-audit-2025-12-13T14-00-00",
-    "project": "mcp-audit",
+    "id": "token-audit-2025-12-13T14-00-00",
+    "project": "token-audit",
     "platform": "claude-code",
     "model": "claude-sonnet-4-20250514",
     "models_used": ["claude-sonnet-4-20250514"],
-    "working_directory": "/Users/user/projects/mcp-audit/main",
+    "working_directory": "/Users/user/projects/token-audit/main",
     "started_at": "2025-12-13T14:00:00+11:00",
     "ended_at": "2025-12-13T14:30:00+11:00",
     "duration_seconds": 1800.0,
@@ -452,7 +452,7 @@ Array of unique model identifiers used during the session:
 ```json
 {
   "session": {
-    "id": "mcp-audit-2025-12-11T14-00-00",
+    "id": "token-audit-2025-12-11T14-00-00",
     "platform": "claude-code",
     "model": "claude-sonnet-4-20250514",
     "models_used": [
@@ -649,22 +649,22 @@ Unknown servers use default estimate: 10 tools × 175 tokens/tool = 1,750 tokens
 ```json
 {
   "_file": {
-    "name": "mcp-audit-2025-12-11T14-00-00.json",
-    "type": "mcp_audit_session",
+    "name": "token-audit-2025-12-11T14-00-00.json",
+    "type": "token_audit_session",
     "purpose": "Complete MCP session log with token usage and tool call statistics for AI agent analysis",
     "schema_version": "1.6.0",
-    "schema_docs": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md",
-    "generated_by": "mcp-audit v0.6.0",
+    "schema_docs": "https://github.com/littlebearapps/token-audit/blob/main/docs/data-contract.md",
+    "generated_by": "token-audit v0.6.0",
     "generated_at": "2025-12-11T14:00:00+11:00"
   },
 
   "session": {
-    "id": "mcp-audit-2025-12-11T14-00-00",
-    "project": "mcp-audit",
+    "id": "token-audit-2025-12-11T14-00-00",
+    "project": "token-audit",
     "platform": "claude-code",
     "model": "claude-sonnet-4-20250514",
     "models_used": ["claude-sonnet-4-20250514"],
-    "working_directory": "/Users/user/projects/mcp-audit/main",
+    "working_directory": "/Users/user/projects/token-audit/main",
     "started_at": "2025-12-11T14:00:00+11:00",
     "ended_at": "2025-12-11T14:30:00+11:00",
     "duration_seconds": 1800.0,
@@ -818,7 +818,7 @@ Accuracy indicators for all metrics in the session:
 | `estimated` | Tokenizer-based estimation | Codex CLI, Gemini CLI |
 | `calls-only` | Only call counts, no tokens | Ollama CLI (v1.1.0) |
 
-**Note on "estimated" vs "exact":** Codex CLI and Gemini CLI are marked "estimated" because while they provide native session-level token totals, mcp-audit estimates the per-MCP-tool breakdown using tiktoken/sentencepiece. Claude Code is "exact" because it provides per-message token attribution directly.
+**Note on "estimated" vs "exact":** Codex CLI and Gemini CLI are marked "estimated" because while they provide native session-level token totals, token-audit estimates the per-MCP-tool breakdown using tiktoken/sentencepiece. Claude Code is "exact" because it provides per-message token attribution directly.
 
 #### Data Quality Fields
 
@@ -858,12 +858,12 @@ MCP tools defined in server schemas but never called during the session:
 ```json
 {
   "_file": {
-    "name": "mcp-audit-2025-12-10T14-19-38.json",
-    "type": "mcp_audit_session",
+    "name": "token-audit-2025-12-10T14-19-38.json",
+    "type": "token_audit_session",
     "purpose": "Complete MCP session log with token usage and tool call statistics for AI agent analysis",
     "schema_version": "1.5.0",
-    "schema_docs": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md",
-    "generated_by": "mcp-audit v0.5.0",
+    "schema_docs": "https://github.com/littlebearapps/token-audit/blob/main/docs/data-contract.md",
+    "generated_by": "token-audit v0.5.0",
     "generated_at": "2025-12-10T14:19:55+11:00"
   },
 
@@ -981,7 +981,7 @@ Specific encoding/tokenizer used. Only present when `is_estimated` is `true`.
 | Gemini CLI | `true` | `"sentencepiece"` | 100% (with optional tokenizer) |
 | Gemini CLI | `true` | `"tiktoken"` | ~95% (fallback) |
 
-> **Note**: Gemini CLI 100% accuracy requires the optional Gemma tokenizer (`mcp-audit tokenizer download`). Without it, tiktoken cl100k_base is used as fallback.
+> **Note**: Gemini CLI 100% accuracy requires the optional Gemma tokenizer (`token-audit tokenizer download`). Without it, tiktoken cl100k_base is used as fallback.
 
 **Backward Compatibility:**
 
@@ -1128,9 +1128,9 @@ Schema v1.1.0 introduces significant improvements for AI-Agent readability while
 ### Directory Structure
 
 ```
-~/.mcp-audit/sessions/
+~/.token-audit/sessions/
 ├── 2025-12-01/
-│   ├── mcp-audit-2025-12-01T14-19-38.json
+│   ├── token-audit-2025-12-01T14-19-38.json
 │   └── my-project-2025-12-01T15-30-00.json
 └── 2025-12-02/
     └── another-project-2025-12-02T09-00-00.json
@@ -1141,21 +1141,21 @@ Schema v1.1.0 introduces significant improvements for AI-Agent readability while
 ```json
 {
   "_file": {
-    "name": "mcp-audit-2025-12-01T14-19-38.json",
-    "type": "mcp_audit_session",
+    "name": "token-audit-2025-12-01T14-19-38.json",
+    "type": "token_audit_session",
     "purpose": "Complete MCP session log with token usage and tool call statistics for AI agent analysis",
     "schema_version": "1.1.0",
-    "schema_docs": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md",
-    "generated_by": "mcp-audit v0.4.0",
+    "schema_docs": "https://github.com/littlebearapps/token-audit/blob/main/docs/data-contract.md",
+    "generated_by": "token-audit v0.4.0",
     "generated_at": "2025-12-01T14:19:55+11:00"
   },
 
   "session": {
-    "id": "mcp-audit-2025-12-01T14-19-38",
-    "project": "mcp-audit",
+    "id": "token-audit-2025-12-01T14-19-38",
+    "project": "token-audit",
     "platform": "claude-code",
     "model": "claude-opus-4-5-20251101",
-    "working_directory": "/Users/user/projects/mcp-audit/main",
+    "working_directory": "/Users/user/projects/token-audit/main",
     "started_at": "2025-12-01T14:19:38+11:00",
     "ended_at": "2025-12-01T14:35:55+11:00",
     "duration_seconds": 976.93,
@@ -1249,11 +1249,11 @@ Schema v1.1.0 introduces significant improvements for AI-Agent readability while
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | File name (matches actual filename) |
-| `type` | string | Always `"mcp_audit_session"` |
+| `type` | string | Always `"token_audit_session"` |
 | `purpose` | string | Human-readable description for AI agents |
 | `schema_version` | string | Schema version (e.g., `"1.1.0"`) |
 | `schema_docs` | string | URL to this documentation |
-| `generated_by` | string | Tool and version (e.g., `"mcp-audit v0.4.0"`) |
+| `generated_by` | string | Tool and version (e.g., `"token-audit v0.4.0"`) |
 | `generated_at` | string | ISO 8601 timestamp with timezone |
 
 #### `session` Block
@@ -1377,7 +1377,7 @@ This means:
 
 ## Versioning Policy
 
-MCP Audit follows [Semantic Versioning 2.0.0](https://semver.org/):
+Token Audit follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 ```
 MAJOR.MINOR.PATCH
@@ -1478,7 +1478,7 @@ These fields will always be present and maintain their type:
 ```python
 # _file header (required in v1.1.0+)
 _file.schema_version: str  # Always present
-_file.type: str            # Always "mcp_audit_session"
+_file.type: str            # Always "token_audit_session"
 _file.generated_at: str    # ISO 8601 with timezone
 
 # session block (required in v1.1.0+)
@@ -1550,17 +1550,17 @@ This ensures forward compatibility within major versions.
 
 ### Automatic Migration
 
-MCP Audit provides migration helpers for upgrading between versions:
+Token Audit provides migration helpers for upgrading between versions:
 
 ```bash
 # Check for sessions needing migration
-mcp-audit migrate --check
+token-audit migrate --check
 
 # Migrate from v0.x format to v1.x
-mcp-audit migrate --from logs/sessions/
+token-audit migrate --from logs/sessions/
 
 # Dry run (preview without changes)
-mcp-audit migrate --from logs/sessions/ --dry-run
+token-audit migrate --from logs/sessions/ --dry-run
 ```
 
 ### Programmatic Migration
@@ -1795,7 +1795,7 @@ warnings.warn(
 
 ## Stability Tiers
 
-Different parts of MCP Audit have different stability guarantees:
+Different parts of Token Audit have different stability guarantees:
 
 ### Tier 1: Stable (Data Format)
 
@@ -1858,7 +1858,7 @@ Before each release:
 
 If you have questions about the data contract:
 
-1. Check [GitHub Discussions](https://github.com/littlebearapps/mcp-audit/discussions)
+1. Check [GitHub Discussions](https://github.com/littlebearapps/token-audit/discussions)
 2. Open an issue for clarification
 3. Review the [CORE-SCHEMA-SPEC.md](CORE-SCHEMA-SPEC.md) for technical details
 

@@ -7,21 +7,21 @@ Tests pricing configuration loading, validation, and cost calculation.
 
 import pytest
 from pathlib import Path
-from mcp_audit.pricing_config import PricingConfig, load_pricing_config, get_model_cost
+from token_audit.pricing_config import PricingConfig, load_pricing_config, get_model_cost
 
 
 class TestPricingConfigLoading:
     """Tests for configuration file loading"""
 
     def test_load_default_config(self) -> None:
-        """Test loading default mcp-audit.toml"""
+        """Test loading default token-audit.toml"""
         config = PricingConfig()
         assert config.loaded == True
         assert len(config.pricing_data) > 0
 
     def test_load_specific_path(self) -> None:
         """Test loading from specific path"""
-        config_path = Path("mcp-audit.toml")
+        config_path = Path("token-audit.toml")
         config = PricingConfig(config_path)
         assert config.loaded == True
 
@@ -340,7 +340,7 @@ class TestDefaultPricingFallback:
 
     def test_source_attribute_file(self) -> None:
         """Test _source is 'file' when loaded from config file"""
-        config = PricingConfig(Path("mcp-audit.toml"))
+        config = PricingConfig(Path("token-audit.toml"))
         assert config._source == "file"
         assert config.loaded == True
 
@@ -432,7 +432,7 @@ class TestDefaultPricingFallback:
         """Test unknown model warning suggests creating config file"""
         config = PricingConfig(Path("nonexistent.toml"))
 
-        with pytest.warns(RuntimeWarning, match="Create.*mcp-audit.toml"):
+        with pytest.warns(RuntimeWarning, match="Create.*token-audit.toml"):
             config.get_model_pricing("unknown-future-model")
 
 

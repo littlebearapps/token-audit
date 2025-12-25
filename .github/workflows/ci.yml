@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Default permissions for all jobs (least privilege principle)
+permissions:
+  contents: read
+
 jobs:
   # ============================================================================
   # Quality Gate (Python testing)
@@ -28,17 +32,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Install package in editable mode
-        run: pip install -e .
+      - name: Install package in editable mode (with server extras)
+        run: pip install -e ".[server]"
 
       - name: Validate version consistency
+        # Skip if script doesn't exist (public repo excludes scripts/)
+        if: hashFiles('scripts/validate-versions.py') != ''
         run: python scripts/validate-versions.py --verbose
 
       - name: Run tests with coverage
-        run: pytest tests/ --cov=src/mcp_audit --cov-report=term-missing --cov-report=xml --cov-report=html
+        run: pytest tests/ --cov=src/token_audit --cov-report=term-missing --cov-report=xml --cov-report=html
 
       - name: Type check with mypy
-        run: mypy src/mcp_audit --config-file pyproject.toml
+        run: mypy src/token_audit --config-file pyproject.toml
 
       - name: Lint with ruff
         run: ruff check .
@@ -68,8 +74,10 @@ jobs:
 
       # GitHub-native coverage reporting with PR comments and annotations
       # No external service needed - badge stored in git branch
+      # Note: continue-on-error handles large PRs (>20k lines) that exceed GitHub diff limits
       - name: Coverage analysis
         id: coverage
+        continue-on-error: true
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
@@ -105,7 +113,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-          pip install -e .
+          pip install -e ".[server]"
 
       - name: Run performance benchmarks
         run: |

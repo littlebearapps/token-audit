@@ -1,5 +1,5 @@
 """
-Performance benchmarks for mcp-audit.
+Performance benchmarks for token-audit.
 
 These tests measure performance against defined targets:
 - TUI refresh: <100ms
@@ -23,20 +23,43 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
-from mcp_audit.display.rich_display import RichDisplay
-from mcp_audit.display.snapshot import DisplaySnapshot
-from mcp_audit.session_manager import SessionManager
-from mcp_audit.storage import StorageManager
+from token_audit.display.rich_display import RichDisplay
+from token_audit.display.snapshot import DisplaySnapshot
+from token_audit.session_manager import SessionManager
+from token_audit.storage import StorageManager
+
+# MCP Server imports for benchmarking
+from token_audit.server.tools import (
+    get_tracker,
+    start_tracking,
+    get_metrics,
+    get_recommendations,
+    analyze_session,
+    get_best_practices,
+    analyze_config,
+    get_trends,
+)
+from token_audit.server.schemas import ServerPlatform, TrendPeriod
 
 
 # =============================================================================
-# Performance Targets (v0.9.0 - task-107.3)
+# Performance Targets (v0.9.0 - task-107.3, v1.0 - task-169)
 # =============================================================================
 TARGETS = {
+    # TUI targets (v0.9.0)
     "tui_refresh_ms": 100,  # Maximum TUI refresh time in milliseconds
     "session_load_1000_calls_ms": 500,  # Maximum load time for 1000-call session
     "report_100_sessions_s": 2.0,  # Maximum time to generate report for 100 sessions
     "memory_live_tracking_mb": 100,  # Maximum memory usage during live tracking
+    # MCP Server tool targets (v1.0)
+    "mcp_start_tracking_ms": 100,  # start_tracking response time
+    "mcp_get_metrics_ms": 100,  # get_metrics response time
+    "mcp_get_recommendations_ms": 100,  # get_recommendations response time
+    "mcp_analyze_session_ms": 200,  # analyze_session response time (more processing)
+    "mcp_get_best_practices_ms": 50,  # get_best_practices response time (cached)
+    "mcp_analyze_config_ms": 100,  # analyze_config response time
+    "mcp_get_trends_ms": 200,  # get_trends response time (aggregation)
+    "mcp_jsonl_events_per_sec": 1000,  # Minimum JSONL streaming throughput
 }
 
 
@@ -495,6 +518,277 @@ class TestBaselineMeasurements:
         elapsed_ms = elapsed * 1000
 
         print(f"\nSnapshot creation: {elapsed_ms:.3f}ms")
+
+
+# =============================================================================
+# MCP Server Performance Tests (v1.0 - task-169)
+# =============================================================================
+class TestMCPServerPerformance:
+    """MCP server tool response time benchmarks.
+
+    These tests measure the performance of MCP server tools
+    when called from AI agents. Fast response times are critical
+    for responsive agent workflows.
+
+    Targets (v1.0):
+    - start_tracking: <100ms
+    - get_metrics: <100ms
+    - get_recommendations: <100ms
+    - analyze_session: <200ms (more processing)
+    - get_best_practices: <50ms (cached after first call)
+    - analyze_config: <100ms
+    - get_trends: <200ms (aggregation work)
+    """
+
+    @pytest.fixture(autouse=True)
+    def cleanup_tracker(self) -> Any:
+        """Clean up tracker state before and after each test."""
+        # Reset tracker state before test
+        tracker = get_tracker()
+        if tracker.has_active_session:
+            tracker.stop_session()
+        yield
+        # Reset tracker state after test
+        if tracker.has_active_session:
+            tracker.stop_session()
+
+    def test_start_tracking_response_time(self) -> None:
+        """start_tracking should respond in under 100ms."""
+        iterations = 10
+
+        # We need to start/stop each iteration since only one session can be active
+        times: List[float] = []
+        for _ in range(iterations):
+            tracker = get_tracker()
+            if tracker.has_active_session:
+                tracker.stop_session()
+
+            start = time.perf_counter()
+            result = start_tracking(
+                platform=ServerPlatform.CLAUDE_CODE,
+                project="benchmark-test",
+            )
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            times.append(elapsed_ms)
+
+            # Stop the session for next iteration
+            tracker.stop_session()
+
+            # Verify it started
+            assert result.status in ("active", "error")
+
+        avg_ms = sum(times) / len(times)
+        print(
+            f"\nstart_tracking avg: {avg_ms:.2f}ms (target: <{TARGETS['mcp_start_tracking_ms']}ms)"
+        )
+
+        assert (
+            avg_ms < TARGETS["mcp_start_tracking_ms"]
+        ), f"start_tracking took {avg_ms:.1f}ms, target <{TARGETS['mcp_start_tracking_ms']}ms"
+
+    def test_get_metrics_response_time(self) -> None:
+        """get_metrics should respond in under 100ms."""
+        # Start a session first
+        tracker = get_tracker()
+        tracker.start_session(platform="claude_code", project="benchmark-test")
+
+        # Simulate some activity by recording calls
+        for i in range(50):
+            tracker.record_tool_call(
+                tool=f"tool_{i % 5}",
+                server="test_server",
+                tokens_in=100,
+                tokens_out=50,
+            )
+
+        # Benchmark get_metrics
+        iterations = 20
+        start = time.perf_counter()
+        for _ in range(iterations):
+            result = get_metrics(include_smells=True, include_breakdown=True)
+        elapsed_ms = (time.perf_counter() - start) / iterations * 1000
+
+        print(f"\nget_metrics avg: {elapsed_ms:.2f}ms (target: <{TARGETS['mcp_get_metrics_ms']}ms)")
+
+        # Verify it returned data
+        assert result.tokens.total > 0
+
+        assert (
+            elapsed_ms < TARGETS["mcp_get_metrics_ms"]
+        ), f"get_metrics took {elapsed_ms:.1f}ms, target <{TARGETS['mcp_get_metrics_ms']}ms"
+
+    def test_get_recommendations_response_time(self) -> None:
+        """get_recommendations should respond in under 100ms."""
+        # Start a session with some activity
+        tracker = get_tracker()
+        tracker.start_session(platform="claude_code", project="benchmark-test")
+
+        for i in range(100):
+            tracker.record_tool_call(
+                tool=f"tool_{i % 5}",
+                server="test_server",
+                tokens_in=100 + (i % 50),
+                tokens_out=50,
+            )
+
+        # Benchmark get_recommendations
+        iterations = 10
+        start = time.perf_counter()
+        for _ in range(iterations):
+            result = get_recommendations(max_recommendations=10)
+        elapsed_ms = (time.perf_counter() - start) / iterations * 1000
+
+        print(
+            f"\nget_recommendations avg: {elapsed_ms:.2f}ms (target: <{TARGETS['mcp_get_recommendations_ms']}ms)"
+        )
+
+        assert (
+            elapsed_ms < TARGETS["mcp_get_recommendations_ms"]
+        ), f"get_recommendations took {elapsed_ms:.1f}ms, target <{TARGETS['mcp_get_recommendations_ms']}ms"
+
+    def test_analyze_session_response_time(self) -> None:
+        """analyze_session should respond in under 200ms."""
+        # Start a session with activity
+        tracker = get_tracker()
+        tracker.start_session(platform="claude_code", project="benchmark-test")
+
+        for i in range(100):
+            tracker.record_tool_call(
+                tool=f"tool_{i % 5}",
+                server="test_server",
+                tokens_in=100,
+                tokens_out=50,
+            )
+
+        # Benchmark analyze_session
+        iterations = 10
+        start = time.perf_counter()
+        for _ in range(iterations):
+            result = analyze_session(include_model_usage=True, include_zombie_tools=True)
+        elapsed_ms = (time.perf_counter() - start) / iterations * 1000
+
+        print(
+            f"\nanalyze_session avg: {elapsed_ms:.2f}ms (target: <{TARGETS['mcp_analyze_session_ms']}ms)"
+        )
+
+        # Verify it returned data
+        assert result.session_id
+
+        assert (
+            elapsed_ms < TARGETS["mcp_analyze_session_ms"]
+        ), f"analyze_session took {elapsed_ms:.1f}ms, target <{TARGETS['mcp_analyze_session_ms']}ms"
+
+    def test_get_best_practices_response_time(self) -> None:
+        """get_best_practices should respond in under 50ms (cached)."""
+        # Warm up - first call loads from disk
+        _ = get_best_practices(list_all=True)
+
+        # Benchmark cached calls
+        iterations = 20
+        start = time.perf_counter()
+        for _ in range(iterations):
+            result = get_best_practices(list_all=True)
+        elapsed_ms = (time.perf_counter() - start) / iterations * 1000
+
+        print(
+            f"\nget_best_practices avg: {elapsed_ms:.2f}ms (target: <{TARGETS['mcp_get_best_practices_ms']}ms)"
+        )
+
+        # Verify it returned practices
+        assert result.total_available > 0
+
+        assert (
+            elapsed_ms < TARGETS["mcp_get_best_practices_ms"]
+        ), f"get_best_practices took {elapsed_ms:.1f}ms, target <{TARGETS['mcp_get_best_practices_ms']}ms"
+
+    def test_get_best_practices_search_response_time(self) -> None:
+        """get_best_practices topic search should be fast."""
+        # Warm up
+        _ = get_best_practices(topic="caching")
+
+        iterations = 20
+        start = time.perf_counter()
+        for _ in range(iterations):
+            result = get_best_practices(topic="security")
+        elapsed_ms = (time.perf_counter() - start) / iterations * 1000
+
+        print(f"\nget_best_practices (search) avg: {elapsed_ms:.2f}ms")
+
+        # Search should be slightly slower than list_all but still fast
+        assert elapsed_ms < 100, f"get_best_practices search took {elapsed_ms:.1f}ms, target <100ms"
+
+    def test_analyze_config_response_time(self) -> None:
+        """analyze_config should respond in under 100ms."""
+        # Note: This may vary if user has many MCP configs
+        iterations = 10
+        start = time.perf_counter()
+        for _ in range(iterations):
+            result = analyze_config(platform=ServerPlatform.CLAUDE_CODE)
+        elapsed_ms = (time.perf_counter() - start) / iterations * 1000
+
+        print(
+            f"\nanalyze_config avg: {elapsed_ms:.2f}ms (target: <{TARGETS['mcp_analyze_config_ms']}ms)"
+        )
+
+        assert (
+            elapsed_ms < TARGETS["mcp_analyze_config_ms"]
+        ), f"analyze_config took {elapsed_ms:.1f}ms, target <{TARGETS['mcp_analyze_config_ms']}ms"
+
+    def test_get_trends_response_time(
+        self, storage_with_sessions: Tuple[StorageManager, List[Path]]
+    ) -> None:
+        """get_trends should respond in under 200ms.
+
+        Note: This test uses mock session data. Real performance depends
+        on the number of historical sessions in storage.
+        """
+        iterations = 5  # Fewer iterations as trends involves I/O
+        start = time.perf_counter()
+        for _ in range(iterations):
+            result = get_trends(period=TrendPeriod.LAST_30_DAYS)
+        elapsed_ms = (time.perf_counter() - start) / iterations * 1000
+
+        print(f"\nget_trends avg: {elapsed_ms:.2f}ms (target: <{TARGETS['mcp_get_trends_ms']}ms)")
+
+        assert (
+            elapsed_ms < TARGETS["mcp_get_trends_ms"]
+        ), f"get_trends took {elapsed_ms:.1f}ms, target <{TARGETS['mcp_get_trends_ms']}ms"
+
+    def test_jsonl_streaming_throughput(self, tmp_path: Path) -> None:
+        """JSONL streaming should handle >1000 events/second.
+
+        This measures the throughput of writing events to JSONL
+        format, which is used for live session streaming.
+        """
+        from token_audit.server.live_tracker import LiveTracker
+        from token_audit.storage import StreamingStorage
+
+        storage = StreamingStorage(base_dir=tmp_path)
+        tracker = LiveTracker(storage=storage)
+        tracker.start_session(platform="claude_code", project="throughput-test")
+
+        # Measure throughput for 1000 events
+        events = 1000
+        start = time.perf_counter()
+        for i in range(events):
+            tracker.record_tool_call(
+                tool=f"tool_{i % 10}",
+                server="test_server",
+                tokens_in=100,
+                tokens_out=50,
+            )
+        elapsed = time.perf_counter() - start
+        events_per_sec = events / elapsed if elapsed > 0 else float("inf")
+
+        tracker.stop_session()
+
+        print(
+            f"\nJSONL streaming: {events_per_sec:.0f} events/sec (target: >{TARGETS['mcp_jsonl_events_per_sec']})"
+        )
+
+        assert (
+            events_per_sec > TARGETS["mcp_jsonl_events_per_sec"]
+        ), f"Throughput {events_per_sec:.0f} events/sec, target >{TARGETS['mcp_jsonl_events_per_sec']}"
 
 
 # =============================================================================

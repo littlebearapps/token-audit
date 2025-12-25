@@ -106,7 +106,7 @@ Safe to share for debugging, analysis, or documentation.
 ## Loading This Session
 
 ```python
-from mcp_audit.storage import StorageManager
+from token_audit.storage import StorageManager
 
 # Load manually
 with open("session-20251125T143022-def456.jsonl") as f:
@@ -125,7 +125,7 @@ events = storage.read_session(
 
 ```bash
 # Generate report from this session
-mcp-audit report ./examples/codex-cli-session/
+token-audit report ./examples/codex-cli-session/
 
 # Output includes:
 # - Token usage breakdown
@@ -135,11 +135,11 @@ mcp-audit report ./examples/codex-cli-session/
 
 ## Cross-Platform Comparison
 
-Use MCP Audit to compare costs across platforms:
+Use Token Audit to compare costs across platforms:
 
 ```bash
 # Analyze both example sessions
-mcp-audit report ./examples/
+token-audit report ./examples/
 
 # Compare Claude Code vs Codex CLI:
 # - Different pricing models

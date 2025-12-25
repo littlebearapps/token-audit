@@ -1,6 +1,6 @@
-# Contributing to MCP Audit
+# Contributing to Token Audit
 
-Thank you for your interest in contributing to MCP Audit! This guide covers everything you need to know to add features, fix bugs, or extend platform support.
+Thank you for your interest in contributing to Token Audit! This guide covers everything you need to know to add features, fix bugs, or extend platform support.
 
 ---
 
@@ -30,8 +30,8 @@ Thank you for your interest in contributing to MCP Audit! This guide covers ever
 
 ```bash
 # Clone the repository
-git clone https://github.com/littlebearapps/mcp-audit.git
-cd mcp-audit
+git clone https://github.com/littlebearapps/token-audit.git
+cd token-audit
 
 # Create virtual environment
 python -m venv venv
@@ -51,8 +51,8 @@ pytest
 ### Project Structure
 
 ```
-mcp-audit/
-├── src/mcp_audit/
+token-audit/
+├── src/token_audit/
 │   ├── __init__.py
 │   ├── cli.py                  # Command-line interface
 │   ├── base_tracker.py         # BaseTracker abstract class
@@ -175,10 +175,10 @@ class BaseTracker(ABC):
 
 ### Step 2: Create Your Adapter
 
-Create a new file in `src/mcp_audit/trackers/`:
+Create a new file in `src/token_audit/trackers/`:
 
 ```python
-# src/mcp_audit/trackers/gemini_cli.py
+# src/token_audit/trackers/gemini_cli.py
 
 from typing import Iterator, Optional
 from .base import BaseTracker, TrackerEvent
@@ -225,7 +225,7 @@ class GeminiCLITracker(BaseTracker):
 
 ### Step 3: Register the Adapter
 
-Add to `src/mcp_audit/trackers/__init__.py`:
+Add to `src/token_audit/trackers/__init__.py`:
 
 ```python
 from .base import BaseTracker, TrackerEvent
@@ -256,7 +256,7 @@ Create `tests/test_trackers/test_gemini_cli.py`:
 
 ```python
 import pytest
-from mcp_audit.trackers.gemini_cli import GeminiCLITracker
+from token_audit.trackers.gemini_cli import GeminiCLITracker
 
 class TestGeminiCLITracker:
     def test_platform_name(self):
@@ -275,7 +275,7 @@ class TestGeminiCLITracker:
 
 ## Plugin System
 
-MCP Audit supports plugins for extending functionality without modifying core code.
+Token Audit supports plugins for extending functionality without modifying core code.
 
 ### Plugin Types
 
@@ -291,7 +291,7 @@ MCP Audit supports plugins for extending functionality without modifying core co
 ```python
 # my_plugin/my_platform.py
 
-from mcp_audit.trackers.base import BaseTracker, TrackerEvent
+from token_audit.trackers.base import BaseTracker, TrackerEvent
 
 class MyPlatformTracker(BaseTracker):
     """Custom platform tracker."""
@@ -308,7 +308,7 @@ class MyPlatformTracker(BaseTracker):
 ```python
 # my_plugin/my_analyzer.py
 
-from mcp_audit.analyzers.base import BaseAnalyzer
+from token_audit.analyzers.base import BaseAnalyzer
 
 class MyAnalyzer(BaseAnalyzer):
     """Custom analysis plugin."""
@@ -335,7 +335,7 @@ class MyAnalyzer(BaseAnalyzer):
 ```python
 # my_plugin/my_exporter.py
 
-from mcp_audit.exporters.base import BaseExporter
+from token_audit.exporters.base import BaseExporter
 
 class MyExporter(BaseExporter):
     """Custom export format plugin."""
@@ -358,19 +358,19 @@ class MyExporter(BaseExporter):
 In your plugin's `pyproject.toml`:
 
 ```toml
-[project.entry-points."mcp_audit.trackers"]
+[project.entry-points."token_audit.trackers"]
 my_platform = "my_plugin.my_platform:MyPlatformTracker"
 
-[project.entry-points."mcp_audit.analyzers"]
+[project.entry-points."token_audit.analyzers"]
 my_analyzer = "my_plugin.my_analyzer:MyAnalyzer"
 
-[project.entry-points."mcp_audit.exporters"]
+[project.entry-points."token_audit.exporters"]
 my_format = "my_plugin.my_exporter:MyExporter"
 ```
 
 #### Configuration File
 
-Alternatively, in `~/.mcp-audit/config/plugins.toml`:
+Alternatively, in `~/.token-audit/config/plugins.toml`:
 
 ```toml
 [plugins]
@@ -391,7 +391,7 @@ disabled = []
 
 ### Plugin Discovery
 
-MCP Audit discovers plugins at startup:
+Token Audit discovers plugins at startup:
 
 1. Check entry points (installed packages)
 2. Check configured plugin paths
@@ -417,7 +417,7 @@ All contributions must include tests. We use pytest with the following requireme
 pytest
 
 # Run with coverage
-pytest --cov=mcp_audit --cov-report=html
+pytest --cov=token_audit --cov-report=html
 
 # Run specific test file
 pytest tests/test_storage.py
@@ -497,17 +497,17 @@ def test_session_processing(sample_session):
 
 ### Before You Start
 
-1. **Bug fixes**: Check if an [Issue](https://github.com/littlebearapps/mcp-audit/issues) already exists
-2. **New features**: Start a [Discussion](https://github.com/littlebearapps/mcp-audit/discussions/new?category=ideas) first
-3. **Questions**: Use [Q&A Discussions](https://github.com/littlebearapps/mcp-audit/discussions/categories/q-a)
+1. **Bug fixes**: Check if an [Issue](https://github.com/littlebearapps/token-audit/issues) already exists
+2. **New features**: Start a [Discussion](https://github.com/littlebearapps/token-audit/discussions/new?category=ideas) first
+3. **Questions**: Use [Q&A Discussions](https://github.com/littlebearapps/token-audit/discussions/categories/q-a)
 4. **Fork the repository** - Work in your own fork
 
 ### Development Flow
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/YOUR_USERNAME/mcp-audit.git
-cd mcp-audit
+git clone https://github.com/YOUR_USERNAME/token-audit.git
+cd token-audit
 
 # 2. Create feature branch
 git checkout -b feature/my-feature
@@ -678,13 +678,13 @@ docs/
 
 ## Releasing
 
-MCP Audit uses automated releases via GitHub Actions. When a version bump is merged to main, a new release is automatically published to PyPI.
+Token Audit uses automated releases via GitHub Actions. When a version bump is merged to main, a new release is automatically published to PyPI.
 
 ### Release Process
 
 1. **Bump version** in `pyproject.toml`:
    - Update `version = "X.Y.Z"` (single source of truth)
-   - `src/mcp_audit/__init__.py` reads version automatically via `importlib.metadata`
+   - `src/token_audit/__init__.py` reads version automatically via `importlib.metadata`
 
 2. **Update CHANGELOG.md**:
    - Add new section: `## [X.Y.Z] - YYYY-MM-DD`
@@ -723,24 +723,24 @@ This triggers the publish workflow.
 
 After merging a version bump:
 
-1. Check [GitHub Actions](https://github.com/littlebearapps/mcp-audit/actions) for workflow runs
+1. Check [GitHub Actions](https://github.com/littlebearapps/token-audit/actions) for workflow runs
 2. Verify tag was created: `git fetch --tags && git tag -l "v*"`
-3. Check [PyPI](https://pypi.org/project/mcp-audit/) for new version
+3. Check [PyPI](https://pypi.org/project/token-audit/) for new version
 
 ---
 
 ## Getting Help
 
-- **Questions**: Open a [Discussion](https://github.com/littlebearapps/mcp-audit/discussions)
-- **Bugs**: Open an [Issue](https://github.com/littlebearapps/mcp-audit/issues)
+- **Questions**: Open a [Discussion](https://github.com/littlebearapps/token-audit/discussions)
+- **Bugs**: Open an [Issue](https://github.com/littlebearapps/token-audit/issues)
 - **Feature ideas**: Open a Discussion first
 
 ---
 
 ## License
 
-By contributing to MCP Audit, you agree that your contributions will be licensed under the MIT License.
+By contributing to Token Audit, you agree that your contributions will be licensed under the MIT License.
 
 ---
 
-Thank you for contributing to MCP Audit!
+Thank you for contributing to Token Audit!

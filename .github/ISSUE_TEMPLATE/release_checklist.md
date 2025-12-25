@@ -33,7 +33,7 @@ assignees: ''
   gh workflow run release-test.yml -f version=[VERSION]
   ```
 - [ ] Review test results - all jobs should pass
-- [ ] Verify tokenizer assets exist in `src/mcp_audit/tokenizers/`
+- [ ] Verify tokenizer assets exist in `src/token_audit/tokenizers/`
 
 ---
 
@@ -58,17 +58,17 @@ assignees: ''
 ### Post-Release Verification
 
 #### Verify Artifacts
-- [ ] Check PyPI: https://pypi.org/project/mcp-audit/[VERSION]/
-- [ ] Check master release: https://github.com/littlebearapps/mcp-audit-master/releases/tag/v[VERSION]
-- [ ] Check public release: https://github.com/littlebearapps/mcp-audit/releases/tag/v[VERSION]
+- [ ] Check PyPI: https://pypi.org/project/token-audit/[VERSION]/
+- [ ] Check master release: https://github.com/littlebearapps/token-audit-master/releases/tag/v[VERSION]
+- [ ] Check public release: https://github.com/littlebearapps/token-audit/releases/tag/v[VERSION]
 - [ ] Verify tokenizer download works:
   ```bash
-  pip install --upgrade mcp-audit
-  mcp-audit tokenizer download
+  pip install token-audit
+  token-audit tokenizer download
   ```
 
 #### Verify Announcement
-- [ ] Check Discussion: https://github.com/littlebearapps/mcp-audit/discussions
+- [ ] Check Discussion: https://github.com/littlebearapps/token-audit/discussions
 - [ ] CHANGELOG content appears in announcement
 
 ---
@@ -81,17 +81,17 @@ If release fails, follow these steps:
    ```bash
    git tag -d v[VERSION]
    git push origin --delete v[VERSION]
-   gh api -X DELETE /repos/littlebearapps/mcp-audit/git/refs/tags/v[VERSION]
+   gh api -X DELETE /repos/littlebearapps/token-audit/git/refs/tags/v[VERSION]
    ```
 
 2. **Delete releases**:
    ```bash
-   gh release delete v[VERSION] --repo littlebearapps/mcp-audit-master --yes
-   gh release delete v[VERSION] --repo littlebearapps/mcp-audit --yes
+   gh release delete v[VERSION] --repo littlebearapps/token-audit-master --yes
+   gh release delete v[VERSION] --repo littlebearapps/token-audit --yes
    ```
 
 3. **PyPI**: Cannot delete, but can yank:
-   - Go to https://pypi.org/manage/project/mcp-audit/releases/
+   - Go to https://pypi.org/manage/project/token-audit/releases/
    - Select version and click "Yank"
 
 ---

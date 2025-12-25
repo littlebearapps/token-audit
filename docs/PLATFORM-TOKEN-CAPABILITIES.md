@@ -1,12 +1,12 @@
 # Platform Token Capabilities
 
-This document describes the token tracking capabilities and limitations for each platform supported by mcp-audit, including our implemented MCP tool token estimation.
+This document describes the token tracking capabilities and limitations for each platform supported by token-audit, including our implemented MCP tool token estimation.
 
 ---
 
 ## Overview
 
-mcp-audit tracks token usage and MCP server efficiency across multiple AI coding platforms. Each platform provides different levels of token attribution detail:
+token-audit tracks token usage and MCP server efficiency across multiple AI coding platforms. Each platform provides different levels of token attribution detail:
 
 | Platform | Session Tokens | Per-Message Tokens | Per-Tool Tokens | Reasoning Tokens | MCP Tool Data | Built-in Tools |
 |----------|---------------|-------------------|-----------------|-----------------|---------------|----------------|
@@ -55,7 +55,7 @@ Claude Code provides **complete per-tool token attribution** through its JSONL s
 
 ### Built-in Tool Tracking (v1.2.0)
 
-As of schema v1.2.0, mcp-audit tracks built-in tools in session files. Claude Code has **18 built-in tools**:
+As of schema v1.2.0, token-audit tracks built-in tools in session files. Claude Code has **18 built-in tools**:
 
 | Tool | Description |
 |------|-------------|
@@ -106,7 +106,7 @@ None - Claude Code provides full MCP tool token attribution and built-in tool tr
 Codex CLI provides **turn-level token tracking** but does NOT provide per-tool token attribution.
 
 **What's available:**
-- Cumulative session totals (`total_token_usage`) - **used by mcp-audit**
+- Cumulative session totals (`total_token_usage`) - **used by token-audit**
 - Per-turn deltas (`last_token_usage`) - not used (causes double-counting)
 - Input, output, cached, and reasoning tokens
 - Full tool call arguments and results
@@ -179,9 +179,9 @@ TOKEN_CNT (new cumulative total)
 
 **Important**: Codex CLI native logs contain **duplicate `token_count` events** - the same values often appear twice consecutively (e.g., Event 2 duplicates Event 1 with identical cumulative totals).
 
-### How mcp-audit Handles Duplicates (v0.3.14+)
+### How token-audit Handles Duplicates (v0.3.14+)
 
-mcp-audit uses `total_token_usage` (cumulative totals) and **replaces** session values instead of summing:
+token-audit uses `total_token_usage` (cumulative totals) and **replaces** session values instead of summing:
 
 | Field | Strategy | Why |
 |-------|----------|-----|
@@ -209,7 +209,7 @@ This data enables **token estimation** based on content size.
 
 ### Built-in Tool Tracking (v1.2.0)
 
-As of schema v1.2.0, mcp-audit tracks built-in tools in session files. Codex CLI has **11 built-in tools**:
+As of schema v1.2.0, token-audit tracks built-in tools in session files. Codex CLI has **11 built-in tools**:
 
 | Tool | Description |
 |------|-------------|
@@ -312,7 +312,7 @@ This data enables **token estimation** based on content size.
 
 ### Built-in Tool Tracking (v1.2.0)
 
-As of schema v1.2.0, mcp-audit tracks built-in tools in session files. Gemini CLI has **12 built-in tools**:
+As of schema v1.2.0, token-audit tracks built-in tools in session files. Gemini CLI has **12 built-in tools**:
 
 | Tool | Description |
 |------|-------------|
@@ -349,7 +349,7 @@ As of schema v1.2.0, mcp-audit tracks built-in tools in session files. Gemini CL
 
 ## Reasoning/Thinking Tokens (v1.3.0)
 
-Starting with schema v1.3.0, mcp-audit tracks reasoning/thinking tokens separately from output tokens. This provides more accurate cost analysis for models that include thinking tokens.
+Starting with schema v1.3.0, token-audit tracks reasoning/thinking tokens separately from output tokens. This provides more accurate cost analysis for models that include thinking tokens.
 
 ### Platform Support
 
@@ -399,7 +399,7 @@ This auto-hiding behavior ensures the TUI remains clean for platforms that don't
 
 ## Token Estimation (Implemented v0.4.0)
 
-Since Codex CLI and Gemini CLI don't provide native per-tool token attribution, mcp-audit **estimates** MCP tool token usage using platform-native tokenizers.
+Since Codex CLI and Gemini CLI don't provide native per-tool token attribution, token-audit **estimates** MCP tool token usage using platform-native tokenizers.
 
 ### Approach
 
@@ -419,28 +419,28 @@ The Gemma tokenizer provides 100% accurate token estimation for Gemini CLI but i
 **Install options:**
 ```bash
 # Direct download from GitHub Releases (recommended)
-mcp-audit tokenizer download
+token-audit tokenizer download
 
 # Check status
-mcp-audit tokenizer status
+token-audit tokenizer status
 ```
 
-The tokenizer is downloaded from GitHub Releases (no HuggingFace account required) to `~/.cache/mcp-audit/tokenizer.model` (~4MB). SHA256 checksum verification ensures integrity.
+The tokenizer is downloaded from GitHub Releases (no HuggingFace account required) to `~/.cache/token-audit/tokenizer.model` (~4MB). SHA256 checksum verification ensures integrity.
 
 **Without the tokenizer:** Gemini CLI uses tiktoken cl100k_base (~95% accuracy). A hint is shown during `collect`:
 ```
 Note: Using standard tokenizer for Gemini CLI (~95% accuracy).
-      For 100% accuracy: mcp-audit tokenizer download
+      For 100% accuracy: token-audit tokenizer download
 ```
 
-**Change your mind later:** Just run `mcp-audit tokenizer download` - no reinstall needed.
+**Change your mind later:** Just run `token-audit tokenizer download` - no reinstall needed.
 
 ### Implementation
 
-#### TokenEstimator Module (`src/mcp_audit/token_estimator.py`)
+#### TokenEstimator Module (`src/token_audit/token_estimator.py`)
 
 ```python
-from mcp_audit.token_estimator import (
+from token_audit.token_estimator import (
     TokenEstimator,
     FUNCTION_CALL_OVERHEAD,  # 25 tokens
     count_tokens,
@@ -573,7 +573,7 @@ Final Summary:
 
 **Gemini CLI (SentencePiece + Gemma):**
 - Uses Google's Gemma tokenizer (same family as Gemini)
-- 100% accuracy when tokenizer is installed via `mcp-audit tokenizer download`
+- 100% accuracy when tokenizer is installed via `token-audit tokenizer download`
 - Falls back to tiktoken cl100k_base (~95% accuracy) if Gemma tokenizer not installed
 - Tokenizer downloaded from GitHub Releases (no account required)
 
@@ -604,7 +604,7 @@ We're monitoring these platforms for native per-tool token support:
 - **Codex CLI**: OpenAI could add `tokens` field to `function_call` events
 - **Gemini CLI**: Google could populate the existing `tool` token field (currently always 0)
 
-If native attribution becomes available, mcp-audit will automatically prefer native values over estimates, with the `is_estimated` field reflecting the source.
+If native attribution becomes available, token-audit will automatically prefer native values over estimates, with the `is_estimated` field reflecting the source.
 
 ### Feature Requests Filed
 

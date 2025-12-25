@@ -1,8 +1,8 @@
-# MCP Audit Architecture
+# Token Audit Architecture
 
 **Last Updated**: 2025-12-13
 
-This document describes the internal architecture of MCP Audit, including the storage system, data schemas, and platform adapter interface.
+This document describes the internal architecture of Token Audit, including the storage system, data schemas, and platform adapter interface.
 
 ---
 
@@ -21,7 +21,7 @@ This document describes the internal architecture of MCP Audit, including the st
 
 ## Overview
 
-MCP Audit is designed with three core principles:
+Token Audit is designed with three core principles:
 
 1. **Platform-Agnostic**: Works with any MCP-enabled CLI tool
 2. **Privacy-First**: No raw prompts/responses stored by default
@@ -32,7 +32,7 @@ MCP Audit is designed with three core principles:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      CLI Interface                          │
-│                   (mcp-audit collect/report)              │
+│                   (token-audit collect/report)              │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -67,10 +67,10 @@ MCP Audit is designed with three core principles:
 
 ### Directory Structure
 
-MCP Audit stores session data in a standardized directory structure:
+Token Audit stores session data in a standardized directory structure:
 
 ```
-~/.mcp-audit/
+~/.token-audit/
 ├── sessions/                          # All session data
 │   ├── claude_code/                   # Claude Code sessions
 │   │   ├── .index.json                # Platform-level index
@@ -89,7 +89,7 @@ MCP Audit stores session data in a standardized directory structure:
 │   └── custom/                        # Custom platform sessions
 │       └── ...
 └── config/
-    └── mcp-audit.toml               # User configuration
+    └── token-audit.toml               # User configuration
 ```
 
 ### Session File Format
@@ -97,10 +97,10 @@ MCP Audit stores session data in a standardized directory structure:
 Each session is stored as a **JSONL (JSON Lines)** file with one event per line:
 
 ```
-~/.mcp-audit/sessions/<platform>/<YYYY-MM-DD>/<session-id>.jsonl
+~/.token-audit/sessions/<platform>/<YYYY-MM-DD>/<session-id>.jsonl
 ```
 
-**Example**: `~/.mcp-audit/sessions/claude_code/2025-11-25/session-20251125T103045-a1b2c3.jsonl`
+**Example**: `~/.token-audit/sessions/claude_code/2025-11-25/session-20251125T103045-a1b2c3.jsonl`
 
 **JSONL Format** (one JSON object per line):
 
@@ -491,25 +491,25 @@ For graceful degradation when encountering unknown formats:
 
 ## Optional Dependencies
 
-MCP Audit uses optional dependency groups for extended functionality:
+Token Audit uses optional dependency groups for extended functionality:
 
 ### Installation Options
 
 ```bash
 # Core only (minimal dependencies)
-pip install mcp-audit
+pip install token-audit
 
 # With analytics (pandas, numpy)
-pip install mcp-audit[analytics]
+pip install token-audit[analytics]
 
 # With visualization (matplotlib, plotly)
-pip install mcp-audit[viz]
+pip install token-audit[viz]
 
 # With export formats (openpyxl, tabulate)
-pip install mcp-audit[export]
+pip install token-audit[export]
 
 # Everything
-pip install mcp-audit[all]
+pip install token-audit[all]
 ```
 
 ### Dependency Groups
@@ -528,13 +528,13 @@ pip install mcp-audit[all]
 analytics = ["pandas>=2.0.0", "numpy>=1.24.0"]
 viz = ["matplotlib>=3.7.0", "plotly>=5.15.0"]
 export = ["openpyxl>=3.1.0", "tabulate>=0.9.0"]
-all = ["mcp-audit[analytics,viz,export]"]
+all = ["token-audit[analytics,viz,export]"]
 ```
 
 ### Feature Detection
 
 ```python
-from mcp_audit.utils import has_analytics, has_viz
+from token_audit.utils import has_analytics, has_viz
 
 if has_analytics():
     import pandas as pd
@@ -554,7 +554,7 @@ The storage format changed significantly between v0.x and v1.x:
 
 | Aspect | v0.x | v1.x |
 |--------|------|------|
-| Location | `logs/sessions/` (project-relative) | `~/.mcp-audit/sessions/` (global) |
+| Location | `logs/sessions/` (project-relative) | `~/.token-audit/sessions/` (global) |
 | Structure | `{project}-{timestamp}/` | `<platform>/<date>/<session-id>.jsonl` |
 | Files | Multiple JSON files | Single JSONL file |
 | Indexes | None | Daily + Platform indexes |
@@ -563,10 +563,10 @@ The storage format changed significantly between v0.x and v1.x:
 
 ```bash
 # Migrate all sessions from v0.x location
-mcp-audit migrate --from logs/sessions/ --platform claude-code
+token-audit migrate --from logs/sessions/ --platform claude-code
 
 # Dry run (preview without changes)
-mcp-audit migrate --from logs/sessions/ --dry-run
+token-audit migrate --from logs/sessions/ --dry-run
 ```
 
 ### Programmatic Migration
@@ -598,7 +598,7 @@ print(f"Failed: {results['failed']}")
 
 ### Backward Compatibility
 
-MCP Audit v1.x can read v0.x session data but stores new sessions in v1.x format only.
+Token Audit v1.x can read v0.x session data but stores new sessions in v1.x format only.
 
 ---
 
@@ -606,5 +606,5 @@ MCP Audit v1.x can read v0.x session data but stores new sessions in v1.x format
 
 - [CORE-SCHEMA-SPEC.md](CORE-SCHEMA-SPEC.md) - Detailed schema specification
 - [INTERCEPTION-MECHANISM-SPEC.md](INTERCEPTION-MECHANISM-SPEC.md) - Platform interception details
-- [PRICING-CONFIGURATION.md](PRICING-CONFIGURATION.md) - Cost calculation setup
+- [pricing-configuration.md](pricing-configuration.md) - Cost calculation setup
 - [contributing.md](contributing.md) - How to add new platform adapters

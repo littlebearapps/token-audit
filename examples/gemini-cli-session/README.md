@@ -53,10 +53,10 @@ Gemini CLI stores sessions as JSON files at `~/.gemini/tmp/<project_hash>/chats/
 
 ```bash
 # To track your own Gemini CLI sessions:
-mcp-audit collect --platform gemini-cli
+token-audit collect --platform gemini-cli
 
 # To generate a report:
-mcp-audit report ~/.mcp-audit/sessions/gemini_cli/
+token-audit report ~/.token-audit/sessions/gemini_cli/
 ```
 
 See [Gemini CLI Setup Guide](../../docs/gemini-cli-setup.md) for detailed instructions.

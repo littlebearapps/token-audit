@@ -79,7 +79,7 @@ Safe to share for debugging, analysis, or documentation.
 ## Loading This Session
 
 ```python
-from mcp_audit.storage import StorageManager
+from token_audit.storage import StorageManager
 
 # Load manually
 with open("session-20251125T103045-abc123.jsonl") as f:
@@ -98,7 +98,7 @@ events = storage.read_session(
 
 ```bash
 # Generate report from this session
-mcp-audit report ./examples/claude-code-session/
+token-audit report ./examples/claude-code-session/
 
 # Output includes:
 # - Token usage breakdown

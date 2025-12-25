@@ -151,7 +151,7 @@ args = ["/Users/nathanschram/.local/mcp/context7-mcp/index.js"]
 Once schemas are obtained, calculate tokens for context tax:
 
 ```python
-from mcp_audit.token_estimator import TokenEstimator
+from token_audit.token_estimator import TokenEstimator
 
 def calculate_schema_tokens(tools: list[dict], platform: str) -> int:
     """Calculate total tokens for tool schemas."""
@@ -231,7 +231,7 @@ def lookup_server_tokens(server_name: str) -> int:
 import json
 from pathlib import Path
 
-SCHEMA_CACHE_PATH = Path.home() / ".mcp-audit" / "schema-cache.json"
+SCHEMA_CACHE_PATH = Path.home() / ".token-audit" / "schema-cache.json"
 
 def cache_schema_tokens(server_name: str, tools: list[dict], tokens: int):
     """Cache schema token count for future use."""

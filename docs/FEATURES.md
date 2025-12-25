@@ -1,6 +1,6 @@
 # Feature Reference
 
-Complete reference for MCP Audit features. For getting started, see [Getting Started](GETTING-STARTED.md).
+Complete reference for Token Audit features. For getting started, see [Getting Started](getting-started.md).
 
 ---
 
@@ -123,15 +123,26 @@ Detected smells are saved with each session:
 ### Viewing Smells
 
 ```bash
-# Cross-session smell analysis
-mcp-audit smells ~/.mcp-audit/sessions/
+# Cross-session smell analysis (last 30 days)
+token-audit report --smells
 
-# Filter by severity
-mcp-audit smells --severity warning
+# Filter by days and platform
+token-audit report --smells --days 7 --platform claude-code
 
-# Filter by pattern
-mcp-audit smells --pattern CHATTY
+# Export as JSON
+token-audit report --smells --format json --output smells.json
+
+# Filter by minimum frequency
+token-audit report --smells --min-frequency 10
 ```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--days` | 30 | Number of days to analyze |
+| `--platform` | *(all)* | Filter: claude-code, codex-cli, gemini-cli |
+| `--project` | *(all)* | Filter by project name |
+| `--format` | text | Output: text, json, markdown |
+| `--min-frequency` | 0 | Minimum frequency % to display |
 
 ---
 
@@ -168,7 +179,7 @@ Converts detected smells into actionable recommendations (v0.8.0).
 Export recommendations for AI-assisted review:
 
 ```bash
-mcp-audit export ai-prompt
+token-audit report --format ai
 ```
 
 The export includes recommendations with evidence for AI interpretation.
@@ -209,7 +220,7 @@ claude-3-5-haiku-20241022      8,765      2,100     $0.0087
 
 ### Supported Models
 
-MCP Audit tracks 2,000+ models via LiteLLM pricing:
+Token Audit tracks 2,000+ models via LiteLLM pricing:
 - **Anthropic**: Claude Opus 4.5, Sonnet 4.5, Haiku 3.5, and all previous versions
 - **OpenAI**: GPT-4o, GPT-5.1, O-series (with reasoning tokens)
 - **Google**: Gemini 2.0 Pro, Flash (with reasoning tokens)
@@ -249,10 +260,10 @@ Session logs include pricing source:
 ### Check Pricing Status
 
 ```bash
-mcp-audit init
+token-audit tokenizer setup
 ```
 
-See [Configuration Reference](CONFIGURATION.md#pricing-configuration) for customization.
+See [Configuration Reference](configuration.md#pricing-configuration) for customization.
 
 ---
 
@@ -305,7 +316,7 @@ Identify MCP tools defined but never used (v0.5.0).
 ### Configuration
 
 ```toml
-# mcp-audit.toml
+# token-audit.toml
 [zombie_tools.zen]
 tools = [
     "mcp__zen__thinkdeep",
@@ -317,7 +328,7 @@ tools = [
 ### How It Works
 
 1. Configure known tools per server
-2. MCP Audit tracks which tools are called
+2. Token Audit tracks which tools are called
 3. Unused tools are reported as "zombies"
 
 ### Session Data
@@ -344,32 +355,32 @@ Generate post-session analysis and exports.
 
 ```bash
 # Basic report (markdown)
-mcp-audit report ~/.mcp-audit/sessions/
+token-audit report ~/.token-audit/sessions/
 
 # Top 5 tools only
-mcp-audit report --top-n 5
+token-audit report --top-n 5
 
 # JSON format
-mcp-audit report --format json
+token-audit report --format json
 
 # CSV for spreadsheet analysis
-mcp-audit report --format csv --output analysis.csv
+token-audit report --format csv --output analysis.csv
 
 # Aggregate across sessions
-mcp-audit report --aggregate
+token-audit report --aggregate
 ```
 
 ### Export for AI Analysis
 
 ```bash
 # Markdown (default) — paste into Claude/ChatGPT
-mcp-audit export ai-prompt
+token-audit report --format ai
 
 # JSON for programmatic use
-mcp-audit export ai-prompt --format json
+token-audit report --format ai-json
 
 # Specific session
-mcp-audit export ai-prompt path/to/session.json
+token-audit report path/to/session.json --format ai
 ```
 
 The AI export includes:
@@ -390,27 +401,119 @@ After exporting, try these prompts:
 
 ## Session Browser
 
-Interactive TUI for browsing past sessions.
+Interactive TUI for browsing past sessions. **v1.0.0** introduces a Dashboard view as the default landing page.
 
 ### Launch
 
 ```bash
-mcp-audit ui
-mcp-audit ui --theme mocha
+token-audit ui                              # Launch to Dashboard (default)
+token-audit ui --view sessions              # Start in session list
+token-audit ui --view live                  # Start in live monitoring
+token-audit ui --view recommendations       # Start in recommendations
+token-audit ui --compact                    # Force compact mode
+token-audit ui --theme mocha                # Use specific theme
 ```
+
+### Views (v1.0.0)
+
+| View | Key | Description |
+|------|-----|-------------|
+| **Dashboard** | `1` | Today's summary, weekly trends, top smells, recent sessions |
+| **Sessions** | `2` | Full session list with filtering and sorting |
+| **Recommendations** | `3` | Actionable optimization suggestions grouped by confidence |
+| **Live** | `4` | Real-time session monitoring with token burn rate |
 
 ### Keybindings
 
 | Key | Action |
 |-----|--------|
-| `j/k`, `↑/↓` | Navigate sessions |
-| `Enter` | View session details |
+| `1`-`4` | Switch between views |
+| `j/k`, `↑/↓` | Navigate |
+| `Enter` | View details / Select |
+| `:` | Command palette (quick navigation) |
+| `/` | Search sessions |
 | `f` | Cycle platform filter |
 | `s` | Cycle sort (date/cost/duration/tools) |
+| `a` | Export to AI |
 | `p` | Pin/unpin session |
-| `r` | Refresh list |
+| `r` | Refresh |
 | `?` | Show help |
+| `Esc` | Back / Navigate back (uses breadcrumb history) |
 | `q` | Quit |
+
+### Navigation Features (v1.0.0)
+
+#### Breadcrumb Navigation
+
+The TUI tracks your navigation history, showing your current path in the header:
+
+```
+Dashboard > Sessions > session-abc123
+```
+
+Use `Esc` or `←` to navigate back through your history. The breadcrumb updates automatically as you navigate.
+
+#### Refresh Indicator
+
+The header shows when data was last refreshed:
+
+```
+Token Audit v1.0.0 | Sessions: 15 | Last refresh: 2m ago
+```
+
+| State | Display |
+|-------|---------|
+| Just refreshed | `Last refresh: just now` |
+| Refreshing | `⟳ Refreshing...` |
+| Stale (>5 min) | `Last refresh: 8m ago ⚠` (yellow warning) |
+
+Press `r` to refresh session data manually.
+
+#### First-Run Help Hints
+
+New users (first 3 launches) see contextual help hints in the footer:
+
+```
+[?] Press ? for help  |  j/k=nav  Enter=view  :=cmd  r=refresh
+```
+
+These hints automatically disappear after a few sessions.
+
+#### Accuracy Legend
+
+The session list header includes an accuracy indicator legend:
+
+```
+Sessions (15)  |  Accuracy: ✓=exact ~=estimated •=calls-only
+```
+
+This helps users understand token count precision for each session.
+
+### Command Palette
+
+Press `:` to open the command palette for quick navigation:
+
+```
+: dashboard
+─────────────────────────────────────────
+> dashboard     Overview and quick stats
+  sessions      Browse all sessions
+  recommendations Optimization suggestions
+  live          Real-time monitoring
+  help          Show help
+```
+
+Type to fuzzy-match, press Enter to select, Esc to cancel.
+
+### Compact Mode
+
+Narrow terminals auto-detect compact mode, or force it with `--compact`:
+
+| Wide (>100 cols) | Compact (<100 cols) |
+|------------------|---------------------|
+| `2025-12-19` | `12/19` |
+| `claude-code` | `claude` |
+| `45,231 tokens` | `45K` |
 
 ### Filtering & Sorting
 
@@ -440,10 +543,10 @@ Customize the TUI appearance.
 
 ```bash
 # Set theme per session
-mcp-audit collect --theme mocha
+token-audit collect --theme mocha
 
 # Session browser
-mcp-audit ui --theme hc-dark
+token-audit ui --theme hc-dark
 ```
 
 ### Accessibility
@@ -473,4 +576,4 @@ See platform guides for details:
 
 ---
 
-*For configuration options, see [Configuration Reference](CONFIGURATION.md). For issues, see [Troubleshooting](TROUBLESHOOTING.md).*
+*For configuration options, see [Configuration Reference](configuration.md). For issues, see [Troubleshooting](troubleshooting.md).*

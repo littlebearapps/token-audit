@@ -12,12 +12,12 @@ Tests cover:
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from mcp_audit.base_tracker import (
+from token_audit.base_tracker import (
     Session,
     Smell,
     TokenUsage,
 )
-from mcp_audit.smell_aggregator import (
+from token_audit.smell_aggregator import (
     TREND_STABILITY_THRESHOLD,
     AggregatedSmell,
     SmellAggregationResult,

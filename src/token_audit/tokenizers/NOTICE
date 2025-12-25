@@ -1,0 +1,22 @@
+Gemma Tokenizer Notice
+======================
+
+This directory contains the Gemma tokenizer model file (tokenizer.model),
+which is part of the Gemma family of models developed by Google.
+
+Gemma is provided under and subject to the Gemma Terms of Use found at:
+https://ai.google.dev/gemma/terms
+
+By using this tokenizer, you agree to the Gemma Terms of Use, including
+the Prohibited Use Policy at:
+https://ai.google.dev/gemma/prohibited_use_policy
+
+The tokenizer is redistributed as permitted under Section 3.1 of the
+Gemma Terms of Use for the purpose of accurate token estimation in
+token-audit.
+
+Source: https://huggingface.co/google/gemma-2-2b
+License: Gemma Terms of Use (https://ai.google.dev/gemma/terms)
+Downloaded: 2025-12-07
+
+For full details, see: docs/gemma-tokenizer-license.md

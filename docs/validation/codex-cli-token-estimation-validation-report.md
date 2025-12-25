@@ -2,7 +2,7 @@
 
 **Date**: 2025-12-07
 **Task**: 69.20 - Codex CLI Token Estimation Validation
-**mcp-audit Version**: 0.3.14
+**token-audit Version**: 0.3.14
 **Codex CLI Version**: 0.64.0
 **Validation Result**: **FAIL** - Critical bug found in total_tokens calculation
 
@@ -30,7 +30,7 @@ to search for 'token' in all python files in src/. Summarize what you find.
 
 ## Token Count Comparison Table
 
-| Metric | Native Codex CLI | mcp-audit | Variance | % Diff | Status |
+| Metric | Native Codex CLI | token-audit | Variance | % Diff | Status |
 |--------|------------------|-----------|----------|--------|--------|
 | input_tokens | 43,853 | 43,853 | 0 | 0.0% | **PASS** |
 | output_tokens | 1,044 | 1,044 | 0 | 0.0% | **PASS** |
@@ -43,7 +43,7 @@ to search for 'token' in all python files in src/. Summarize what you find.
 ## Root Cause Analysis
 
 ### Bug Location
-**File**: `src/mcp_audit/codex_cli_adapter.py`
+**File**: `src/token_audit/codex_cli_adapter.py`
 **Lines**: 944-950
 
 ### Current (Incorrect) Calculation
@@ -79,7 +79,7 @@ total_tokens = input_tokens + output_tokens
 
 ### Variance Breakdown
 ```
-mcp-audit total:    53,793
+token-audit total:    53,793
 Native total:       44,897
 Difference:          8,896
 
@@ -118,7 +118,7 @@ Total error:          8,896 (100% accounted for)
 ```
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │ MCP Audit v0.3.14 - Full Session ↺  [codex-cli]                              │
-│ Project: mcp-audit  Started: 13:25:04  Duration: 25s                         │
+│ Project: token-audit  Started: 13:25:04  Duration: 25s                         │
 │ Model: GPT-5.1 Codex Max                                                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭───────────────────── Token Usage & Cost (MCP: tiktoken) ─────────────────────╮
@@ -139,7 +139,7 @@ Total error:          8,896 (100% accounted for)
 ### TUI Checklist
 
 #### Header Section
-- [x] Project name displayed: "mcp-audit"
+- [x] Project name displayed: "token-audit"
 - [x] Platform shows "codex-cli"
 - [x] Model detected correctly: "GPT-5.1 Codex Max"
 - [x] Duration timer running
@@ -166,7 +166,7 @@ Total error:          8,896 (100% accounted for)
 
 ### File Metadata (`_file`)
 - [x] `schema_version` is "1.4.0"
-- [x] `generated_by` shows "mcp-audit v0.3.14"
+- [x] `generated_by` shows "token-audit v0.3.14"
 
 ### Token Usage (`token_usage`)
 - [x] `input_tokens`: 43,853 (matches native)
@@ -269,6 +269,6 @@ The Codex CLI token estimation validation has **FAILED** due to a critical bug i
 ## Test Artifacts
 
 - **Native Codex CLI session**: `~/.codex/sessions/2025/12/07/rollout-2025-12-07T13-24-10-019af69f-ac6c-70a3-b54d-7db938041889.jsonl`
-- **mcp-audit session**: `~/.mcp-audit/sessions/codex-cli/2025-12-07/mcp-audit-2025-12-07T13-25-04.json`
+- **token-audit session**: `~/.token-audit/sessions/codex-cli/2025-12-07/token-audit-2025-12-07T13-25-04.json`
 - **TUI capture**: `/tmp/codex-tui-capture.txt`
 - **Native token extraction**: `/tmp/codex-native-tokens.json`

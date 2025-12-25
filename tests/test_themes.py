@@ -1,7 +1,7 @@
 """Tests for theme module."""
 
 import pytest
-from mcp_audit.display.themes import (
+from token_audit.display.themes import (
     CatppuccinMocha,
     CatppuccinLatte,
     HighContrastDark,

@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-Common issues and solutions for MCP Audit. For quick answers, see [FAQ](FAQ.md).
+Common issues and solutions for Token Audit. For quick answers, see [FAQ](faq.md).
 
 ---
 
@@ -9,7 +9,7 @@ Common issues and solutions for MCP Audit. For quick answers, see [FAQ](FAQ.md).
 Run this first to check your setup:
 
 ```bash
-mcp-audit init
+token-audit tokenizer setup
 ```
 
 This shows:
@@ -33,14 +33,14 @@ This environment is externally managed
 
 **Solution:** Use pipx instead:
 ```bash
-pipx install mcp-audit
+pipx install token-audit
 ```
 
 Or create a virtual environment:
 ```bash
-python3 -m venv ~/.mcp-audit-venv
-source ~/.mcp-audit-venv/bin/activate
-pip install mcp-audit
+python3 -m venv ~/.token-audit-venv
+source ~/.token-audit-venv/bin/activate
+pip install token-audit
 ```
 
 ### pipx not found
@@ -83,7 +83,7 @@ PermissionError: [Errno 13] Permission denied
 
 **Solution:** Don't use `sudo pip`. Use pipx or a virtual environment:
 ```bash
-pipx install mcp-audit
+pipx install token-audit
 ```
 
 ---
@@ -94,20 +94,20 @@ pipx install mcp-audit
 
 **Possible causes:**
 
-1. **Started MCP Audit after the agent**
-   - Solution: Start `mcp-audit collect` first, then start your AI agent
+1. **Started Token Audit after the agent**
+   - Solution: Start `token-audit collect` first, then start your AI agent
 
 2. **Wrong platform specified**
    - Solution: Verify `--platform` matches your agent:
      ```bash
-     mcp-audit collect --platform claude-code  # Not codex-cli
+     token-audit collect --platform claude-code  # Not codex-cli
      ```
 
 3. **Wrong directory**
-   - Solution: Run MCP Audit from your project directory:
+   - Solution: Run Token Audit from your project directory:
      ```bash
      cd /path/to/your/project
-     mcp-audit collect
+     token-audit collect
      ```
 
 4. **Session file not updating**
@@ -117,7 +117,7 @@ pipx install mcp-audit
 
 ### Session not saving
 
-**Symptoms:** Session completes but no file in `~/.mcp-audit/sessions/`
+**Symptoms:** Session completes but no file in `~/.token-audit/sessions/`
 
 **Causes & Solutions:**
 
@@ -125,8 +125,8 @@ pipx install mcp-audit
    - This intentionally skips saving. Remove the flag.
 
 2. **Permission issue**
-   - Check: `ls -la ~/.mcp-audit/`
-   - Fix: `chmod 755 ~/.mcp-audit/`
+   - Check: `ls -la ~/.token-audit/`
+   - Fix: `chmod 755 ~/.token-audit/`
 
 3. **Disk full**
    - Check: `df -h ~`
@@ -134,11 +134,11 @@ pipx install mcp-audit
 
 ### Wrong platform detected
 
-**Symptom:** MCP Audit detects Claude Code when you're using Codex CLI (or vice versa).
+**Symptom:** Token Audit detects Claude Code when you're using Codex CLI (or vice versa).
 
 **Solution:** Specify platform explicitly:
 ```bash
-mcp-audit collect --platform codex-cli
+token-audit collect --platform codex-cli
 ```
 
 ### TUI not updating
@@ -164,7 +164,7 @@ mcp-audit collect --platform codex-cli
 
 #### "Could not find session file"
 
-**Cause:** Claude Code stores sessions by project hash. MCP Audit may not find the correct one.
+**Cause:** Claude Code stores sessions by project hash. Token Audit may not find the correct one.
 
 **Solution:**
 1. Ensure you're in the same directory as your Claude Code session
@@ -209,12 +209,12 @@ If session tokens are also 0, the session file may not be updating. Try restarti
 
 **Solution:**
 ```bash
-mcp-audit tokenizer download
+token-audit tokenizer download
 ```
 
 Verify:
 ```bash
-mcp-audit tokenizer status
+token-audit tokenizer status
 ```
 
 #### Tokenizer download fails
@@ -225,8 +225,8 @@ mcp-audit tokenizer status
    - Try: `curl -I https://github.com`
 
 2. **Firewall blocking GitHub**
-   - Download manually from [Releases](https://github.com/littlebearapps/mcp-audit/releases)
-   - Place in `~/.mcp-audit/tokenizers/`
+   - Download manually from [Releases](https://github.com/littlebearapps/token-audit/releases)
+   - Place in `~/.token-audit/tokenizers/`
 
 3. **Disk space**
    - Tokenizer requires ~4MB
@@ -242,12 +242,12 @@ mcp-audit tokenizer status
 
 **Solution:** Enable API pricing:
 ```toml
-# ~/.mcp-audit/mcp-audit.toml
+# ~/.token-audit/token-audit.toml
 [pricing.api]
 enabled = true
 ```
 
-Or add TOML pricing manually. See [Configuration](CONFIGURATION.md#pricing-configuration).
+Or add TOML pricing manually. See [Configuration](configuration.md#pricing-configuration).
 
 ### Network errors fetching pricing
 
@@ -272,7 +272,7 @@ WARNING: Could not fetch pricing from API
    curl -I https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json
    ```
 
-3. **Use cached data:** If you previously fetched pricing, the cache at `~/.mcp-audit/pricing-cache.json` will be used.
+3. **Use cached data:** If you previously fetched pricing, the cache at `~/.token-audit/pricing-cache.json` will be used.
 
 ### Stale pricing data
 
@@ -283,8 +283,8 @@ WARNING: Could not fetch pricing from API
 **Solution:**
 ```bash
 # Clear cache to force refresh
-rm ~/.mcp-audit/pricing-cache.json
-mcp-audit init
+rm ~/.token-audit/pricing-cache.json
+token-audit tokenizer setup
 ```
 
 ### "TOML support not available"
@@ -304,17 +304,17 @@ Note: Python 3.11+ has built-in `tomllib` (no installation needed).
 
 ### Empty reports
 
-**Symptom:** `mcp-audit report` shows no data.
+**Symptom:** `token-audit report` shows no data.
 
 **Causes:**
 
 1. **No sessions saved**
-   - Check: `ls ~/.mcp-audit/sessions/`
+   - Check: `ls ~/.token-audit/sessions/`
    - If empty, track a session first
 
 2. **Wrong path**
-   - Default: `~/.mcp-audit/sessions/`
-   - Specify explicitly: `mcp-audit report ~/.mcp-audit/sessions/`
+   - Default: `~/.token-audit/sessions/`
+   - Specify explicitly: `token-audit report ~/.token-audit/sessions/`
 
 3. **Filter too restrictive**
    - Try without filters first
@@ -332,14 +332,14 @@ JSONDecodeError: Expecting value
 
 1. **Identify bad file:**
    ```bash
-   for f in ~/.mcp-audit/sessions/**/*.json; do
+   for f in ~/.token-audit/sessions/**/*.json; do
      python3 -c "import json; json.load(open('$f'))" || echo "Bad: $f"
    done
    ```
 
 2. **Remove or fix corrupted file**
 
-3. **Prevent future corruption:** Don't kill mcp-audit with `kill -9`. Use `Ctrl+C` for graceful shutdown.
+3. **Prevent future corruption:** Don't kill token-audit with `kill -9`. Use `Ctrl+C` for graceful shutdown.
 
 ### Export truncated
 
@@ -349,7 +349,7 @@ JSONDecodeError: Expecting value
 
 **Solution:** Export as JSON for full data:
 ```bash
-mcp-audit export ai-prompt --format json
+token-audit report --format ai-json
 ```
 
 ---
@@ -366,7 +366,7 @@ mcp-audit export ai-prompt --format json
 
 1. **Use plain mode:**
    ```bash
-   mcp-audit collect --plain
+   token-audit collect --plain
    ```
 
 2. **Change terminal:** Use iTerm2 (macOS), Windows Terminal, or any UTF-8 capable terminal
@@ -381,10 +381,10 @@ mcp-audit export ai-prompt --format json
 **Solution:** Use a different theme:
 ```bash
 # High contrast
-mcp-audit collect --theme hc-dark
+token-audit collect --theme hc-dark
 
 # Or disable colors entirely
-NO_COLOR=1 mcp-audit collect
+NO_COLOR=1 token-audit collect
 ```
 
 ### TUI doesn't fit terminal
@@ -393,7 +393,7 @@ NO_COLOR=1 mcp-audit collect
 
 For smaller terminals, use plain mode:
 ```bash
-mcp-audit collect --plain
+token-audit collect --plain
 ```
 
 ---
@@ -402,7 +402,7 @@ mcp-audit collect --plain
 
 ### High CPU usage
 
-**Symptom:** `mcp-audit` using significant CPU during tracking.
+**Symptom:** `token-audit` using significant CPU during tracking.
 
 **Cause:** Aggressive file polling on slow file system.
 
@@ -412,14 +412,14 @@ mcp-audit collect --plain
 
 2. **Check for large session files:**
    ```bash
-   du -sh ~/.mcp-audit/sessions/
+   du -sh ~/.token-audit/sessions/
    ```
 
 3. **Clear old sessions if very large**
 
 ### Slow startup
 
-**Symptom:** `mcp-audit` takes several seconds to start.
+**Symptom:** `token-audit` takes several seconds to start.
 
 **Causes:**
 
@@ -433,18 +433,18 @@ mcp-audit collect --plain
 
 ### Information to include in bug reports
 
-When opening a [GitHub Issue](https://github.com/littlebearapps/mcp-audit/issues):
+When opening a [GitHub Issue](https://github.com/littlebearapps/token-audit/issues):
 
 ```bash
 # Version info
-mcp-audit --version
+token-audit --version
 python3 --version
 
 # Platform
 uname -a
 
 # Configuration status
-mcp-audit init
+token-audit tokenizer setup
 ```
 
 Plus:
@@ -455,9 +455,9 @@ Plus:
 
 ### Community support
 
-- [GitHub Discussions](https://github.com/littlebearapps/mcp-audit/discussions) — Questions and ideas
-- [GitHub Issues](https://github.com/littlebearapps/mcp-audit/issues) — Bug reports
+- [GitHub Discussions](https://github.com/littlebearapps/token-audit/discussions) — Questions and ideas
+- [GitHub Issues](https://github.com/littlebearapps/token-audit/issues) — Bug reports
 
 ---
 
-*For quick answers, see [FAQ](FAQ.md). For configuration help, see [Configuration](CONFIGURATION.md).*
+*For quick answers, see [FAQ](faq.md). For configuration help, see [Configuration](configuration.md).*

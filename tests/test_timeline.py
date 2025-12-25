@@ -11,7 +11,7 @@ Tests cover:
 
 from datetime import date, datetime, timedelta, timezone
 
-from mcp_audit.display.session_browser import (
+from token_audit.display.session_browser import (
     BrowserMode,
     SessionBrowser,
     TimelineBucket,
@@ -441,5 +441,5 @@ class TestTimelineModeIntegration:
 
         browser._open_timeline_view()
 
-        assert browser.state.mode == BrowserMode.LIST  # Unchanged
+        assert browser.state.mode == BrowserMode.DASHBOARD  # Unchanged (v1.0.0 default)
         assert browser._timeline_data is None

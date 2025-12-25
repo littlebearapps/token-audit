@@ -18,14 +18,14 @@ class TestAPIStability:
 
     def test_api_stability_dict_exists(self) -> None:
         """API_STABILITY dictionary should be importable."""
-        from mcp_audit import API_STABILITY
+        from token_audit import API_STABILITY
 
         assert isinstance(API_STABILITY, dict)
         assert len(API_STABILITY) > 0
 
     def test_get_api_stability_function(self) -> None:
         """get_api_stability should return correct tiers."""
-        from mcp_audit import get_api_stability
+        from token_audit import get_api_stability
 
         # Known stable API
         assert get_api_stability("StorageManager") == "stable"
@@ -43,7 +43,7 @@ class TestAPIStability:
 
     def test_stability_tier_type(self) -> None:
         """StabilityTier type should include expected values."""
-        from mcp_audit import StabilityTier
+        from token_audit import StabilityTier
 
         valid_tiers = get_args(StabilityTier)
         assert "stable" in valid_tiers
@@ -53,7 +53,7 @@ class TestAPIStability:
 
     def test_all_exports_have_stability(self) -> None:
         """Every export in __all__ should have a stability classification."""
-        from mcp_audit import API_STABILITY, __all__
+        from token_audit import API_STABILITY, __all__
 
         # Exclude metadata and stability-related exports
         excluded = {
@@ -71,7 +71,7 @@ class TestAPIStability:
 
     def test_stability_values_are_valid(self) -> None:
         """All stability values should be valid tiers."""
-        from mcp_audit import API_STABILITY, StabilityTier
+        from token_audit import API_STABILITY, StabilityTier
 
         valid_tiers = set(get_args(StabilityTier))
 
@@ -88,7 +88,7 @@ class TestDeprecationWarnings:
             warnings.simplefilter("always")
 
             # Import the deprecated function
-            from mcp_audit import estimate_tool_tokens  # noqa: F401
+            from token_audit import estimate_tool_tokens  # noqa: F401
 
             # Check warning was emitted
             deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
@@ -106,7 +106,7 @@ class TestDeprecationWarnings:
             warnings.simplefilter("always")
 
             # Import stable APIs
-            from mcp_audit import (  # noqa: F401
+            from token_audit import (  # noqa: F401
                 PricingConfig,
                 SessionIndex,
                 StorageManager,
@@ -115,8 +115,8 @@ class TestDeprecationWarnings:
 
             # No deprecation warnings should be raised
             deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-            # Filter to only mcp_audit related warnings
-            mcp_warnings = [w for w in deprecation_warnings if "mcp_audit" in str(w.filename)]
+            # Filter to only token_audit related warnings
+            mcp_warnings = [w for w in deprecation_warnings if "token_audit" in str(w.filename)]
             assert len(mcp_warnings) == 0
 
 
@@ -145,11 +145,11 @@ class TestStableAPIsImportable:
         ],
     )
     def test_stable_api_importable(self, api_name: str) -> None:
-        """Each stable API should be importable from mcp_audit."""
-        import mcp_audit
+        """Each stable API should be importable from token_audit."""
+        import token_audit
 
-        assert hasattr(mcp_audit, api_name), f"Cannot import {api_name}"
-        obj = getattr(mcp_audit, api_name)
+        assert hasattr(token_audit, api_name), f"Cannot import {api_name}"
+        obj = getattr(token_audit, api_name)
         assert obj is not None
 
 
@@ -175,11 +175,11 @@ class TestEvolvingAPIsImportable:
         ],
     )
     def test_evolving_api_importable(self, api_name: str) -> None:
-        """Each evolving API should be importable from mcp_audit."""
-        import mcp_audit
+        """Each evolving API should be importable from token_audit."""
+        import token_audit
 
-        assert hasattr(mcp_audit, api_name), f"Cannot import {api_name}"
-        obj = getattr(mcp_audit, api_name)
+        assert hasattr(token_audit, api_name), f"Cannot import {api_name}"
+        obj = getattr(token_audit, api_name)
         assert obj is not None
 
 
@@ -188,21 +188,21 @@ class TestStabilityDocumentation:
 
     def test_stable_count(self) -> None:
         """There should be exactly 16 stable APIs."""
-        from mcp_audit import API_STABILITY
+        from token_audit import API_STABILITY
 
         stable_count = sum(1 for tier in API_STABILITY.values() if tier == "stable")
         assert stable_count == 16, f"Expected 16 stable APIs, got {stable_count}"
 
     def test_evolving_count(self) -> None:
-        """There should be exactly 13 evolving APIs."""
-        from mcp_audit import API_STABILITY
+        """There should be exactly 16 evolving APIs (13 core + 3 server)."""
+        from token_audit import API_STABILITY
 
         evolving_count = sum(1 for tier in API_STABILITY.values() if tier == "evolving")
-        assert evolving_count == 13, f"Expected 13 evolving APIs, got {evolving_count}"
+        assert evolving_count == 16, f"Expected 16 evolving APIs, got {evolving_count}"
 
     def test_deprecated_count(self) -> None:
         """There should be exactly 1 deprecated API."""
-        from mcp_audit import API_STABILITY
+        from token_audit import API_STABILITY
 
         deprecated_count = sum(1 for tier in API_STABILITY.values() if tier == "deprecated")
         assert deprecated_count == 1, f"Expected 1 deprecated API, got {deprecated_count}"

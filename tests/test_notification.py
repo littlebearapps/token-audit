@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_audit.display.rich_display import Notification, RichDisplay
-from mcp_audit.display.snapshot import DisplaySnapshot
+from token_audit.display.rich_display import Notification, RichDisplay
+from token_audit.display.snapshot import DisplaySnapshot
 
 
 # ============================================================================
@@ -255,7 +255,7 @@ class TestNotificationAsciiMode:
 
     def test_success_icon_ascii_fallback(self, monkeypatch) -> None:
         """Test success checkmark converts to [OK] in ASCII mode."""
-        monkeypatch.setenv("MCP_AUDIT_ASCII", "1")
+        monkeypatch.setenv("TOKEN_AUDIT_ASCII", "1")
 
         # Need to create display after setting env var
         display = RichDisplay()
@@ -266,7 +266,7 @@ class TestNotificationAsciiMode:
 
     def test_warning_icon_ascii_fallback(self, monkeypatch) -> None:
         """Test warning icon converts to [WARN] in ASCII mode."""
-        monkeypatch.setenv("MCP_AUDIT_ASCII", "1")
+        monkeypatch.setenv("TOKEN_AUDIT_ASCII", "1")
 
         display = RichDisplay()
         display.show_notification("Warning", "warning")
@@ -276,7 +276,7 @@ class TestNotificationAsciiMode:
 
     def test_error_icon_ascii_fallback(self, monkeypatch) -> None:
         """Test error icon converts to [ERR] in ASCII mode."""
-        monkeypatch.setenv("MCP_AUDIT_ASCII", "1")
+        monkeypatch.setenv("TOKEN_AUDIT_ASCII", "1")
 
         display = RichDisplay()
         display.show_notification("Error", "error")
@@ -286,7 +286,7 @@ class TestNotificationAsciiMode:
 
     def test_info_icon_ascii_fallback(self, monkeypatch) -> None:
         """Test info icon converts to [INFO] in ASCII mode."""
-        monkeypatch.setenv("MCP_AUDIT_ASCII", "1")
+        monkeypatch.setenv("TOKEN_AUDIT_ASCII", "1")
 
         display = RichDisplay()
         display.show_notification("Info", "info")
@@ -296,7 +296,7 @@ class TestNotificationAsciiMode:
 
     def test_unicode_icons_when_ascii_disabled(self, monkeypatch) -> None:
         """Test Unicode icons are used when ASCII mode disabled."""
-        monkeypatch.delenv("MCP_AUDIT_ASCII", raising=False)
+        monkeypatch.delenv("TOKEN_AUDIT_ASCII", raising=False)
 
         display = RichDisplay()
         display.show_notification("Success", "success")

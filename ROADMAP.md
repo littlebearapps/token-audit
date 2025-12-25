@@ -1,13 +1,15 @@
 # Roadmap
 
-This document outlines the planned development direction for MCP Audit. For completed features, see the [Changelog](CHANGELOG.md).
+This document outlines the planned development direction for Token Audit. For completed features, see the [Changelog](CHANGELOG.md).
 
 ## Current Status
 
-**Version**: v0.9.1
-**Stage**: Polish + Stability — Performance Optimization, API Stability, Profiling Guide
+**Version**: v1.0.0
+**Stage**: Released — MCP Server Mode, Best Practices, Config Analyzer
 
-MCP Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v0.9.0 adds sub-millisecond TUI refresh, 14 performance benchmarks in CI, explicit API stability tiers for all 30 public exports, and comprehensive profiling documentation.
+Token Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v1.0 adds MCP Server Mode with 8 tools for AI agent integration, best practices guidance system, multi-platform config analysis, and comprehensive integration documentation.
+
+**Next**: v1.1.0 "MCP Profiler" — Schema efficiency metrics, tool coverage analysis, and profiling infrastructure.
 
 ---
 
@@ -20,7 +22,7 @@ The foundation for efficiency insights and AI-assisted analysis.
 - ✅ **Smell Engine MVP** — Detect 5 efficiency patterns: HIGH_VARIANCE, TOP_CONSUMER, HIGH_MCP_SHARE, CHATTY, LOW_CACHE_HIT
 - ✅ **Zombie Tool Detection** — Identify MCP tools defined but never called
 - ✅ **Data Quality System** — Accuracy labels: exact/estimated/calls-only
-- ✅ **AI Prompt Export MVP** — `mcp-audit export ai-prompt` for AI analysis
+- ✅ **AI Prompt Export MVP** — `token-audit export ai-prompt` for AI analysis
 - ✅ **Schema v1.5.0** — `smells`, `data_quality`, `zombie_tools` blocks
 
 **Success Metrics:**
@@ -28,7 +30,7 @@ The foundation for efficiency insights and AI-assisted analysis.
 - ✅ AI assistants can consume session data for analysis
 - ✅ Clear accuracy labeling for all metrics
 
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/1)
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/1)
 
 ---
 
@@ -50,7 +52,7 @@ Multi-model tracking and dynamic pricing infrastructure.
 - ✅ Pricing stays current via LiteLLM API
 - ✅ 3 platforms supported: Claude Code, Codex CLI, Gemini CLI
 
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/2)
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/2)
 
 ---
 
@@ -70,7 +72,7 @@ Enhanced TUI metrics and display improvements.
 - ✅ Cache effectiveness clearly distinguished from cost efficiency
 - ✅ Tool diversity visible in MCP Servers panel
 
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/3)
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/3)
 
 ---
 
@@ -92,7 +94,7 @@ Deeper analysis capabilities and improved AI integration.
 - ✅ AI exports include actionable recommendations
 - ✅ Users can see smell trends across sessions
 
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/4)
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/4)
 
 ---
 
@@ -116,32 +118,35 @@ Performance optimization and API stability for production readiness.
 - ✅ API stability classification for all public exports
 - ✅ Deprecation warnings for unstable APIs
 
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/5)
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/5)
 
 ---
 
-## v1.0.0 — Product Hunt Launch
+## ✅ v1.0.0 — MCP Server Mode (Released)
 
-**Theme:** "Hello World"
+**Theme:** "AI Agent Integration"
 
-The official stable release with full marketing launch.
+The v1.0 stable release with MCP Server Mode for AI agent integration.
 
-- **Landing Page** — littlebearapps.com/mcp-audit
-- **Press Kit** — Logos, screenshots, descriptions, one-pager
-- **Blog Post** — v1.0 announcement with journey and features
-- **Video Demos** — 6 demo videos covering all features
-- **Product Hunt** — Full launch execution
-- **Social Announcements** — Coordinated launch campaign
-- **Final QA & Release** — Quality assurance and release execution
+- ✅ **MCP Server Mode** — 8 tools for AI agent integration
+- ✅ **Best Practices System** — 10 curated design patterns
+- ✅ **Config Analyzer** — Multi-platform config discovery
+- ✅ **Security Enhancements** — Credential exposure detection
+- ✅ **Performance Benchmarks** — MCP server operation targets
+- ✅ **Historical Aggregation** — Cross-session token usage analysis
+  - `token-audit daily/weekly/monthly` CLI commands
+  - Project grouping with `--instances` flag
+  - JSON export with `--json` flag
+- ✅ **Documentation** — Integration guides, Token Audit docs
 
 **Success Metrics:**
-- Successful Product Hunt launch
-- Landing page live with conversion tracking
-- Press kit downloadable
-- Blog post published
-- Video demos created
+- ✅ MCP Server Mode production-ready
+- ✅ Best practices guidance system complete
+- ✅ Multi-platform config analysis working
+- ✅ Historical usage reporting available
+- ✅ 3 platforms supported: Claude Code, Codex CLI, Gemini CLI
 
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/6)
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/6)
 
 ---
 
@@ -149,37 +154,75 @@ The official stable release with full marketing launch.
 
 > **Note:** The following roadmap items represent our current thinking and are subject to change based on community feedback, ecosystem developments (particularly AAIF governance decisions), and technical discoveries during implementation. Features may be added, removed, reordered, or combined as we learn more.
 
-### v1.1.0 — Ollama CLI Support
+### v1.1.0 — MCP Profiler
 
-**Theme:** "Local Model Tracking"
+**Theme:** "See the Numbers"
 
-Adds support for Ollama CLI via API proxy approach.
+Schema efficiency metrics, tool coverage analysis, variance/spike detection, and profiling infrastructure.
 
-- **Ollama API Proxy** — `mcp-audit ollama-proxy` command for local model tracking
+**Core Profiling Metrics (High Priority):**
+- **Schema Waste Metrics** — SchemaTokensTotal, SchemaTokensUsed, SchemaWaste%, TopUnusedToolsBySchemaWeight
+- **Tool Coverage Analysis** — ToolsDeclared, ToolsUsed, Coverage%, per-server breakdown
+- **Token Percentiles** — Per-tool TokensIn/Out p50/p90/p99, variance tracking
+- **Spike Rate Detection** — SpikeRate (% calls > median×3), WorstSpikeDelta
+- **Compaction Pressure Metrics** — ContextGrowthSlope, MaxBurst, CompactionEventCount
+- **Schema Hash & Change Detection** — ServerSchemaHash fingerprint, schema change flags
+
+**Static Schema Inspection (Medium Priority):**
+- **Schema Bloat Analyzer** — Description length, param count, enum size, nesting depth
+- **Result Bloat Risk Detection** — Missing pagination params, unbounded output detection
+- **Naming & Ergonomics Linter** — Ambiguous names, parameter explosion, inconsistent patterns
+
+**TUI Enhancements:**
+- **Server Health View** — Context tax display, coverage%, chatty index, spike rate
+- **Enhanced Tool Detail View** — p50/p90/p99 tokens, call frequency, spike examples, lint warnings
+
+**Infrastructure:**
+- **Scoring Model Foundation** — 4 subscores: Schema Efficiency, Runtime Efficiency, Reliability, Ergonomics
+- **Enhanced Ask-AI Export** — Aggregated metrics tables, lint results, confidence indicators
+
+**Promotional:**
+- **Landing Page** — littlebearapps.com/token-audit
+- **Press Kit** — Logos, screenshots, descriptions, one-pager
+- **Blog Post** — v1.0 announcement with journey and features
+- **Video Demos** — 6 demo videos covering all features
+- **Product Hunt** — Full launch execution
+- **Social Announcements** — Coordinated launch campaign
+
+**Success Metrics:**
+- Schema waste % visible for all sessions
+- Tool coverage analysis working
+- Token percentiles (p50/p90/p99) per tool
+- Spike detection operational
+- Compaction pressure tracked
+- Schema hash change detection
+
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/10)
+
+### v1.2.0 — Ollama CLI + Platform Expansion
+
+**Theme:** "More Platforms"
+
+Ollama CLI via API proxy, goose adapter, Cursor adapter, AGENTS.md parsing.
+
+**Ollama CLI Support:**
+- **Ollama API Proxy** — `token-audit ollama-proxy` command for local model tracking
 - **Exact Token Counts** — Track via `prompt_eval_count` and `eval_count`
 - **Zero-Cost Sessions** — Sessions with $0 cost (local models)
 - **Tool Call Tracking** — Capture Ollama's native tool format
 
-**Success Metrics:**
-- Ollama users can track local model sessions via proxy
-- 4 platforms supported: Claude Code, Codex CLI, Gemini CLI, Ollama CLI
-
-➡️ [View Milestone](https://github.com/littlebearapps/mcp-audit/milestone/10)
-
-### v1.2.0 — Platform Expansion
-
-**Theme:** "More Platforms"
-
-Adds support for AAIF reference runtime and market-leading IDE.
-
+**Platform Expansion:**
 - **goose Adapter** — Block's AAIF founding project (MCP-native, 24k+ GitHub stars)
 - **Cursor Adapter** — Market-leading AI IDE (session format research required)
 - **AGENTS.md Parsing** — Extract project context from OpenAI's agent config standard
 
 **Success Metrics:**
+- Ollama users can track local model sessions via proxy
 - goose sessions fully tracked
 - Cursor sessions tracked
 - 6 platforms supported: Claude Code, Codex CLI, Gemini CLI, Ollama, goose, Cursor
+
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/12)
 
 ### v1.3.0 — Developer Insight
 
@@ -264,7 +307,7 @@ Major platform release with breaking changes.
 - **Security Suite** — Full toxic flow analysis, security posture, credential detection
 - **AAIF Compliance** — Verify sessions against MCP spec versions
 
-**Context:** MCP was donated to the Linux Foundation's Agentic AI Foundation (AAIF) in December 2025. goose (Block) and AGENTS.md (OpenAI) are co-founding projects. v2.0 aligns mcp-audit with this vendor-neutral ecosystem.
+**Context:** MCP was donated to the Linux Foundation's Agentic AI Foundation (AAIF) in December 2025. goose (Block) and AGENTS.md (OpenAI) are co-founding projects. v2.0 aligns token-audit with this vendor-neutral ecosystem.
 
 ---
 
@@ -272,9 +315,9 @@ Major platform release with breaking changes.
 
 We welcome community input on the roadmap!
 
-- **Feature requests**: [Start a Discussion](https://github.com/littlebearapps/mcp-audit/discussions/new?category=ideas)
-- **View all ideas**: [Ideas Board](https://github.com/littlebearapps/mcp-audit/discussions/categories/ideas)
-- **Questions**: [Q&A Discussions](https://github.com/littlebearapps/mcp-audit/discussions/categories/q-a)
+- **Feature requests**: [Start a Discussion](https://github.com/littlebearapps/token-audit/discussions/new?category=ideas)
+- **View all ideas**: [Ideas Board](https://github.com/littlebearapps/token-audit/discussions/categories/ideas)
+- **Questions**: [Q&A Discussions](https://github.com/littlebearapps/token-audit/discussions/categories/q-a)
 
 ---
 
@@ -284,4 +327,4 @@ This roadmap represents our current development plans and is subject to change. 
 
 ---
 
-**Last Updated**: December 14, 2025
+**Last Updated**: December 18, 2025

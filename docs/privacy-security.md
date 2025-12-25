@@ -1,6 +1,6 @@
 # Privacy & Security
 
-MCP Audit is designed with privacy as a core principle. This document explains what data is collected, how it's stored, and what controls you have.
+Token Audit is designed with privacy as a core principle. This document explains what data is collected, how it's stored, and what controls you have.
 
 ---
 
@@ -21,7 +21,7 @@ MCP Audit is designed with privacy as a core principle. This document explains w
 
 ### Minimum Necessary
 
-MCP Audit collects only the minimum data needed to provide usage insights:
+Token Audit collects only the minimum data needed to provide usage insights:
 
 - ✅ **Token counts** - How many tokens were used
 - ✅ **Tool names** - Which MCP tools were called
@@ -39,7 +39,7 @@ Your AI coding conversations may contain:
 - Personal information
 - Confidential project details
 
-MCP Audit is designed so you can safely track usage without exposing this sensitive content.
+Token Audit is designed so you can safely track usage without exposing this sensitive content.
 
 ---
 
@@ -128,7 +128,7 @@ MCP Audit is designed so you can safely track usage without exposing this sensit
 
 ### Never Stored
 
-The following data is **never** written to disk by MCP Audit:
+The following data is **never** written to disk by Token Audit:
 
 | Data Type | Reason |
 |-----------|--------|
@@ -175,15 +175,15 @@ The query content and search results are **not stored**.
 
 ### No Cloud Communication
 
-MCP Audit operates entirely on your local machine:
+Token Audit operates entirely on your local machine:
 
 ```
 Your Machine
 ┌─────────────────────────────────────────────────────┐
 │                                                     │
-│  Claude Code/Codex ──► MCP Audit ──► Local Storage │
+│  Claude Code/Codex ──► Token Audit ──► Local Storage │
 │                                                     │
-│  ~/.mcp-audit/sessions/                            │
+│  ~/.token-audit/sessions/                            │
 │                                                     │
 └─────────────────────────────────────────────────────┘
                            │
@@ -203,18 +203,18 @@ Your Machine
 
 ### Network Usage
 
-MCP Audit itself makes **zero network requests**. The only network usage is:
+Token Audit itself makes **zero network requests**. The only network usage is:
 
-1. **Installation** (`pip install mcp-audit`) - Downloads package from PyPI
-2. **Updates** (`pip install --upgrade mcp-audit`) - Downloads newer version
+1. **Installation** (`pip install token-audit`) - Downloads package from PyPI
+2. **Updates** (`pip install --upgrade token-audit`) - Downloads newer version
 
-After installation, MCP Audit is fully offline-capable.
+After installation, Token Audit is fully offline-capable.
 
 ---
 
 ## Redaction Hooks
 
-MCP Audit provides hooks to customize what data is stored.
+Token Audit provides hooks to customize what data is stored.
 
 ### Built-in Redaction
 
@@ -232,10 +232,10 @@ DEFAULT_REDACTION = {
 
 ### Custom Redaction Hooks
 
-Create `~/.mcp-audit/config/redaction.py`:
+Create `~/.token-audit/config/redaction.py`:
 
 ```python
-"""Custom redaction hooks for MCP Audit."""
+"""Custom redaction hooks for Token Audit."""
 
 def redact_event(event: dict) -> dict:
     """
@@ -283,13 +283,13 @@ def hash_project_name(name: str) -> str:
 
 ### Configuration File
 
-Enable custom redaction in `~/.mcp-audit/config/mcp-audit.toml`:
+Enable custom redaction in `~/.token-audit/config/token-audit.toml`:
 
 ```toml
 [privacy]
 # Enable custom redaction hooks
 custom_redaction = true
-redaction_module = "~/.mcp-audit/config/redaction.py"
+redaction_module = "~/.token-audit/config/redaction.py"
 
 # Built-in redaction options
 strip_working_directory = false  # Default: false
@@ -308,7 +308,7 @@ Choose a redaction level based on your needs:
 | **detailed** | + Project names, paths | Full analysis |
 | **custom** | Your redaction hooks | Specific requirements |
 
-Configure in `mcp-audit.toml`:
+Configure in `token-audit.toml`:
 
 ```toml
 [privacy]
@@ -321,19 +321,19 @@ redaction_level = "standard"  # minimal, standard, detailed, custom
 
 ### File Permissions
 
-MCP Audit creates files with secure permissions:
+Token Audit creates files with secure permissions:
 
 ```bash
 # Session files: Owner read/write only
 -rw------- user  staff  sessions/session-xxx.jsonl
 
 # Config directory: Owner access only
-drwx------ user  staff  ~/.mcp-audit/
+drwx------ user  staff  ~/.token-audit/
 ```
 
 ### Storage Location
 
-Default: `~/.mcp-audit/sessions/`
+Default: `~/.token-audit/sessions/`
 
 All data is stored in your home directory, protected by your system's user permissions.
 
@@ -343,15 +343,15 @@ For additional security, you can specify a custom location:
 
 ```bash
 # Use encrypted volume
-mcp-audit collect --output /Volumes/EncryptedDrive/mcp-audit/
+token-audit collect --output /Volumes/EncryptedDrive/token-audit/
 
 # Use per-project storage
-mcp-audit collect --output ./local-audit/
+token-audit collect --output ./local-audit/
 ```
 
 ### Encryption
 
-MCP Audit does not encrypt data at rest (files are plaintext JSON). For sensitive environments, consider:
+Token Audit does not encrypt data at rest (files are plaintext JSON). For sensitive environments, consider:
 
 1. **Encrypted home directory** - macOS FileVault, Linux LUKS
 2. **Encrypted volume** - Store sessions on encrypted partition
@@ -394,10 +394,10 @@ Use the built-in sanitization tool:
 
 ```bash
 # Sanitize a session for sharing
-mcp-audit sanitize session.jsonl --output sanitized.jsonl
+token-audit sanitize session.jsonl --output sanitized.jsonl
 
 # Options
-mcp-audit sanitize session.jsonl \
+token-audit sanitize session.jsonl \
     --anonymize-projects \
     --strip-paths \
     --strip-timestamps \
@@ -432,7 +432,7 @@ mcp-audit sanitize session.jsonl \
 
 ### Privacy-Related Settings
 
-`~/.mcp-audit/config/mcp-audit.toml`:
+`~/.token-audit/config/token-audit.toml`:
 
 ```toml
 [privacy]
@@ -451,14 +451,14 @@ redaction_module = ""
 
 [storage]
 # Base directory for sessions
-base_dir = "~/.mcp-audit/sessions"
+base_dir = "~/.token-audit/sessions"
 
 # File permissions (octal)
 file_mode = "0600"
 dir_mode = "0700"
 
 [telemetry]
-# MCP Audit has no telemetry, but this explicitly disables any future options
+# Token Audit has no telemetry, but this explicitly disables any future options
 enabled = false
 ```
 
@@ -466,13 +466,13 @@ enabled = false
 
 ```bash
 # Override storage location
-export MCP_AUDIT_BASE_DIR="/secure/location/mcp-audit"
+export TOKEN_AUDIT_BASE_DIR="/secure/location/token-audit"
 
 # Set redaction level
-export MCP_AUDIT_REDACTION_LEVEL="minimal"
+export TOKEN_AUDIT_REDACTION_LEVEL="minimal"
 
 # Disable all metadata storage
-export MCP_AUDIT_MINIMAL_MODE="true"
+export TOKEN_AUDIT_MINIMAL_MODE="true"
 ```
 
 ---
@@ -495,7 +495,7 @@ export MCP_AUDIT_MINIMAL_MODE="true"
 
 ### For Open Source Projects
 
-1. **Don't commit sessions** - Add `~/.mcp-audit/` to global gitignore
+1. **Don't commit sessions** - Add `~/.token-audit/` to global gitignore
 2. **Sanitize examples** - Use sanitization tool before sharing
 3. **Document policies** - Tell contributors what's tracked
 
@@ -505,9 +505,9 @@ export MCP_AUDIT_MINIMAL_MODE="true"
 
 If you have privacy or security concerns:
 
-1. **Review source code** - MCP Audit is open source
-2. **Open an issue** - [GitHub Issues](https://github.com/littlebearapps/mcp-audit/issues)
-3. **Start a discussion** - [GitHub Discussions](https://github.com/littlebearapps/mcp-audit/discussions)
+1. **Review source code** - Token Audit is open source
+2. **Open an issue** - [GitHub Issues](https://github.com/littlebearapps/token-audit/issues)
+3. **Start a discussion** - [GitHub Discussions](https://github.com/littlebearapps/token-audit/discussions)
 
 ---
 
@@ -524,4 +524,4 @@ If you have privacy or security concerns:
 | Redaction hooks | ✅ Available |
 | Encryption | ✅ Use system-level |
 
-**MCP Audit is designed to help you optimize costs without compromising your privacy.**
+**Token Audit is designed to help you optimize costs without compromising your privacy.**

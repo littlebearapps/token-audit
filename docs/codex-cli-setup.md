@@ -1,11 +1,11 @@
 # Codex CLI Setup Guide
 
-This guide explains how to configure MCP Audit to track your Codex CLI (OpenAI) sessions.
+This guide explains how to configure Token Audit to track your Codex CLI (OpenAI) sessions.
 
 ## Prerequisites
 
 - Codex CLI installed (`npm install -g @openai/codex` or via npx)
-- MCP Audit installed (`pip install mcp-audit`)
+- Token Audit installed (`pip install token-audit`)
 
 ## Session File Location
 
@@ -32,10 +32,10 @@ Monitor a running Codex CLI session:
 codex
 
 # In another terminal, monitor the session
-mcp-audit collect --platform codex-cli
+token-audit collect --platform codex-cli
 
 # Or use Python API
-from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+from token_audit.codex_cli_adapter import CodexCLIAdapter
 adapter = CodexCLIAdapter(project="my-project")
 adapter.start_tracking()
 ```
@@ -46,10 +46,10 @@ Analyze completed sessions:
 
 ```bash
 # Process the most recent session
-mcp-audit collect --platform codex-cli --batch --latest
+token-audit collect --platform codex-cli --batch --latest
 
 # Process a specific session file
-mcp-audit collect --platform codex-cli --batch --session-file ~/.codex/sessions/2025/11/04/session.jsonl
+token-audit collect --platform codex-cli --batch --session-file ~/.codex/sessions/2025/11/04/session.jsonl
 ```
 
 ### 3. List Available Sessions
@@ -58,7 +58,7 @@ View recent sessions with metadata:
 
 ```bash
 python -c "
-from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+from token_audit.codex_cli_adapter import CodexCLIAdapter
 adapter = CodexCLIAdapter(project='my-project')
 for path, mtime, sid in adapter.list_sessions(limit=10):
     print(f'{mtime.strftime(\"%Y-%m-%d %H:%M\")} - {sid or \"no-id\"[:8]}')
@@ -119,7 +119,7 @@ sessions = adapter.get_session_files(since=since, until=until)
 ## Example Output
 
 ```
-$ mcp-audit collect --platform codex-cli --batch --latest
+$ token-audit collect --platform codex-cli --batch --latest
 
 [Codex CLI] Processing: rollout-2025-11-23T16-40-08-...jsonl
   Total tokens: 10,454,282
@@ -130,12 +130,12 @@ $ mcp-audit collect --platform codex-cli --batch --latest
   MCP calls: 12
   Model: GPT-5.1 Codex Max
 
-Session saved to: ~/.mcp-audit/sessions/codex-cli/...
+Session saved to: ~/.token-audit/sessions/codex-cli/...
 ```
 
 ## Pricing Configuration
 
-Edit `mcp-audit.toml` to add custom Codex models:
+Edit `token-audit.toml` to add custom Codex models:
 
 ```toml
 [pricing.openai]
@@ -149,7 +149,7 @@ Edit `mcp-audit.toml` to add custom Codex models:
 
 ## Platform Limitations
 
-Codex CLI has some differences from Claude Code that affect MCP Audit data:
+Codex CLI has some differences from Claude Code that affect Token Audit data:
 
 ### Per-Tool Token Attribution: Not Available
 
@@ -206,7 +206,7 @@ Built-in tools appear in the "Built-in Tools" count, not the MCP server hierarch
 
 ### Tool Duration: Available
 
-Unlike tokens, tool execution duration IS available. MCP Audit extracts "Wall time" from `function_call_output` events:
+Unlike tokens, tool execution duration IS available. Token Audit extracts "Wall time" from `function_call_output` events:
 
 ```json
 {
@@ -221,7 +221,7 @@ Unlike tokens, tool execution duration IS available. MCP Audit extracts "Wall ti
 
 ### MCP Server Naming
 
-Codex CLI uses `-mcp` suffix in server names (e.g., `brave-search-mcp`). MCP Audit normalizes these automatically:
+Codex CLI uses `-mcp` suffix in server names (e.g., `brave-search-mcp`). Token Audit normalizes these automatically:
 
 - Raw: `mcp__brave-search-mcp__brave_web_search`
 - Normalized: `mcp__brave-search__brave_web_search`
@@ -246,7 +246,7 @@ Codex CLI uses `-mcp` suffix in server names (e.g., `brave-search-mcp`). MCP Aud
 
 Use `--session-file` to specify exact file:
 ```bash
-mcp-audit collect --platform codex-cli --session-file /path/to/session.jsonl
+token-audit collect --platform codex-cli --session-file /path/to/session.jsonl
 ```
 
 ### Model Not Detected

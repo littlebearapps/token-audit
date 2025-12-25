@@ -1,8 +1,8 @@
 # API Reference
 
-MCP Audit is primarily a CLI tool. This document covers programmatic usage for advanced integrations.
+Token Audit is primarily a CLI tool. This document covers programmatic usage for advanced integrations.
 
-> **Stability Policy (v0.9.0+):** All APIs now have explicit stability tiers. See [API-STABILITY.md](API-STABILITY.md) for the full policy, deprecation timeline, and migration guides.
+> **Stability Policy (v0.9.0+):** All APIs now have explicit stability tiers. See [api-stability.md](api-stability.md) for the full policy, deprecation timeline, and migration guides.
 
 ## Stability Tiers
 
@@ -19,7 +19,7 @@ MCP Audit is primarily a CLI tool. This document covers programmatic usage for a
 ### Loading Sessions
 
 ```python
-from mcp_audit.storage import StorageManager
+from token_audit.storage import StorageManager
 
 # Initialize storage manager
 storage = StorageManager()
@@ -34,10 +34,10 @@ for session in sessions:
 ### Loading a Specific Session
 
 ```python
-from mcp_audit.storage import load_session_file
+from token_audit.storage import load_session_file
 from pathlib import Path
 
-session_path = Path("~/.mcp-audit/sessions/claude_code/2025-01-15/session-abc123.json")
+session_path = Path("~/.token-audit/sessions/claude_code/2025-01-15/session-abc123.json")
 session_data = load_session_file(session_path.expanduser())
 
 if session_data:
@@ -54,9 +54,9 @@ if session_data:
 Manages session storage and indexing.
 
 ```python
-from mcp_audit.storage import StorageManager
+from token_audit.storage import StorageManager
 
-storage = StorageManager(base_dir="~/.mcp-audit")
+storage = StorageManager(base_dir="~/.token-audit")
 ```
 
 **Methods:**
@@ -74,7 +74,7 @@ storage = StorageManager(base_dir="~/.mcp-audit")
 Lightweight session entry for efficient queries.
 
 ```python
-from mcp_audit.storage import SessionIndex
+from token_audit.storage import SessionIndex
 
 # SessionIndex fields
 session.session_id       # Unique identifier
@@ -94,7 +94,7 @@ session.model            # Primary model used
 Generate a custom weekly report:
 
 ```python
-from mcp_audit.storage import StorageManager
+from token_audit.storage import StorageManager
 from datetime import datetime, timedelta
 
 def weekly_report():
@@ -142,7 +142,7 @@ Check session cost against a threshold:
 """CI script to check session costs against budget."""
 
 import sys
-from mcp_audit.storage import get_latest_session, load_session_file
+from token_audit.storage import get_latest_session, load_session_file
 
 MAX_COST_USD = 1.00  # Budget per session
 
@@ -178,7 +178,7 @@ if __name__ == "__main__":
 Usage in GitHub Actions:
 
 ```yaml
-- name: Check MCP Audit costs
+- name: Check Token Audit costs
   run: python scripts/check_session_cost.py
 ```
 
@@ -189,7 +189,7 @@ Usage in GitHub Actions:
 Analyze smells across sessions:
 
 ```python
-from mcp_audit.storage import StorageManager, load_session_file
+from token_audit.storage import StorageManager, load_session_file
 from collections import Counter
 
 def analyze_smells():
@@ -279,35 +279,35 @@ Available imports by stability tier:
 ```python
 # === STABLE APIs ===
 # Storage
-from mcp_audit import StorageManager, SessionIndex
+from token_audit import StorageManager, SessionIndex
 
 # Pricing
-from mcp_audit import PricingConfig, load_pricing_config, get_model_cost
+from token_audit import PricingConfig, load_pricing_config, get_model_cost
 
 # Normalization
-from mcp_audit import normalize_tool_name, normalize_server_name
+from token_audit import normalize_tool_name, normalize_server_name
 
 # Token estimation
-from mcp_audit import TokenEstimator, count_tokens, get_estimator_for_platform
+from token_audit import TokenEstimator, count_tokens, get_estimator_for_platform
 
 # Display
-from mcp_audit import DisplayAdapter, DisplaySnapshot, create_display
+from token_audit import DisplayAdapter, DisplaySnapshot, create_display
 
 # API stability helpers
-from mcp_audit import get_api_stability, API_STABILITY
+from token_audit import get_api_stability, API_STABILITY
 
 # === EVOLVING APIs ===
 # Data classes
-from mcp_audit import Session, Call, TokenUsage, MCPToolCalls
+from token_audit import Session, Call, TokenUsage, MCPToolCalls
 
 # Platform adapters
-from mcp_audit import ClaudeCodeAdapter, CodexCLIAdapter, GeminiCLIAdapter
+from token_audit import ClaudeCodeAdapter, CodexCLIAdapter, GeminiCLIAdapter
 
 # Smell analysis
-from mcp_audit import SmellAggregator
+from token_audit import SmellAggregator
 
 # === DEPRECATED (remove in v1.1.0) ===
-# from mcp_audit import estimate_tool_tokens  # Use TokenEstimator instead
+# from token_audit import estimate_tool_tokens  # Use TokenEstimator instead
 ```
 
 ---
@@ -329,4 +329,4 @@ For maximum stability:
 
 ---
 
-*For CLI usage, see [Getting Started](GETTING-STARTED.md). For session format details, see [Data Contract](data-contract.md).*
+*For CLI usage, see [Getting Started](getting-started.md). For session format details, see [Data Contract](data-contract.md).*

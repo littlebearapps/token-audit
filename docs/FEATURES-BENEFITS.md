@@ -1,6 +1,6 @@
 # Features & Benefits by Audience
 
-MCP Audit v0.9.0 - Features mapped to benefits for each target audience.
+Token Audit v1.0.0 - Features mapped to benefits for each target audience.
 
 ---
 
@@ -30,6 +30,171 @@ MCP Audit v0.9.0 - Features mapped to benefits for each target audience.
 | **Performance optimization** (v0.9.0) | Sub-ms TUI refresh for production | Smooth real-time monitoring |
 | **API stability tiers** (v0.9.0) | Stable APIs for integration | Know which APIs won't break |
 | **Profiling guide** (v0.9.0) | cProfile/tracemalloc docs | Optimize your own MCP tools |
+| **Tiered pricing** (v0.9.1) | Accurate costs for large sessions | Better budget estimates |
+| **Fallback pricing persistence** (v0.9.1) | Offline resilience | Always have pricing data |
+| **Session recommendations storage** (v0.9.1) | Programmatic access to suggestions | AI analysis of sessions |
+| **MCP Server Mode** (v1.0.0) | Real-time efficiency feedback | In-agent monitoring |
+| **8 MCP tools** (v1.0.0) | Track, analyze, recommend in-agent | Live metrics + guidance |
+| **Best practices system** (v1.0.0) | 10 MCP design patterns | Learn curated guidance |
+| **Config analyzer** (v1.0.0) | Security issue detection | Find misconfigurations |
+| **LiveTracker JSONL** (v1.0.0) | Real-time streaming writes | Incremental session data |
+| **MCP resources** (v1.0.0) | Resource-based pattern access | Queryable best practices |
+
+---
+
+## v1.0.0 Features: MCP Server Mode
+
+v1.0.0 introduces **MCP Server Mode** — real-time efficiency tracking directly inside your AI coding agent. No separate terminal needed.
+
+### MCP Server Overview
+
+Run token-audit as an MCP server that your AI agent can query directly:
+
+```bash
+# Start as MCP server (stdio transport)
+token-audit-server
+```
+
+**8 MCP Tools available:**
+
+| Tool | Purpose | Key Parameters |
+|------|---------|----------------|
+| `start_tracking` | Begin live session tracking | `platform`, `project_name` |
+| `get_metrics` | Query current session stats | `include_smells`, `include_breakdown` |
+| `get_recommendations` | Get optimization suggestions | `severity_filter`, `max_recommendations` |
+| `analyze_session` | Deep session analysis | `session_id` |
+| `get_best_practices` | Query MCP design patterns | `category`, `topic` |
+| `analyze_config` | Multi-platform config discovery | `platform` |
+| `get_pinned_servers` | Detect pinned servers | `source` |
+| `get_trends` | Cross-session aggregation | `date_range`, `platform` |
+
+### LiveTracker (JSONL Streaming)
+
+Real-time session tracking with incremental JSONL writes:
+
+```json
+{"event": "session_start", "timestamp": "2025-12-17T10:00:00Z", "platform": "claude-code"}
+{"event": "tool_call", "tool": "mcp__zen__chat", "input_tokens": 1234, "output_tokens": 567}
+{"event": "smell_detected", "pattern": "CHATTY", "severity": "warning", "tool": "mcp__zen__chat"}
+{"event": "session_end", "total_tokens": 45000, "cost_usd": 0.12}
+```
+
+- Thread-safe incremental writes
+- Graceful JSONL → JSON conversion on completion
+- In-memory metrics for fast queries
+
+### Best Practices System
+
+10 curated MCP design patterns with severity levels:
+
+| Category | Pattern | Severity |
+|----------|---------|----------|
+| Security | Credential protection, input validation | critical |
+| Progressive Disclosure | Minimal prompts, on-demand details | high |
+| Tool Design | Single responsibility, clear naming | high |
+| Caching Strategy | Cache-friendly operations, TTL hints | medium |
+| Error Handling | Graceful degradation, informative errors | high |
+| Schema Design | Minimal required fields, versioning | medium |
+| Performance | Batch operations, lazy loading | medium |
+| Testing | Mock servers, integration tests | low |
+| Observability | Structured logging, metrics exposure | low |
+| Versioning | Semantic versioning, deprecation warnings | medium |
+
+Export patterns:
+```bash
+token-audit export best-practices --format markdown
+token-audit export best-practices --category security --format json
+```
+
+### Config Analyzer
+
+Multi-platform MCP configuration discovery and security analysis:
+
+```bash
+# Analyze config via CLI
+token-audit analyze-config
+
+# Via MCP tool
+# Returns: servers, pinned servers, security issues
+```
+
+**Detects issues:**
+- Credential exposure (hardcoded API keys, tokens)
+- Excessive server count (>15 servers)
+- Path issues (invalid/missing paths)
+- Duplicate servers
+- Parse errors
+
+**Pinned server detection** (3 methods):
+1. Explicit JSON config (`SOURCE_EXPLICIT`)
+2. Project CLAUDE.md files
+3. Global settings
+
+### MCP Resources
+
+Three resource endpoints for pattern access:
+
+| URI | Returns |
+|-----|---------|
+| `token-audit://best-practices` | Index of all patterns by severity |
+| `token-audit://best-practices/{id}` | Detailed pattern content |
+| `token-audit://best-practices/category/{category}` | Patterns filtered by category |
+
+---
+
+## v0.9.1 Features: Pricing & Reliability
+
+v0.9.1 introduces pricing enhancements and reliability fixes for production use.
+
+### Tiered Pricing Support
+
+Accurate cost calculation for sessions exceeding token thresholds:
+
+| Model Family | Threshold | Above-Threshold Pricing |
+|--------------|-----------|------------------------|
+| Claude models | 200K tokens | Higher input/output rates |
+| Gemini models | 128K tokens | Higher input/output rates |
+
+Automatic detection based on model name — no configuration needed.
+
+### Fallback Pricing Persistence
+
+Pricing data persisted to `~/.token-audit/fallback-pricing.json`:
+
+- Saved whenever LiteLLM API fetch succeeds
+- Used when cache expires and API unavailable
+- Never expires — always available as last resort
+
+**Fallback chain**: API → cache (24h) → fallback file → TOML → defaults
+
+### Session Recommendations Storage
+
+Recommendations now included in session output:
+
+```json
+{
+  "recommendations": [
+    {
+      "type": "REMOVE_UNUSED_SERVER",
+      "confidence": 0.85,
+      "evidence": "Server 'zen' has 3 unused tools",
+      "action": "Consider removing unused tools from schema",
+      "impact": {"token_savings": 450}
+    }
+  ]
+}
+```
+
+Accessible for AI analysis via export:
+```bash
+token-audit report --format ai
+```
+
+### Bug Fixes
+
+- **Session browser**: Fixed platform directory lookup (underscores vs hyphens)
+- **Session browser**: Fixed file extension scanning (.jsonl + .json)
+- **Codex CLI TUI**: Auto-detects completed sessions (>5 seconds old with data)
 
 ---
 
@@ -112,7 +277,7 @@ MCP Servers (4 servers, 12 tools, 47 calls)
 Rate metrics and cache hit ratio are now included in AI exports:
 
 ```bash
-mcp-audit export ai-prompt
+token-audit report --format ai
 ```
 
 The export includes:
@@ -160,10 +325,10 @@ Export session data for analysis by your AI assistant:
 
 ```bash
 # Export as structured markdown
-mcp-audit export ai-prompt
+token-audit report --format ai
 
 # Export as JSON for programmatic use
-mcp-audit export ai-prompt --format json
+token-audit report --format ai-json
 ```
 
 The export includes:
@@ -178,7 +343,7 @@ The export includes:
 Identify MCP tools defined in server schemas but never called:
 
 ```toml
-# mcp-audit.toml
+# token-audit.toml
 [zombie_tools.zen]
 tools = [
     "mcp__zen__thinkdeep",
@@ -264,7 +429,7 @@ Session logs include per-model breakdown:
 Auto-fetch current pricing for 2,000+ models from the [LiteLLM pricing database](https://github.com/BerriAI/litellm):
 
 ```toml
-# mcp-audit.toml — configure pricing behavior
+# token-audit.toml — configure pricing behavior
 [pricing.api]
 enabled = true           # Enable API pricing (default: true)
 cache_ttl_hours = 24     # Cache pricing for 24 hours
@@ -286,7 +451,7 @@ Session logs include pricing source:
 | Source | Description | Models |
 |--------|-------------|--------|
 | `api` | LiteLLM API (auto-refresh) | 2,000+ |
-| `toml` | Local mcp-audit.toml | Custom |
+| `toml` | Local token-audit.toml | Custom |
 | `default` | Built-in fallback | ~20 |
 
 ### Context Tax Tracking
@@ -404,7 +569,7 @@ mcp__myserver__light_tool            45    12,345         274
 
 **4. Cross-Session Trend Analysis**
 ```bash
-mcp-audit report ~/.mcp-audit/sessions/ --format csv --output analysis.csv
+token-audit report ~/.token-audit/sessions/ --format csv --output analysis.csv
 ```
 - Track optimization progress over time
 - Compare before/after metrics
@@ -414,13 +579,13 @@ mcp-audit report ~/.mcp-audit/sessions/ --format csv --output analysis.csv
 
 ```bash
 # 1. Track while developing
-mcp-audit collect --platform claude-code --pin-server myserver
+token-audit collect --platform claude-code --pin-server myserver
 
 # 2. Work with your MCP tools
 # (Real-time TUI shows per-tool metrics)
 
 # 3. Review session results
-mcp-audit report ~/.mcp-audit/sessions/
+token-audit report ~/.token-audit/sessions/
 
 # 4. Iterate and improve
 # (Track new sessions to verify optimizations)
@@ -447,7 +612,7 @@ mcp-audit report ~/.mcp-audit/sessions/
 
 **1. Real-Time TUI Dashboard**
 ```
-MCP Audit - Live Session
+Token Audit - Live Session
 -------------------------------------------
 Project: my-project | Platform: claude-code
 Elapsed: 12m 34s | Model: claude-opus-4-5
@@ -522,8 +687,8 @@ Top Tools:
 ### Power User Workflow
 
 ```bash
-# 1. Start mcp-audit BEFORE starting Claude Code
-mcp-audit collect --platform claude-code
+# 1. Start token-audit BEFORE starting Claude Code
+token-audit collect --platform claude-code
 
 # 2. Work normally in Claude Code
 # (Real-time TUI shows token consumption)
@@ -532,7 +697,7 @@ mcp-audit collect --platform claude-code
 # (Session saved automatically)
 
 # 4. Review weekly/monthly patterns
-mcp-audit report ~/.mcp-audit/sessions/
+token-audit report ~/.token-audit/sessions/
 ```
 
 ---
@@ -581,18 +746,18 @@ mcp-audit report ~/.mcp-audit/sessions/
 
 **Note**: Gemini CLI provides message-level tokens only. Built-in tool call counts are tracked but per-tool token attribution is not available from the platform. Reasoning tokens (Gemini's `thoughts` field) are tracked separately from output tokens.
 
-**Token Estimation** (v0.4.0): For 100% accurate MCP tool token estimation, run `mcp-audit tokenizer download` to get the Gemma tokenizer from GitHub Releases (no account required). Without it, mcp-audit uses tiktoken (~95% accuracy) and displays a hint during collection.
+**Token Estimation** (v0.4.0): For 100% accurate MCP tool token estimation, run `token-audit tokenizer download` to get the Gemma tokenizer from GitHub Releases (no account required). Without it, token-audit uses tiktoken (~95% accuracy) and displays a hint during collection.
 
 ---
 
-## mcp-audit vs ccusage
+## token-audit vs ccusage
 
 | Tool | Focus | Use Case |
 |------|-------|----------|
 | [ccusage](https://github.com/ryoppippi/ccusage) | Historical trends | "What did I spend this month?" |
-| mcp-audit | Session tracking | "What's eating context right now?" |
+| token-audit | Session tracking | "What's eating context right now?" |
 
-ccusage is a historical analyzer—it tracks long-term usage trends (daily, monthly, all-time). mcp-audit is a **session tracker**—real-time visibility into what's happening *right now*, with per-tool granularity to investigate context bloat & high token usage as it happens.
+ccusage is a historical analyzer—it tracks long-term usage trends (daily, monthly, all-time). token-audit is a **session tracker**—real-time visibility into what's happening *right now*, with per-tool granularity to investigate context bloat & high token usage as it happens.
 
 ---
 
@@ -604,7 +769,7 @@ ccusage is a historical analyzer—it tracks long-term usage trends (daily, mont
 |---------|---------|
 | **Privacy-first** | All data stays local, no prompts stored |
 | **Free & open-source** | MIT license, no cost to use |
-| **Lightweight install** | `pip install mcp-audit` (~500KB, optional tokenizer) |
+| **Lightweight install** | `pip install token-audit` (~500KB, optional tokenizer) |
 | **Zero config needed** | Works out of the box |
 | **Signal handling** | Ctrl+C saves data gracefully |
 | **Multiple output formats** | JSON, CSV, Markdown reports |
@@ -617,14 +782,14 @@ ccusage is a historical analyzer—it tracks long-term usage trends (daily, mont
 
 - **No prompts stored** - Only token counts and tool names
 - **No network requests** - Zero telemetry, no cloud sync
-- **Local storage only** - All data in `~/.mcp-audit/`
+- **Local storage only** - All data in `~/.token-audit/`
 - **Redaction hooks** - Customize what gets logged
 
 ---
 
 ## Feature Comparison: Free vs What You'd Build
 
-| Capability | Manual (grep + spreadsheets) | mcp-audit |
+| Capability | Manual (grep + spreadsheets) | token-audit |
 |------------|------------------------------|-----------|
 | Real-time tracking | Not possible | Live TUI |
 | Per-tool metrics | Hours of parsing | Automatic |
@@ -639,17 +804,17 @@ ccusage is a historical analyzer—it tracks long-term usage trends (daily, mont
 
 ### Installation
 ```bash
-pip install mcp-audit
+pip install token-audit
 ```
 
 ### Track a Session
 ```bash
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 ### Generate Report
 ```bash
-mcp-audit report ~/.mcp-audit/sessions/
+token-audit report ~/.token-audit/sessions/
 ```
 
 ### More Information
@@ -660,4 +825,4 @@ mcp-audit report ~/.mcp-audit/sessions/
 
 ---
 
-*v0.7.0 | Schema v1.6.0 | MIT License*
+*v1.0.0 | Schema v1.7.0 | MIT License*

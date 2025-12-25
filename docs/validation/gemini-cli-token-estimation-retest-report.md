@@ -1,7 +1,7 @@
 # Gemini CLI Token Estimation Retest Report (Post 69.28 Fix)
 
 **Date**: 2025-12-07
-**mcp-audit Version**: 0.3.14
+**token-audit Version**: 0.3.14
 **Gemini CLI Version**: 0.19.1
 **Task**: 69.26 (Gemini CLI Token Estimation Retest - Final Run)
 **Session File**: `session-2025-12-07T06-40-8062fd2b.json`
@@ -40,14 +40,14 @@ Then use the fs MCP server to read pyproject.toml and tell me the package versio
 
 ### MCP Server Configuration
 ```
-✓ fs: npx -y @modelcontextprotocol/server-filesystem /Users/nathanschram/.../mcp-audit/main (stdio) - Connected
+✓ fs: npx -y @modelcontextprotocol/server-filesystem /Users/nathanschram/.../token-audit/main (stdio) - Connected
 ```
 
 ---
 
 ## Session-Level Token Comparison
 
-| Metric | Native Gemini CLI | mcp-audit | Variance | Status |
+| Metric | Native Gemini CLI | token-audit | Variance | Status |
 |--------|-------------------|-----------|----------|--------|
 | `input` / `input_tokens` | 25,357 | 25,357 | 0 (0.0%) | **PASS** |
 | `output` / `output_tokens` | 316 | 316 | 0 (0.0%) | **PASS** |
@@ -142,7 +142,7 @@ This is acceptable per task criteria but a follow-up task (69.29) has been creat
 ## Files
 
 - Native session: `~/.gemini/tmp/76c62a47.../chats/session-2025-12-07T06-40-8062fd2b.json`
-- mcp-audit session: `~/.mcp-audit/sessions/gemini-cli/2025-12-07/mcp-audit-2025-12-07T17-48-33.json`
+- token-audit session: `~/.token-audit/sessions/gemini-cli/2025-12-07/token-audit-2025-12-07T17-48-33.json`
 
 ---
 

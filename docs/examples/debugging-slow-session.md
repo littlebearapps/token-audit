@@ -17,7 +17,7 @@ Your Claude Code session is running slowly:
 
 ## Prerequisites
 
-- MCP Audit installed
+- Token Audit installed
 - Active Claude Code session exhibiting slow behavior
 - MCP servers configured in Claude Code
 
@@ -25,18 +25,18 @@ Your Claude Code session is running slowly:
 
 ## Step-by-Step Solution
 
-### Step 1: Start MCP Audit
+### Step 1: Start Token Audit
 
 Open a new terminal in your project directory:
 
 ```bash
 cd /path/to/your/project
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 ### Step 2: Reproduce the Slow Behavior
 
-In your Claude Code session, work as you normally would. Pay attention to the TUI dashboard in the MCP Audit terminal.
+In your Claude Code session, work as you normally would. Pay attention to the TUI dashboard in the Token Audit terminal.
 
 Watch for:
 - **Token panel**: Is input growing rapidly?
@@ -80,7 +80,7 @@ In this example, `mcp__zen__thinkdeep` is consuming 67% of all tokens with just 
 Stop tracking (`Ctrl+C`) and generate a detailed report:
 
 ```bash
-mcp-audit report --top-n 10
+token-audit report --top-n 10
 ```
 
 Output:
@@ -139,4 +139,4 @@ After implementing changes, your next session should show:
 
 ---
 
-*See [Feature Reference](../FEATURES.md) for details on smell detection and recommendations.*
+*See [Feature Reference](../features.md) for details on smell detection and recommendations.*

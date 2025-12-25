@@ -2,7 +2,7 @@
 """
 Tests for CLI signal handling functionality.
 
-These tests verify that mcp-audit collect properly saves sessions when:
+These tests verify that token-audit collect properly saves sessions when:
 - Running in foreground and Ctrl+C pressed (SIGINT)
 - Running in background and killed via SIGTERM
 - Running via timeout command (SIGTERM)
@@ -18,8 +18,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_audit import cli
-from mcp_audit.base_tracker import BaseTracker, Session
+from token_audit import cli
+from token_audit.base_tracker import BaseTracker, Session
 
 
 class MockTracker(BaseTracker):
@@ -207,10 +207,10 @@ class TestSignalRegistration:
         try:
             # Create minimal mock setup
             with (
-                patch("mcp_audit.display.create_display") as mock_create_display,
-                patch("mcp_audit.cli.detect_platform", return_value="claude-code"),
-                patch("mcp_audit.cli.detect_project_name", return_value="test"),
-                patch("mcp_audit.claude_code_adapter.ClaudeCodeAdapter") as mock_adapter_class,
+                patch("token_audit.display.create_display") as mock_create_display,
+                patch("token_audit.cli.detect_platform", return_value="claude-code"),
+                patch("token_audit.cli.detect_project_name", return_value="test"),
+                patch("token_audit.claude_code_adapter.ClaudeCodeAdapter") as mock_adapter_class,
             ):
                 mock_display = MagicMock()
                 mock_create_display.return_value = mock_display
@@ -249,10 +249,10 @@ class TestSignalRegistration:
 
         try:
             with (
-                patch("mcp_audit.display.create_display") as mock_create_display,
-                patch("mcp_audit.cli.detect_platform", return_value="claude-code"),
-                patch("mcp_audit.cli.detect_project_name", return_value="test"),
-                patch("mcp_audit.claude_code_adapter.ClaudeCodeAdapter") as mock_adapter_class,
+                patch("token_audit.display.create_display") as mock_create_display,
+                patch("token_audit.cli.detect_platform", return_value="claude-code"),
+                patch("token_audit.cli.detect_project_name", return_value="test"),
+                patch("token_audit.claude_code_adapter.ClaudeCodeAdapter") as mock_adapter_class,
             ):
                 mock_display = MagicMock()
                 mock_create_display.return_value = mock_display
@@ -354,9 +354,9 @@ class TestFirstRunDetection:
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create mock home directory with marker
             mock_home = Path(tmpdir)
-            mcp_audit_dir = mock_home / ".mcp-audit"
-            mcp_audit_dir.mkdir()
-            marker = mcp_audit_dir / ".initialized"
+            token_audit_dir = mock_home / ".token-audit"
+            token_audit_dir.mkdir()
+            marker = token_audit_dir / ".initialized"
             marker.touch()
 
             with patch.object(Path, "home", return_value=mock_home):
@@ -376,7 +376,7 @@ class TestFirstRunDetection:
                 assert result is True
 
                 # Marker should exist
-                marker = mock_home / ".mcp-audit" / ".initialized"
+                marker = mock_home / ".token-audit" / ".initialized"
                 assert marker.exists()
 
     def test_first_run_handles_eof_error(self) -> None:
@@ -392,7 +392,7 @@ class TestFirstRunDetection:
                 assert result is True
 
                 # Marker should exist
-                marker = mock_home / ".mcp-audit" / ".initialized"
+                marker = mock_home / ".token-audit" / ".initialized"
                 assert marker.exists()
 
     def test_first_run_handles_keyboard_interrupt(self) -> None:
@@ -408,5 +408,5 @@ class TestFirstRunDetection:
                 assert result is True
 
                 # Marker should exist
-                marker = mock_home / ".mcp-audit" / ".initialized"
+                marker = mock_home / ".token-audit" / ".initialized"
                 assert marker.exists()

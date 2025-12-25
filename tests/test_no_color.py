@@ -1,6 +1,6 @@
 """Tests for NO_COLOR standard compliance.
 
-Verifies that mcp-audit respects the NO_COLOR environment variable
+Verifies that token-audit respects the NO_COLOR environment variable
 per https://no-color.org/ specification.
 """
 
@@ -67,7 +67,7 @@ class TestNoColorCompliance:
         """RichDisplay should use Rich Console which respects NO_COLOR."""
         monkeypatch.setenv("NO_COLOR", "1")
 
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay()
 
@@ -81,7 +81,7 @@ class TestNoColorWithTheme:
     def test_no_color_overrides_theme(self, monkeypatch):
         """NO_COLOR should take precedence over theme setting."""
         monkeypatch.setenv("NO_COLOR", "1")
-        monkeypatch.setenv("MCP_AUDIT_THEME", "dark")
+        monkeypatch.setenv("TOKEN_AUDIT_THEME", "dark")
 
         from rich.console import Console
 
@@ -94,7 +94,7 @@ class TestNoColorWithTheme:
     def test_theme_works_without_no_color(self, monkeypatch):
         """Theme should work normally when NO_COLOR is not set."""
         monkeypatch.delenv("NO_COLOR", raising=False)
-        monkeypatch.setenv("MCP_AUDIT_THEME", "dark")
+        monkeypatch.setenv("TOKEN_AUDIT_THEME", "dark")
 
         from rich.console import Console
 
@@ -108,14 +108,14 @@ class TestNoColorWithAsciiMode:
     """Tests for NO_COLOR interaction with ASCII mode."""
 
     def test_no_color_with_ascii_mode(self, monkeypatch):
-        """NO_COLOR and MCP_AUDIT_ASCII should work together."""
+        """NO_COLOR and TOKEN_AUDIT_ASCII should work together."""
         monkeypatch.setenv("NO_COLOR", "1")
-        monkeypatch.setenv("MCP_AUDIT_ASCII", "1")
+        monkeypatch.setenv("TOKEN_AUDIT_ASCII", "1")
 
         from rich.console import Console
         from rich import box
 
-        from mcp_audit.display.ascii_mode import is_ascii_mode, get_box_style
+        from token_audit.display.ascii_mode import is_ascii_mode, get_box_style
 
         console = Console()
 

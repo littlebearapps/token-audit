@@ -19,8 +19,8 @@ from typing import Generator
 
 import pytest
 
-from mcp_audit.claude_code_adapter import ClaudeCodeAdapter
-from mcp_audit.display import NullDisplay
+from token_audit.claude_code_adapter import ClaudeCodeAdapter
+from token_audit.display import NullDisplay
 
 
 @pytest.fixture

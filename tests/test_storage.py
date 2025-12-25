@@ -3,7 +3,7 @@
 Pytest tests for storage.py module.
 
 Tests the standardized JSONL directory structure:
-    ~/.mcp-audit/sessions/<platform>/<YYYY-MM-DD>/<session-id>.jsonl
+    ~/.token-audit/sessions/<platform>/<YYYY-MM-DD>/<session-id>.jsonl
 """
 
 import pytest
@@ -13,13 +13,15 @@ from pathlib import Path
 from datetime import datetime, date, timedelta
 from typing import Generator
 
-from mcp_audit.storage import (
+from token_audit.storage import (
     StorageManager,
+    StreamingStorage,
     SessionIndex,
     DailyIndex,
     PlatformIndex,
     STORAGE_SCHEMA_VERSION,
     SUPPORTED_PLATFORMS,
+    ACTIVE_SESSION_DIR,
     get_default_base_dir,
     migrate_v0_session,
     migrate_all_v0_sessions,
@@ -42,6 +44,12 @@ def temp_storage_dir() -> Generator[Path, None, None]:
 def storage(temp_storage_dir: Path) -> StorageManager:
     """Create StorageManager instance with temp directory."""
     return StorageManager(base_dir=temp_storage_dir)
+
+
+@pytest.fixture
+def streaming_storage(temp_storage_dir: Path) -> StreamingStorage:
+    """Create StreamingStorage instance with temp directory."""
+    return StreamingStorage(base_dir=temp_storage_dir)
 
 
 @pytest.fixture
@@ -105,9 +113,9 @@ class TestDefaultBaseDir:
     """Test default base directory configuration."""
 
     def test_default_base_dir_is_home(self) -> None:
-        """Default base dir should be ~/.mcp-audit/sessions/"""
+        """Default base dir should be ~/.token-audit/sessions/"""
         base_dir = get_default_base_dir()
-        assert base_dir == Path.home() / ".mcp-audit" / "sessions"
+        assert base_dir == Path.home() / ".token-audit" / "sessions"
 
     def test_default_base_dir_is_path(self) -> None:
         """Default base dir should be a Path object."""
@@ -137,7 +145,7 @@ class TestStorageManagerInit:
 
     def test_init_with_none_uses_default(self) -> None:
         """Init with None should use default base dir."""
-        # Note: This will try to create ~/.mcp-audit/sessions/ in real environment
+        # Note: This will try to create ~/.token-audit/sessions/ in real environment
         # We just test that it doesn't crash
         storage = StorageManager(base_dir=None)
         assert storage.base_dir == get_default_base_dir()
@@ -152,9 +160,14 @@ class TestPathGeneration:
     """Test path generation methods."""
 
     def test_get_platform_dir(self, storage: StorageManager) -> None:
-        """Get platform directory path."""
+        """Get platform directory path.
+
+        Note: Platform names use underscores internally (claude_code) but
+        directory names use hyphens (claude-code) for CLI consistency.
+        """
         platform_dir = storage.get_platform_dir("claude_code")
-        assert platform_dir == storage.base_dir / "claude_code"
+        # Directory uses hyphens for CLI consistency
+        assert platform_dir == storage.base_dir / "claude-code"
 
     def test_get_platform_dir_invalid_platform(self, storage: StorageManager) -> None:
         """Invalid platform should raise ValueError."""
@@ -166,13 +179,15 @@ class TestPathGeneration:
         """Get date directory path."""
         session_date = date(2025, 11, 25)
         date_dir = storage.get_date_dir("claude_code", session_date)
-        assert date_dir == storage.base_dir / "claude_code" / "2025-11-25"
+        # Directory uses hyphens for CLI consistency
+        assert date_dir == storage.base_dir / "claude-code" / "2025-11-25"
 
     def test_get_session_path(self, storage: StorageManager) -> None:
         """Get session file path."""
         session_date = date(2025, 11, 25)
         session_path = storage.get_session_path("claude_code", session_date, "session-123")
-        expected = storage.base_dir / "claude_code" / "2025-11-25" / "session-123.jsonl"
+        # Directory uses hyphens for CLI consistency
+        expected = storage.base_dir / "claude-code" / "2025-11-25" / "session-123.jsonl"
         assert session_path == expected
 
     def test_generate_session_id_format(self, storage: StorageManager) -> None:
@@ -586,7 +601,8 @@ class TestSessionDiscovery:
 
         sessions = storage.list_sessions(platform="claude_code")
         assert len(sessions) == 1
-        assert "claude_code" in str(sessions[0])
+        # Directory uses hyphens for CLI consistency
+        assert "claude-code" in str(sessions[0])
 
     def test_list_sessions_by_date_range(self, storage: StorageManager) -> None:
         """List sessions filtered by date range."""
@@ -703,7 +719,8 @@ class TestMigration:
 
         assert new_path is not None
         assert new_path.exists()
-        assert "claude_code" in str(new_path)
+        # Directory uses hyphens for CLI consistency
+        assert "claude-code" in str(new_path)
 
         # Check events were copied
         v1_events = v1_storage.load_session_events(new_path)
@@ -828,3 +845,252 @@ class TestEdgeCases:
         events = storage.load_session_events(session_path)
         assert len(events) == 1
         assert "日本語" in events[0]["content"]
+
+
+# =============================================================================
+# Test: Streaming Storage for Active Sessions
+# =============================================================================
+
+
+class TestStreamingStorageInit:
+    """Test StreamingStorage initialization."""
+
+    def test_init_creates_active_dir(self, temp_storage_dir: Path) -> None:
+        """StreamingStorage should create active directory on init."""
+        storage = StreamingStorage(base_dir=temp_storage_dir)
+        assert (temp_storage_dir / ACTIVE_SESSION_DIR).exists()
+        assert storage.get_active_dir() == temp_storage_dir / ACTIVE_SESSION_DIR
+
+    def test_init_with_none_uses_default(self) -> None:
+        """Init with None should use default base dir."""
+        storage = StreamingStorage(base_dir=None)
+        assert storage.base_dir == get_default_base_dir()
+
+
+class TestStreamingStorageSessionLifecycle:
+    """Test active session creation, events, and completion."""
+
+    def test_create_active_session(self, streaming_storage: StreamingStorage) -> None:
+        """Create a new active session file."""
+        session_id = "test-session-123"
+        path = streaming_storage.create_active_session(session_id)
+
+        assert path.exists()
+        assert path.suffix == ".jsonl"
+        assert session_id in path.stem
+        assert streaming_storage.has_active_session(session_id)
+
+    def test_create_active_session_already_exists(
+        self, streaming_storage: StreamingStorage
+    ) -> None:
+        """Creating duplicate session should raise error."""
+        session_id = "test-session-123"
+        streaming_storage.create_active_session(session_id)
+
+        with pytest.raises(FileExistsError):
+            streaming_storage.create_active_session(session_id)
+
+    def test_get_active_session_path(self, streaming_storage: StreamingStorage) -> None:
+        """Get correct path for active session."""
+        session_id = "test-session-456"
+        path = streaming_storage.get_active_session_path(session_id)
+
+        assert path.parent == streaming_storage.get_active_dir()
+        assert path.name == f"{session_id}.jsonl"
+
+    def test_append_event(self, streaming_storage: StreamingStorage) -> None:
+        """Append events to active session."""
+        session_id = "test-session"
+        streaming_storage.create_active_session(session_id)
+
+        event1 = {"type": "session_start", "platform": "claude_code"}
+        event2 = {"type": "tool_call", "tool": "Read", "tokens_in": 100}
+
+        streaming_storage.append_event(session_id, event1)
+        streaming_storage.append_event(session_id, event2)
+
+        events = streaming_storage.load_all_events(session_id)
+        assert len(events) == 2
+        assert events[0]["type"] == "session_start"
+        assert events[1]["type"] == "tool_call"
+
+    def test_append_event_nonexistent_session(self, streaming_storage: StreamingStorage) -> None:
+        """Appending to nonexistent session should raise error."""
+        with pytest.raises(FileNotFoundError):
+            streaming_storage.append_event("nonexistent", {"type": "test"})
+
+    def test_read_events_iterator(self, streaming_storage: StreamingStorage) -> None:
+        """Read events as iterator."""
+        session_id = "test-session"
+        streaming_storage.create_active_session(session_id)
+
+        for i in range(3):
+            streaming_storage.append_event(session_id, {"index": i})
+
+        events = list(streaming_storage.read_events(session_id))
+        assert len(events) == 3
+        assert [e["index"] for e in events] == [0, 1, 2]
+
+    def test_read_events_nonexistent_session(self, streaming_storage: StreamingStorage) -> None:
+        """Reading from nonexistent session should raise error."""
+        with pytest.raises(FileNotFoundError):
+            list(streaming_storage.read_events("nonexistent"))
+
+
+class TestStreamingStorageMoveToComplete:
+    """Test moving active sessions to completed directory."""
+
+    def test_move_to_complete(self, streaming_storage: StreamingStorage) -> None:
+        """Move active session to completed directory."""
+        session_id = "test-session"
+        streaming_storage.create_active_session(session_id)
+
+        # Add some events
+        streaming_storage.append_event(session_id, {"type": "session_start"})
+        streaming_storage.append_event(session_id, {"type": "tool_call"})
+
+        # Prepare final data
+        final_data = {
+            "session_id": session_id,
+            "platform": "claude_code",
+            "total_tokens": 1000,
+            "events": streaming_storage.load_all_events(session_id),
+        }
+
+        # Move to complete
+        completed_path = streaming_storage.move_to_complete(
+            session_id=session_id,
+            platform="claude_code",
+            session_date=date(2025, 12, 16),
+            final_data=final_data,
+        )
+
+        # Check completed file
+        assert completed_path.exists()
+        assert completed_path.suffix == ".json"
+        assert "claude-code" in str(completed_path)
+        assert "2025-12-16" in str(completed_path)
+
+        # Check active file removed
+        assert not streaming_storage.has_active_session(session_id)
+
+        # Check JSON content
+        with open(completed_path) as f:
+            loaded = json.load(f)
+        assert loaded["session_id"] == session_id
+        assert loaded["total_tokens"] == 1000
+        assert len(loaded["events"]) == 2
+
+    def test_move_to_complete_nonexistent(self, streaming_storage: StreamingStorage) -> None:
+        """Moving nonexistent session should raise error."""
+        with pytest.raises(FileNotFoundError):
+            streaming_storage.move_to_complete(
+                session_id="nonexistent",
+                platform="claude_code",
+                session_date=date.today(),
+                final_data={},
+            )
+
+
+class TestStreamingStorageDiscovery:
+    """Test session discovery methods."""
+
+    def test_get_active_sessions_empty(self, streaming_storage: StreamingStorage) -> None:
+        """Empty active directory should return empty list."""
+        sessions = streaming_storage.get_active_sessions()
+        assert sessions == []
+
+    def test_get_active_sessions_with_sessions(self, streaming_storage: StreamingStorage) -> None:
+        """List active sessions."""
+        streaming_storage.create_active_session("session-a")
+        streaming_storage.create_active_session("session-b")
+        streaming_storage.create_active_session("session-c")
+
+        sessions = streaming_storage.get_active_sessions()
+        assert len(sessions) == 3
+        assert set(sessions) == {"session-a", "session-b", "session-c"}
+
+    def test_has_active_session(self, streaming_storage: StreamingStorage) -> None:
+        """Check if active session exists."""
+        assert not streaming_storage.has_active_session("test")
+
+        streaming_storage.create_active_session("test")
+        assert streaming_storage.has_active_session("test")
+
+
+class TestStreamingStorageCleanup:
+    """Test cleanup operations."""
+
+    def test_cleanup_active_session(self, streaming_storage: StreamingStorage) -> None:
+        """Cleanup should remove active session file."""
+        session_id = "test-session"
+        streaming_storage.create_active_session(session_id)
+        assert streaming_storage.has_active_session(session_id)
+
+        streaming_storage.cleanup_active_session(session_id)
+        assert not streaming_storage.has_active_session(session_id)
+
+    def test_cleanup_nonexistent_session(self, streaming_storage: StreamingStorage) -> None:
+        """Cleanup of nonexistent session should not raise error."""
+        # Should not raise
+        streaming_storage.cleanup_active_session("nonexistent")
+
+
+class TestStreamingStorageFileLocking:
+    """Test file locking behavior."""
+
+    def test_concurrent_appends_same_session(self, streaming_storage: StreamingStorage) -> None:
+        """Concurrent appends to same session should be safe."""
+        import threading
+        import time
+
+        session_id = "concurrent-test"
+        streaming_storage.create_active_session(session_id)
+
+        num_threads = 5
+        events_per_thread = 20
+        errors: list = []
+
+        def append_events(thread_id: int) -> None:
+            try:
+                for i in range(events_per_thread):
+                    streaming_storage.append_event(session_id, {"thread": thread_id, "event": i})
+                    # Small delay to increase contention
+                    time.sleep(0.001)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=append_events, args=(i,)) for i in range(num_threads)]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Check no errors
+        assert len(errors) == 0
+
+        # Check all events were written
+        events = streaming_storage.load_all_events(session_id)
+        assert len(events) == num_threads * events_per_thread
+
+    def test_read_during_write(self, streaming_storage: StreamingStorage) -> None:
+        """Reading while writing should return consistent data."""
+        session_id = "read-write-test"
+        streaming_storage.create_active_session(session_id)
+
+        # Write some events first
+        for i in range(10):
+            streaming_storage.append_event(session_id, {"index": i})
+
+        # Read should return complete events
+        events = streaming_storage.load_all_events(session_id)
+        assert len(events) == 10
+
+
+class TestActiveSessionDirConstant:
+    """Test ACTIVE_SESSION_DIR constant."""
+
+    def test_active_session_dir_value(self) -> None:
+        """Active session dir should be 'active'."""
+        assert ACTIVE_SESSION_DIR == "active"

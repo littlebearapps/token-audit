@@ -1,15 +1,15 @@
 # ============================================================================
 # Publish to PyPI (Public Repo)
 # ============================================================================
-# This workflow runs FROM the public repo (mcp-audit) so that:
-# 1. OIDC token originates from littlebearapps/mcp-audit
+# This workflow runs FROM the public repo (token-audit) so that:
+# 1. OIDC token originates from littlebearapps/token-audit
 # 2. URLs pointing to this repo are verified on PyPI
 #
 # Triggered by workflow_dispatch from release-pipeline.yml in master repo.
 #
 # PyPI Trusted Publisher config required:
 #   - Owner: littlebearapps
-#   - Repository: mcp-audit
+#   - Repository: token-audit
 #   - Workflow: publish-pypi.yml
 #   - Environment: pypi
 # ============================================================================
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/mcp-audit/
+      url: https://pypi.org/project/token-audit/
     permissions:
       id-token: write  # Required for Trusted Publishing
       contents: read
