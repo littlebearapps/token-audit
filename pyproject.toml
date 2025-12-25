@@ -3,9 +3,9 @@ requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mcp-audit"
-version = "0.9.1"
-description = "Real-time MCP token tracker for Claude Code, Codex CLI & Gemini CLI. Investigate context bloat and high token usage at the source."
+name = "token-audit"
+version = "1.0.0"
+description = "Token usage auditor for AI coding tools. Investigate context bloat across Claude Code, Codex CLI & Gemini CLI."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["mcp", "model-context-protocol", "token-tracking", "context-window", "claude-code", "codex-cli", "gemini-cli", "llm-cost", "ai-coding", "token-usage"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -33,7 +33,8 @@ dependencies = [
     "rich>=13.0.0",
     "tiktoken>=0.7.0",       # Token estimation for Codex CLI (o200k_base encoding)
     "sentencepiece>=0.2.0",  # Token estimation for Gemini CLI (100% accurate with Gemma)
-    "jsonschema>=4.0.0",     # Schema validation for mcp-audit validate command
+    "jsonschema>=4.0.0",     # Schema validation for token-audit validate command
+    "pyyaml>=6.0.0",         # YAML frontmatter parsing for best practices guidance
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "mypy>=1.7.0",
+    "types-PyYAML>=6.0.0",  # Type stubs for PyYAML
     "ruff>=0.1.0",
     "black>=23.0.0",
     "build>=1.0.0",
@@ -52,31 +54,36 @@ toml = [
 gemma = [
     "huggingface_hub>=0.20.0",  # For downloading Gemma tokenizer
 ]
+server = [
+    "mcp>=1.0.0",               # MCP Python SDK for server mode
+    "pydantic>=2.0.0",          # Schema validation for tool inputs/outputs
+]
 
 [project.scripts]
-mcp-audit = "mcp_audit.cli:main"
+token-audit = "token_audit.cli:main"
+token-audit-server = "token_audit.server.main:run_server"
 
 [project.urls]
-Homepage = "https://github.com/littlebearapps/mcp-audit"
-Documentation = "https://github.com/littlebearapps/mcp-audit#readme"
-Repository = "https://github.com/littlebearapps/mcp-audit"
-Source = "https://github.com/littlebearapps/mcp-audit"
-Issues = "https://github.com/littlebearapps/mcp-audit/issues"
-Changelog = "https://github.com/littlebearapps/mcp-audit/blob/main/CHANGELOG.md"
-Discussions = "https://github.com/littlebearapps/mcp-audit/discussions"
+Homepage = "https://github.com/littlebearapps/token-audit"
+Documentation = "https://github.com/littlebearapps/token-audit#readme"
+Repository = "https://github.com/littlebearapps/token-audit"
+Source = "https://github.com/littlebearapps/token-audit"
+Issues = "https://github.com/littlebearapps/token-audit/issues"
+Changelog = "https://github.com/littlebearapps/token-audit/blob/main/CHANGELOG.md"
+Discussions = "https://github.com/littlebearapps/token-audit/discussions"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-mcp_audit = ["py.typed", "tokenizers/NOTICE"]
+token_audit = ["py.typed", "tokenizers/NOTICE", "guidance/best_practices/*.md", "guidance/best_practices/*.yaml"]
 
-# Include schema files in distribution (for mcp-audit validate command)
+# Include schema files in distribution (for token-audit validate command)
 [tool.setuptools.data-files]
-"share/mcp-audit/schema" = ["docs/schema/session-v1.7.0.json"]
+"share/token-audit/schema" = ["docs/schema/session-v1.7.0.json"]
 
 [tool.setuptools.exclude-package-data]
-mcp_audit = ["tokenizers/*.model"]
+token_audit = ["tokenizers/*.model"]
 
 [tool.pytest.ini_options]
 minversion = "7.4"
@@ -89,9 +96,12 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "network: marks tests that require network access (deselect with '-m \"not network\"')",
+]
 
 [tool.coverage.run]
-source = ["src/mcp_audit"]
+source = ["src/token_audit"]
 relative_files = true  # Required for CI - converts absolute paths to relative
 omit = [
     "tests/*",
@@ -138,6 +148,20 @@ exclude = [
 module = "huggingface_hub"
 ignore_missing_imports = true
 
+# Server mode optional dependencies
+[[tool.mypy.overrides]]
+module = "mcp.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pydantic"
+ignore_missing_imports = true
+
+# YAML parsing for best practices guidance
+[[tool.mypy.overrides]]
+module = "yaml"
+ignore_missing_imports = true
+
 [tool.ruff]
 target-version = "py38"
 line-length = 100
@@ -163,8 +187,14 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG", "S101"]
-"src/mcp_audit/storage.py" = ["ARG002"]  # Platform arg reserved for future use
-"src/mcp_audit/cli.py" = ["ARG002"]  # Args objects from argparse
+"src/token_audit/storage.py" = ["ARG002", "SIM117"]  # Platform arg reserved for future use; nested with for lock ordering
+"src/token_audit/cli.py" = ["ARG001", "ARG002"]  # Args objects from argparse
+"src/token_audit/server/tools.py" = ["ARG001"]  # Stub functions have unused params
+"src/token_audit/server/main.py" = ["SIM105"]  # try-except-pass clearer than contextlib.suppress
+"src/token_audit/server/security.py" = ["SIM102"]  # Nested if is clearer for path sanitization
+"src/token_audit/config_analyzer/discovery.py" = ["SIM108"]  # if-else clearer than ternary for path logic
+"src/token_audit/config_analyzer/parsers.py" = ["ARG001"]  # Platform arg reserved for future use
+"src/token_audit/config_analyzer/pinned_servers.py" = ["SIM102"]  # Nested if is clearer for config checks
 
 [tool.black]
 line-length = 100

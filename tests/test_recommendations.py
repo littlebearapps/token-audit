@@ -2,8 +2,8 @@
 
 import pytest
 
-from mcp_audit.base_tracker import Smell
-from mcp_audit.recommendations import (
+from token_audit.base_tracker import Smell
+from token_audit.recommendations import (
     Recommendation,
     RecommendationEngine,
     RecommendationType,

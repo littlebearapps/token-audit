@@ -1,11 +1,11 @@
 # Gemini CLI Setup Guide
 
-This guide explains how to configure MCP Audit to track your Gemini CLI sessions.
+This guide explains how to configure Token Audit to track your Gemini CLI sessions.
 
 ## Prerequisites
 
 - Gemini CLI installed (`npm install -g @anthropic/gemini-cli`)
-- MCP Audit installed (`pip install mcp-audit`)
+- Token Audit installed (`pip install token-audit`)
 
 ## Session File Location
 
@@ -57,10 +57,10 @@ cd /path/to/project
 gemini
 
 # In another terminal, from the same directory
-mcp-audit collect --platform gemini-cli
+token-audit collect --platform gemini-cli
 
 # Or use Python API
-from mcp_audit.gemini_cli_adapter import GeminiCLIAdapter
+from token_audit.gemini_cli_adapter import GeminiCLIAdapter
 adapter = GeminiCLIAdapter(project="my-project")
 adapter.start_tracking()
 ```
@@ -72,10 +72,10 @@ Analyze completed sessions:
 ```bash
 # Process the most recent session (auto-detects project hash)
 cd /path/to/project
-mcp-audit collect --platform gemini-cli --batch --latest
+token-audit collect --platform gemini-cli --batch --latest
 
 # Process a specific session file
-mcp-audit collect --platform gemini-cli --batch \
+token-audit collect --platform gemini-cli --batch \
   --session-file ~/.gemini/tmp/abc123.../chats/session-2025-11-07T05-10-xyz.json
 ```
 
@@ -85,7 +85,7 @@ View all project hashes with their last activity:
 
 ```bash
 python -c "
-from mcp_audit.gemini_cli_adapter import GeminiCLIAdapter
+from token_audit.gemini_cli_adapter import GeminiCLIAdapter
 adapter = GeminiCLIAdapter(project='my-project')
 for h, path, mtime in adapter.list_available_hashes():
     print(f'{h[:16]}...  {mtime.strftime(\"%Y-%m-%d %H:%M\")}')
@@ -93,12 +93,12 @@ for h, path, mtime in adapter.list_available_hashes():
 "
 
 # Or use CLI
-python -m mcp_audit.gemini_cli_adapter --list-hashes
+python -m token_audit.gemini_cli_adapter --list-hashes
 ```
 
 ## Project Hash Auto-Detection
 
-MCP Audit automatically calculates the project hash from your current working directory:
+Token Audit automatically calculates the project hash from your current working directory:
 
 ```python
 import hashlib
@@ -114,7 +114,7 @@ print(f"Project hash: {project_hash}")
 If auto-detection fails, specify the hash directly:
 
 ```bash
-mcp-audit collect --platform gemini-cli --project-hash abc123...
+token-audit collect --platform gemini-cli --project-hash abc123...
 ```
 
 ## What Gets Tracked
@@ -157,7 +157,7 @@ print(f"Thinking tokens: {adapter.thoughts_tokens}")
 ## Example Output
 
 ```
-$ mcp-audit collect --platform gemini-cli --batch --latest
+$ token-audit collect --platform gemini-cli --batch --latest
 
 [Gemini CLI] Processing: session-2025-11-07T05-10-0b04c358.json
   Total tokens: 13,175,835
@@ -169,12 +169,12 @@ $ mcp-audit collect --platform gemini-cli --batch --latest
   Model: Gemini 2.5 Pro
   Messages: 94
 
-Session saved to: ~/.mcp-audit/sessions/gemini-cli/...
+Session saved to: ~/.token-audit/sessions/gemini-cli/...
 ```
 
 ## Pricing Configuration
 
-Gemini pricing is included by default. Edit `mcp-audit.toml` to customize:
+Gemini pricing is included by default. Edit `token-audit.toml` to customize:
 
 ```toml
 [pricing.gemini]
@@ -191,7 +191,7 @@ Gemini pricing is included by default. Edit `mcp-audit.toml` to customize:
 
 ## Differences from OTEL Telemetry
 
-Previous versions of MCP Audit used Gemini's OpenTelemetry output. The new adapter:
+Previous versions of Token Audit used Gemini's OpenTelemetry output. The new adapter:
 
 1. **No OTEL setup required** - Reads native session files directly
 2. **Simpler configuration** - No environment variables needed
@@ -217,10 +217,10 @@ Previous versions of MCP Audit used Gemini's OpenTelemetry output. The new adapt
 
 ### Wrong Project Hash
 
-Ensure you're in the correct directory when running MCP Audit, or specify the hash:
+Ensure you're in the correct directory when running Token Audit, or specify the hash:
 
 ```bash
-mcp-audit collect --platform gemini-cli --project-hash <correct-hash>
+token-audit collect --platform gemini-cli --project-hash <correct-hash>
 ```
 
 ### Model Not Detected
@@ -236,5 +236,5 @@ cat ~/.gemini/tmp/.../chats/session-*.json | grep -o '"model":"[^"]*"' | head -1
 If you work in multiple projects, each has its own session history. List all:
 
 ```bash
-python -m mcp_audit.gemini_cli_adapter --list-hashes
+python -m token_audit.gemini_cli_adapter --list-hashes
 ```

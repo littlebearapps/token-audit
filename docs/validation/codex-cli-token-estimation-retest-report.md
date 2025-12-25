@@ -10,7 +10,7 @@
 
 | Item | Value |
 |------|-------|
-| mcp-audit Version | 0.3.14 |
+| token-audit Version | 0.3.14 |
 | Codex CLI Version | 0.64.0 |
 | Schema Version | 1.4.0 |
 | Platform | macOS Darwin 25.1.0 |
@@ -35,14 +35,14 @@ and tell me the package version.
 ### Execution
 ```bash
 codex exec "..." --full-auto
-mcp-audit collect --platform codex-cli --from-start --plain
+token-audit collect --platform codex-cli --from-start --plain
 ```
 
 ---
 
 ## Session-Level Token Comparison
 
-| Metric | Native Codex CLI | mcp-audit | Variance | Status |
+| Metric | Native Codex CLI | token-audit | Variance | Status |
 |--------|------------------|-----------|----------|--------|
 | `input_tokens` | 27,143 | 27,143 | 0 | ✅ PASS |
 | `output_tokens` | 2,635 | 2,635 | 0 | ✅ PASS |
@@ -118,7 +118,7 @@ The plain-text TUI output displayed:
 | Cache Savings | $0.0190 (23.4% saved) |
 | Cache Efficiency | 38% |
 
-**Note**: Cost calculations use the pricing from `mcp-audit.toml` for `gpt-5.1-codex-max`.
+**Note**: Cost calculations use the pricing from `token-audit.toml` for `gpt-5.1-codex-max`.
 
 ---
 
@@ -186,4 +186,4 @@ The Task 69.24 fix has successfully enabled token estimation for built-in tools 
 - Task 69.24 - Fix Built-in Tool Token Estimation
 - Task 69.20 - Original Codex CLI validation
 - Task 69.7 - TokenEstimator class implementation
-- `docs/PLATFORM-TOKEN-CAPABILITIES.md` - Platform capabilities documentation
+- `docs/platform-token-capabilities.md` - Platform capabilities documentation

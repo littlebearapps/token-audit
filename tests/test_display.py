@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_audit.display import (
+from token_audit.display import (
     DisplaySnapshot,
     NullDisplay,
     PlainDisplay,
@@ -168,7 +168,7 @@ class TestPlainDisplay:
             display.start(snapshot)
 
         output = captured.getvalue()
-        assert "MCP Audit" in output
+        assert "Token Audit" in output
         assert "claude-code" in output
         assert "test-project" in output
 
@@ -229,21 +229,21 @@ class TestRichDisplay:
 
     def test_rich_display_import(self) -> None:
         """Test that RichDisplay can be imported when Rich is available."""
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay()
         assert display.refresh_rate == 0.5
 
     def test_rich_display_custom_refresh_rate(self) -> None:
         """Test RichDisplay with custom refresh rate."""
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay(refresh_rate=1.0)
         assert display.refresh_rate == 1.0
 
     def test_rich_display_build_layout_structure(self) -> None:
         """Test RichDisplay._build_layout() returns correct structure."""
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay()
         snapshot = create_test_snapshot()
@@ -260,7 +260,7 @@ class TestRichDisplay:
 
     def test_rich_display_format_duration(self) -> None:
         """Test RichDisplay._format_duration() formatting."""
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay()
 
@@ -271,7 +271,7 @@ class TestRichDisplay:
 
     def test_rich_display_truncates_long_tool_names(self) -> None:
         """Test that long tool names are truncated in display."""
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay()
         long_name = "mcp__very_long_server_name__very_long_tool_name_here"
@@ -289,7 +289,7 @@ class TestRichDisplay:
 
     def test_rich_display_pinned_servers(self) -> None:
         """Test that pinned servers appear first and have visual indicator."""
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay(pinned_servers=["zen"])
         assert "zen" in display.pinned_servers
@@ -312,7 +312,7 @@ class TestRichDisplay:
 
     def test_rich_display_multiple_pinned_servers(self) -> None:
         """Test that multiple servers can be pinned."""
-        from mcp_audit.display.rich_display import RichDisplay
+        from token_audit.display.rich_display import RichDisplay
 
         display = RichDisplay(pinned_servers=["zen", "backlog"])
         assert "zen" in display.pinned_servers
@@ -362,7 +362,7 @@ class TestCreateDisplay:
         with patch.object(sys.stdout, "isatty", return_value=True):
             display = create_display(mode="tui")
             # Should be RichDisplay
-            from mcp_audit.display.rich_display import RichDisplay
+            from token_audit.display.rich_display import RichDisplay
 
             assert isinstance(display, RichDisplay)
 
@@ -375,7 +375,7 @@ class TestCreateDisplay:
         """Test create_display passes refresh_rate to RichDisplay."""
         with patch.object(sys.stdout, "isatty", return_value=True):
             display = create_display(mode="tui", refresh_rate=2.0)
-            from mcp_audit.display.rich_display import RichDisplay
+            from token_audit.display.rich_display import RichDisplay
 
             assert isinstance(display, RichDisplay)
             assert display.refresh_rate == 2.0
@@ -403,7 +403,7 @@ class TestDisplayIntegration:
 
         output = captured.getvalue()
         # Should have header, event, and summary
-        assert "MCP Audit" in output
+        assert "Token Audit" in output
         assert "mcp__zen__chat" in output
         assert "Session Complete" in output
 
@@ -424,7 +424,7 @@ class TestDisplayIntegration:
             display2.stop(snapshot)
 
         # Should have different content
-        assert "MCP Audit" in captured1.getvalue()
+        assert "Token Audit" in captured1.getvalue()
         assert "Session Complete" in captured2.getvalue()
         assert captured1.getvalue() != captured2.getvalue()
 
@@ -439,7 +439,7 @@ class TestCLIDisplayIntegration:
 
     def test_get_display_mode_quiet(self) -> None:
         """Test get_display_mode returns 'quiet' when --quiet flag set."""
-        from mcp_audit.cli import get_display_mode
+        from token_audit.cli import get_display_mode
 
         class MockArgs:
             quiet = True
@@ -450,7 +450,7 @@ class TestCLIDisplayIntegration:
 
     def test_get_display_mode_plain(self) -> None:
         """Test get_display_mode returns 'plain' when --plain flag set."""
-        from mcp_audit.cli import get_display_mode
+        from token_audit.cli import get_display_mode
 
         class MockArgs:
             quiet = False
@@ -461,7 +461,7 @@ class TestCLIDisplayIntegration:
 
     def test_get_display_mode_tui(self) -> None:
         """Test get_display_mode returns 'tui' when --tui flag set."""
-        from mcp_audit.cli import get_display_mode
+        from token_audit.cli import get_display_mode
 
         class MockArgs:
             quiet = False
@@ -472,7 +472,7 @@ class TestCLIDisplayIntegration:
 
     def test_get_display_mode_auto_default(self) -> None:
         """Test get_display_mode returns 'auto' when no flags set."""
-        from mcp_audit.cli import get_display_mode
+        from token_audit.cli import get_display_mode
 
         class MockArgs:
             quiet = False
@@ -483,7 +483,7 @@ class TestCLIDisplayIntegration:
 
     def test_get_display_mode_quiet_takes_precedence(self) -> None:
         """Test --quiet takes precedence over other flags."""
-        from mcp_audit.cli import get_display_mode
+        from token_audit.cli import get_display_mode
 
         class MockArgs:
             quiet = True
@@ -495,7 +495,7 @@ class TestCLIDisplayIntegration:
 
     def test_get_display_mode_plain_before_tui(self) -> None:
         """Test --plain takes precedence over --tui."""
-        from mcp_audit.cli import get_display_mode
+        from token_audit.cli import get_display_mode
 
         class MockArgs:
             quiet = False

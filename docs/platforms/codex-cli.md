@@ -1,6 +1,8 @@
 # Codex CLI Platform Guide
 
-This guide explains how to use MCP Audit with [Codex CLI](https://github.com/openai/codex), OpenAI's AI coding assistant.
+This guide explains how to use Token Audit with [Codex CLI](https://github.com/openai/codex), OpenAI's AI coding assistant.
+
+> **v1.0 Feature**: Want to use token-audit as an MCP server inside Codex CLI? See [MCP Server Integration: Codex CLI](../mcp-server-integration/codex-cli.md).
 
 > **📖 See [Codex CLI Setup Guide](../codex-cli-setup.md) for detailed configuration options.**
 
@@ -30,13 +32,13 @@ This guide explains how to use MCP Audit with [Codex CLI](https://github.com/ope
 ## Installation
 
 ```bash
-pipx install mcp-audit
+pipx install token-audit
 ```
 
 Or with pip:
 
 ```bash
-pip install mcp-audit
+pip install token-audit
 ```
 
 ---
@@ -48,7 +50,7 @@ pip install mcp-audit
 Open a new terminal and run:
 
 ```bash
-mcp-audit collect --platform codex-cli
+token-audit collect --platform codex-cli
 ```
 
 ### 2. Use Codex CLI Normally
@@ -59,7 +61,7 @@ In a separate terminal, start Codex:
 codex
 ```
 
-Work as usual. MCP Audit will track:
+Work as usual. Token Audit will track:
 - All model interactions (tokens used)
 - All MCP tool calls (call counts)
 - Cache efficiency (cache read tokens)
@@ -69,7 +71,7 @@ Work as usual. MCP Audit will track:
 When done, press `Ctrl+C` to see the session summary, or generate a report:
 
 ```bash
-mcp-audit report
+token-audit report
 ```
 
 ---
@@ -86,12 +88,12 @@ Codex CLI provides **session-level token counts** with per-tool estimation:
 | Cache tracking | ✅ Read only | Cache creation not reported by OpenAI |
 | Cost estimates | ✅ Accurate | Based on session totals + model pricing |
 
-### Token Estimation (v0.4.0)
+### Token Estimation
 
-MCP Audit uses OpenAI's `tiktoken` library with the `o200k_base` encoding to estimate per-tool token usage:
+Token Audit uses OpenAI's `tiktoken` library with the `o200k_base` encoding to estimate per-tool token usage:
 
 - **Accuracy**: ~99-100% (same tokenizer OpenAI uses)
-- **No setup required**: tiktoken is bundled with mcp-audit
+- **No setup required**: tiktoken is bundled with token-audit
 - **TUI indicator**: Shows "Estimated (tiktoken)" in token panel
 
 ---
@@ -104,14 +106,14 @@ Codex CLI stores sessions at:
 ~/.codex/sessions/YYYY/MM/DD/*.jsonl
 ```
 
-MCP Audit auto-discovers the latest session. Use `--from-start` to include existing data:
+Token Audit auto-discovers the latest session. Use `--from-start` to include existing data:
 
 ```bash
 # Track only new events (default)
-mcp-audit collect --platform codex-cli
+token-audit collect --platform codex-cli
 
 # Include existing session data from the start
-mcp-audit collect --platform codex-cli --from-start
+token-audit collect --platform codex-cli --from-start
 ```
 
 ---
@@ -133,14 +135,14 @@ mcp-audit collect --platform codex-cli --from-start
 
 ```bash
 # Use Catppuccin Mocha theme
-mcp-audit collect --platform codex-cli --theme mocha
+token-audit collect --platform codex-cli --theme mocha
 
 # Available themes: auto, dark, light, mocha, latte, hc-dark, hc-light
 ```
 
 ### Pricing Configuration
 
-Edit `~/.mcp-audit/mcp-audit.toml`:
+Edit `~/.token-audit/token-audit.toml`:
 
 ```toml
 [pricing.openai]
@@ -209,9 +211,9 @@ Tool execution time IS available via `function_call_output` events:
 ## Example Output
 
 ```
-$ mcp-audit collect --platform codex-cli
+$ token-audit collect --platform codex-cli
 
-MCP Audit v0.4.0 - Codex CLI
+Token Audit v1.0.0 - Codex CLI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Project: my-project │ Elapsed: 8m 12s
@@ -259,10 +261,11 @@ head -20 ~/.codex/sessions/2025/12/08/session.jsonl | grep turn_context
 
 ## See Also
 
-- [Getting Started](../GETTING-STARTED.md) - Installation and first session
-- [Feature Reference](../FEATURES.md) - Complete feature guide
-- [Configuration Reference](../CONFIGURATION.md) - CLI options and pricing
-- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues and solutions
+- [MCP Server Integration: Codex CLI](../mcp-server-integration/codex-cli.md) - Use token-audit as an MCP server (v1.0)
+- [Getting Started](../getting-started.md) - Installation and first session
+- [Feature Reference](../features.md) - Complete feature guide
+- [Configuration Reference](../configuration.md) - CLI options and pricing
+- [Troubleshooting](../troubleshooting.md) - Common issues and solutions
 - [Complete Setup Guide](../codex-cli-setup.md) - Detailed configuration options
-- [Architecture](../architecture.md) - How MCP Audit works internally
+- [Architecture](../architecture.md) - How Token Audit works internally
 - [Data Contract](../data-contract.md) - Session schema documentation

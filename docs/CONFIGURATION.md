@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Complete reference for MCP Audit configuration options. For getting started, see [Getting Started](GETTING-STARTED.md).
+Complete reference for Token Audit configuration options. For getting started, see [Getting Started](getting-started.md).
 
 ---
 
@@ -19,22 +19,22 @@ Complete reference for MCP Audit configuration options. For getting started, see
 
 ### File Locations
 
-MCP Audit checks for configuration files in this order:
+Token Audit checks for configuration files in this order:
 
 | Priority | Location | Use Case |
 |----------|----------|----------|
-| 1 | `./mcp-audit.toml` | Project-specific settings |
-| 2 | `~/.mcp-audit/mcp-audit.toml` | User-level defaults |
+| 1 | `./token-audit.toml` | Project-specific settings |
+| 2 | `~/.token-audit/token-audit.toml` | User-level defaults |
 
 ### Creating a Config File
 
 ```bash
 # Create user config directory
-mkdir -p ~/.mcp-audit
+mkdir -p ~/.token-audit
 
 # Create config file
-cat > ~/.mcp-audit/mcp-audit.toml << 'EOF'
-# MCP Audit Configuration
+cat > ~/.token-audit/token-audit.toml << 'EOF'
+# Token Audit Configuration
 
 [pricing.api]
 enabled = true
@@ -48,18 +48,18 @@ EOF
 ### Check Configuration Status
 
 ```bash
-mcp-audit init
+token-audit tokenizer setup
 ```
 
 Output:
 
 ```
-MCP Audit Configuration Status
+Token Audit Configuration Status
 ==============================
-Version: 0.8.0
+Version: 1.0.0
 
 Configuration:
-  File: ~/.mcp-audit/mcp-audit.toml (loaded)
+  File: ~/.token-audit/token-audit.toml (loaded)
 
 Pricing:
   Source: api (fresh)
@@ -79,7 +79,7 @@ Tokenizer:
 Track a live session.
 
 ```bash
-mcp-audit collect [OPTIONS]
+token-audit collect [OPTIONS]
 ```
 
 | Option | Values | Default | Description |
@@ -97,16 +97,16 @@ mcp-audit collect [OPTIONS]
 
 ```bash
 # Basic usage
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 
 # Pin servers to monitor closely
-mcp-audit collect --pin-server zen --pin-server backlog
+token-audit collect --pin-server zen --pin-server backlog
 
 # Dark theme with custom project name
-mcp-audit collect --theme mocha --project my-feature
+token-audit collect --theme mocha --project my-feature
 
 # CI/headless mode
-mcp-audit collect --plain --quiet
+token-audit collect --plain --quiet
 ```
 
 ### report
@@ -114,7 +114,7 @@ mcp-audit collect --plain --quiet
 Generate usage report.
 
 ```bash
-mcp-audit report [PATH] [OPTIONS]
+token-audit report [PATH] [OPTIONS]
 ```
 
 | Option | Values | Default | Description |
@@ -128,88 +128,129 @@ mcp-audit report [PATH] [OPTIONS]
 
 ```bash
 # Basic report
-mcp-audit report ~/.mcp-audit/sessions/
+token-audit report ~/.token-audit/sessions/
 
 # Top 5 tools in JSON
-mcp-audit report --top-n 5 --format json
+token-audit report --top-n 5 --format json
 
 # CSV export for spreadsheet
-mcp-audit report --format csv --output analysis.csv
+token-audit report --format csv --output analysis.csv
 
 # Aggregate all sessions
-mcp-audit report --aggregate
+token-audit report --aggregate
 ```
 
-### smells
+### report --smells
 
 Analyze efficiency patterns across sessions.
 
 ```bash
-mcp-audit smells [PATH] [OPTIONS]
+token-audit report --smells [OPTIONS]
 ```
 
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
-| `--severity` | `info`, `warning`, `error` | *(all)* | Filter by severity |
-| `--pattern` | PATTERN_NAME | *(all)* | Filter by pattern |
-| `--format` | `json`, `markdown` | `markdown` | Output format |
-
-**Examples:**
-
-```bash
-# All smells
-mcp-audit smells ~/.mcp-audit/sessions/
-
-# Warnings and errors only
-mcp-audit smells --severity warning
-
-# Specific pattern
-mcp-audit smells --pattern CHATTY
-```
-
-### export
-
-Export session data for external analysis.
-
-```bash
-mcp-audit export ai-prompt [PATH] [OPTIONS]
-```
-
-| Option | Values | Default | Description |
-|--------|--------|---------|-------------|
-| `--format` | `markdown`, `json` | `markdown` | Output format |
+| `--days` | INT | `30` | Number of days to analyze |
+| `--platform` | `claude-code`, `codex-cli`, `gemini-cli` | *(all)* | Filter by platform |
+| `--project` | TEXT | *(all)* | Filter by project name |
+| `--format` | `text`, `json`, `markdown` | `text` | Output format |
+| `--min-frequency` | FLOAT | `0` | Minimum frequency % to display |
 | `--output` | PATH | stdout | Output file |
 
 **Examples:**
 
 ```bash
-# Export for AI analysis (paste into Claude/ChatGPT)
-mcp-audit export ai-prompt
+# Analyze last 30 days (default)
+token-audit report --smells
 
-# Specific session as JSON
-mcp-audit export ai-prompt path/to/session.json --format json
+# Last 7 days, Claude Code only
+token-audit report --smells --days 7 --platform claude-code
+
+# Export as JSON
+token-audit report --smells --format json --output smells.json
+```
+
+### report --format ai
+
+Export session data for AI assistant analysis.
+
+```bash
+token-audit report --format ai [OPTIONS]
+```
+
+| Option | Values | Default | Description |
+|--------|--------|---------|-------------|
+| `--output` | PATH | stdout | Output file |
+| `--session` | ID | *(latest)* | Specific session to export |
+
+**Examples:**
+
+```bash
+# Export for AI analysis (paste into Claude/ChatGPT)
+token-audit report --format ai
+
+# Specific session
+token-audit report --format ai --session session-2024-01-15
 
 # Save to file
-mcp-audit export ai-prompt --output analysis.md
+token-audit report --format ai --output analysis.md
+```
+
+### best-practices
+
+Export MCP best practices from usage patterns.
+
+```bash
+token-audit best-practices [OPTIONS]
+```
+
+| Option | Values | Default | Description |
+|--------|--------|---------|-------------|
+| `--format` | `json`, `yaml`, `markdown` | `json` | Output format |
+| `--category` | `efficiency`, `security`, `performance`, `all` | `all` | Filter by category |
+| `--output` | PATH | stdout | Output file |
+
+**Examples:**
+
+```bash
+# Export best practices as markdown for AGENTS.md
+token-audit best-practices --format markdown
+
+# Export security-related best practices
+token-audit best-practices --category security
 ```
 
 ### ui
 
-Interactive session browser.
+Interactive session browser with Dashboard, Live monitoring, and Recommendations views (v1.0.0).
 
 ```bash
-mcp-audit ui [OPTIONS]
+token-audit ui [OPTIONS]
 ```
 
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
 | `--theme` | See [themes](#available-themes) | `auto` | Color theme |
+| `--view` | `dashboard`, `sessions`, `recommendations`, `live` | `dashboard` | Initial view to display |
+| `--compact` | flag | auto-detect | Force compact display mode |
+
+**Views (use number keys 1-4 to switch):**
+
+| View | Key | Description |
+|------|-----|-------------|
+| Dashboard | `1` | Today's summary, weekly trends, top smells, recent sessions |
+| Sessions | `2` | Full session list with filtering and sorting |
+| Recommendations | `3` | Optimization suggestions grouped by confidence |
+| Live | `4` | Real-time session monitoring |
 
 **Examples:**
 
 ```bash
-mcp-audit ui
-mcp-audit ui --theme mocha
+token-audit ui                              # Launch to Dashboard (default)
+token-audit ui --view sessions              # Start in session list
+token-audit ui --view live                  # Start in live monitoring
+token-audit ui --compact                    # Force compact display
+token-audit ui --theme mocha                # Use specific theme
 ```
 
 ### tokenizer
@@ -217,23 +258,88 @@ mcp-audit ui --theme mocha
 Manage optional tokenizers.
 
 ```bash
-mcp-audit tokenizer download    # Download Gemma tokenizer (~4MB)
-mcp-audit tokenizer status      # Check availability
+token-audit tokenizer download    # Download Gemma tokenizer (~4MB)
+token-audit tokenizer status      # Check availability
 ```
 
-### init
+### tokenizer setup
 
 Show configuration and pricing status.
 
 ```bash
-mcp-audit init
+token-audit tokenizer setup
+```
+
+### validate
+
+Validate session files against JSON Schema.
+
+```bash
+token-audit validate <session_file> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--schema-only` | Show schema path without validating |
+| `--verbose` | Show detailed validation errors |
+
+**Examples:**
+
+```bash
+# Validate a session file
+token-audit validate ~/.token-audit/sessions/session-2024-01-15.json
+
+# Show schema path
+token-audit validate --schema-only
+
+# Verbose validation errors
+token-audit validate session.json --verbose
+```
+
+### pin
+
+Manage pinned MCP servers for focused analysis.
+
+```bash
+token-audit pin [server_name] [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--list`, `-l` | List all pinned servers |
+| `--remove`, `-r` | Remove a pinned server |
+| `--auto` | Auto-detect servers from MCP config |
+| `--clear` | Clear all pinned servers |
+| `--json` | Output as JSON |
+| `--notes` | Add notes when pinning |
+
+**Examples:**
+
+```bash
+# Pin a server
+token-audit pin zen
+
+# Pin with notes
+token-audit pin brave-search --notes "Monitor for rate limits"
+
+# List pinned servers
+token-audit pin --list
+
+# Auto-detect from config
+token-audit pin --auto
+
+# Remove a pinned server
+token-audit pin --remove zen
+
+# Clear all pinned
+token-audit pin --clear
 ```
 
 ---
 
 ## Pricing Configuration
 
-MCP Audit provides accurate cost estimation through a multi-tier pricing system.
+Token Audit provides accurate cost estimation through a multi-tier pricing system.
 
 ### Pricing Sources (Priority Order)
 
@@ -310,12 +416,12 @@ Fields:
 
 ### Cache Location
 
-API pricing cached at: `~/.mcp-audit/pricing-cache.json`
+API pricing cached at: `~/.token-audit/pricing-cache.json`
 
 Clear cache to force refresh:
 ```bash
-rm ~/.mcp-audit/pricing-cache.json
-mcp-audit init
+rm ~/.token-audit/pricing-cache.json
+token-audit tokenizer setup
 ```
 
 ### Model Pricing Reference
@@ -346,10 +452,10 @@ mcp-audit init
 
 ```bash
 # Per-session
-mcp-audit collect --theme mocha
+token-audit collect --theme mocha
 
 # Session browser
-mcp-audit ui --theme hc-dark
+token-audit ui --theme hc-dark
 ```
 
 ### Accessibility Options
@@ -369,7 +475,7 @@ Detect unused MCP tools that contribute to context overhead.
 ### Configuration
 
 ```toml
-# mcp-audit.toml
+# token-audit.toml
 [zombie_tools.zen]
 tools = [
     "mcp__zen__thinkdeep",
@@ -389,7 +495,7 @@ tools = [
 ### How It Works
 
 1. List known tools per MCP server in config
-2. MCP Audit tracks which tools are actually called
+2. Token Audit tracks which tools are actually called
 3. Uncalled tools are reported as "zombies"
 4. Each zombie adds ~175 tokens to context overhead
 
@@ -409,22 +515,22 @@ tools = [
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_AUDIT_DIR` | `~/.mcp-audit` | Data directory |
+| `TOKEN_AUDIT_DIR` | `~/.token-audit` | Data directory |
 | `NO_COLOR` | *(unset)* | Disable colors when set |
 | `TERM` | *(system)* | Used for theme auto-detection |
 
 ### Custom Data Directory
 
 ```bash
-export MCP_AUDIT_DIR=/custom/path
-mcp-audit collect
+export TOKEN_AUDIT_DIR=/custom/path
+token-audit collect
 # Sessions saved to /custom/path/sessions/
 ```
 
 ### Disable Colors
 
 ```bash
-NO_COLOR=1 mcp-audit collect
+NO_COLOR=1 token-audit collect
 ```
 
 ---
@@ -432,7 +538,7 @@ NO_COLOR=1 mcp-audit collect
 ## Complete Example Configuration
 
 ```toml
-# ~/.mcp-audit/mcp-audit.toml
+# ~/.token-audit/token-audit.toml
 
 # Dynamic pricing from LiteLLM API
 [pricing.api]
@@ -504,8 +610,8 @@ pip install toml
 ```
 Python 3.11+ has built-in `tomllib`.
 
-See [Troubleshooting Guide](TROUBLESHOOTING.md) for more issues.
+See [Troubleshooting Guide](troubleshooting.md) for more issues.
 
 ---
 
-*For feature details, see [Feature Reference](FEATURES.md). For getting started, see [Getting Started](GETTING-STARTED.md).*
+*For feature details, see [Feature Reference](features.md). For getting started, see [Getting Started](getting-started.md).*

@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from mcp_audit.base_tracker import ServerSession, Session, ToolStats
-from mcp_audit.zombie_detector import (
+from token_audit.base_tracker import ServerSession, Session, ToolStats
+from token_audit.zombie_detector import (
     ZombieToolConfig,
     detect_zombie_tools,
     load_zombie_config,
@@ -264,7 +264,7 @@ class TestSessionFinalizationIntegration:
 
     def test_finalize_session_populates_zombie_tools(self) -> None:
         """Test that finalize_session runs zombie detection."""
-        from mcp_audit.base_tracker import BaseTracker
+        from token_audit.base_tracker import BaseTracker
 
         class TestTracker(BaseTracker):
             def start(self) -> None:

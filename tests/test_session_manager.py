@@ -9,8 +9,8 @@ import pytest
 import json
 from pathlib import Path
 from datetime import datetime
-from mcp_audit.session_manager import SessionManager, save_session, load_session
-from mcp_audit.base_tracker import (
+from token_audit.session_manager import SessionManager, save_session, load_session
+from token_audit.base_tracker import (
     Session,
     ServerSession,
     ToolStats,
@@ -122,7 +122,7 @@ class TestSessionPersistence:
 
         # Check _file header exists (v1.1.0)
         assert "_file" in data
-        assert data["_file"]["type"] == "mcp_audit_session"
+        assert data["_file"]["type"] == "token_audit_session"
         assert data["_file"]["schema_version"].startswith("1.")  # v1.x compatible
 
         # Check session block (v1.1.0)
@@ -324,15 +324,21 @@ class TestSessionCleanup:
 
     def test_cleanup_old_sessions(self, temp_session_dir) -> None:
         """Test cleaning up old sessions (v1.0.0 format)"""
+        from datetime import date, timedelta
+
         manager = SessionManager(base_dir=temp_session_dir)
 
         # Create old session directory (v1.0.0 format with timestamp in name)
-        old_dir = temp_session_dir / "test-2025-09-20-100000"
+        # Use date 60 days ago (should be deleted with 30 day max_age)
+        old_date = (date.today() - timedelta(days=60)).strftime("%Y-%m-%d")
+        old_dir = temp_session_dir / f"test-{old_date}-100000"
         old_dir.mkdir()
         (old_dir / "summary.json").write_text('{"schema_version": "1.0.0"}')
 
         # Create recent session directory (v1.0.0 format)
-        recent_dir = temp_session_dir / "test-2025-11-24-100000"
+        # Use date 10 days ago (should NOT be deleted with 30 day max_age)
+        recent_date = (date.today() - timedelta(days=10)).strftime("%Y-%m-%d")
+        recent_dir = temp_session_dir / f"test-{recent_date}-100000"
         recent_dir.mkdir()
         (recent_dir / "summary.json").write_text('{"schema_version": "1.0.0"}')
 

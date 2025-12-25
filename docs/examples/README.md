@@ -1,6 +1,6 @@
 # Usage Examples
 
-Real-world scenarios demonstrating MCP Audit capabilities. Each example includes a problem statement, step-by-step solution, and key takeaways.
+Real-world scenarios demonstrating Token Audit capabilities. Each example includes a problem statement, step-by-step solution, and key takeaways.
 
 ---
 
@@ -20,19 +20,19 @@ Real-world scenarios demonstrating MCP Audit capabilities. Each example includes
 ## Prerequisites
 
 All examples assume:
-- MCP Audit installed (`pipx install mcp-audit`)
+- Token Audit installed (`pipx install token-audit`)
 - At least one supported platform (Claude Code, Codex CLI, or Gemini CLI)
-- Familiarity with [Getting Started](../GETTING-STARTED.md)
+- Familiarity with [Getting Started](../getting-started.md)
 
 ---
 
 ## Quick Links
 
-- [Getting Started](../GETTING-STARTED.md) — Installation and first session
-- [Feature Reference](../FEATURES.md) — Complete feature guide
-- [Configuration Reference](../CONFIGURATION.md) — CLI options and settings
-- [Troubleshooting](../TROUBLESHOOTING.md) — Common issues
+- [Getting Started](../getting-started.md) — Installation and first session
+- [Feature Reference](../features.md) — Complete feature guide
+- [Configuration Reference](../configuration.md) — CLI options and settings
+- [Troubleshooting](../troubleshooting.md) — Common issues
 
 ---
 
-*Have a use case you'd like to see documented? [Start a discussion](https://github.com/littlebearapps/mcp-audit/discussions/new?category=ideas).*
+*Have a use case you'd like to see documented? [Start a discussion](https://github.com/littlebearapps/token-audit/discussions/new?category=ideas).*

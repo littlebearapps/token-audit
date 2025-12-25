@@ -8,7 +8,7 @@ Tests BaseTracker abstract class and shared functionality.
 import pytest
 from datetime import datetime
 from pathlib import Path
-from mcp_audit.base_tracker import (
+from token_audit.base_tracker import (
     BaseTracker,
     Session,
     ServerSession,
@@ -558,7 +558,7 @@ class TestPersistence:
         # v1.1.0: has _file header
         assert "_file" in data
         assert data["_file"]["schema_version"] == SCHEMA_VERSION
-        assert data["_file"]["type"] == "mcp_audit_session"
+        assert data["_file"]["type"] == "token_audit_session"
 
         # v1.1.0: has session block
         assert "session" in data
@@ -1323,7 +1323,7 @@ class TestDataQualityPerPlatform:
 
     def test_claude_code_data_quality_exact(self, tmp_path) -> None:
         """Test Claude Code adapter sets data_quality to exact/native"""
-        from mcp_audit.claude_code_adapter import ClaudeCodeAdapter
+        from token_audit.claude_code_adapter import ClaudeCodeAdapter
 
         # Create mock Claude directory structure for CI
         mock_claude_dir = tmp_path / "claude"
@@ -1339,7 +1339,7 @@ class TestDataQualityPerPlatform:
 
     def test_codex_cli_data_quality_estimated(self, tmp_path, monkeypatch) -> None:
         """Test Codex CLI adapter sets data_quality to estimated/tiktoken"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         # Create mock Codex directory structure for CI
         mock_codex_dir = tmp_path / ".codex"
@@ -1355,9 +1355,14 @@ class TestDataQualityPerPlatform:
         assert adapter.session.data_quality.confidence == 0.99
         assert "tiktoken" in adapter.session.data_quality.notes
 
-    def test_gemini_cli_data_quality_estimated(self, tmp_path, monkeypatch) -> None:
-        """Test Gemini CLI adapter sets data_quality to estimated"""
-        from mcp_audit.gemini_cli_adapter import GeminiCLIAdapter
+    def test_gemini_cli_data_quality(self, tmp_path, monkeypatch) -> None:
+        """Test Gemini CLI adapter sets data_quality appropriately.
+
+        With sentencepiece installed (which is a core dependency), the Gemma
+        tokenizer is available and returns 'exact' accuracy. Without the
+        tokenizer file, it falls back to 'estimated'.
+        """
+        from token_audit.gemini_cli_adapter import GeminiCLIAdapter
 
         # Create mock Gemini directory structure for CI
         mock_gemini_dir = tmp_path / ".gemini"
@@ -1367,7 +1372,9 @@ class TestDataQualityPerPlatform:
         adapter = GeminiCLIAdapter(project="test")
 
         assert adapter.session.data_quality is not None
-        assert adapter.session.data_quality.accuracy_level == "estimated"
+        # Accuracy level depends on whether Gemma tokenizer is available
+        # With sentencepiece installed, it's 'exact'; without, it's 'estimated'
+        assert adapter.session.data_quality.accuracy_level in ["exact", "estimated"]
         # Token source depends on whether Gemma tokenizer is available
         assert adapter.session.data_quality.token_source in ["sentencepiece", "tiktoken"]
         # Confidence is 1.0 for Gemma, 0.95 for tiktoken fallback
@@ -1377,7 +1384,7 @@ class TestDataQualityPerPlatform:
         """Test data_quality block appears in saved session JSON"""
         import json
 
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         # Create mock Codex directory structure for CI
         mock_codex_dir = tmp_path / ".codex"
@@ -1405,7 +1412,7 @@ class TestDataQualityPricingFields:
 
     def test_data_quality_has_pricing_fields(self) -> None:
         """Test DataQuality has pricing_source and pricing_freshness fields"""
-        from mcp_audit.base_tracker import DataQuality
+        from token_audit.base_tracker import DataQuality
 
         dq = DataQuality()
         assert hasattr(dq, "pricing_source")
@@ -1415,7 +1422,7 @@ class TestDataQualityPricingFields:
 
     def test_data_quality_pricing_to_dict(self) -> None:
         """Test pricing fields are included in to_dict()"""
-        from mcp_audit.base_tracker import DataQuality
+        from token_audit.base_tracker import DataQuality
 
         dq = DataQuality(
             accuracy_level="exact",
@@ -1430,7 +1437,7 @@ class TestDataQualityPricingFields:
 
     def test_finalize_session_sets_pricing_from_config(self, tmp_path, monkeypatch) -> None:
         """Test finalize_session() populates pricing fields from pricing_config"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         # Create mock Codex directory structure for CI
         mock_codex_dir = tmp_path / ".codex"
@@ -1454,7 +1461,7 @@ class TestDataQualityPricingFields:
         """Test pricing fields appear in saved session JSON"""
         import json
 
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         # Create mock Codex directory structure for CI
         mock_codex_dir = tmp_path / ".codex"
@@ -1483,7 +1490,7 @@ class TestMultiModelDataStructures:
 
     def test_call_has_model_field(self) -> None:
         """Test Call dataclass has model field"""
-        from mcp_audit.base_tracker import Call
+        from token_audit.base_tracker import Call
 
         call = Call()
         assert hasattr(call, "model")
@@ -1491,14 +1498,14 @@ class TestMultiModelDataStructures:
 
     def test_call_model_can_be_set(self) -> None:
         """Test Call.model can be set"""
-        from mcp_audit.base_tracker import Call
+        from token_audit.base_tracker import Call
 
         call = Call(model="claude-sonnet-4-20250514")
         assert call.model == "claude-sonnet-4-20250514"
 
     def test_call_to_dict_includes_model_when_set(self) -> None:
         """Test Call.to_dict() includes model when present"""
-        from mcp_audit.base_tracker import Call
+        from token_audit.base_tracker import Call
 
         call = Call(
             index=1,
@@ -1511,7 +1518,7 @@ class TestMultiModelDataStructures:
 
     def test_call_to_dict_excludes_model_when_none(self) -> None:
         """Test Call.to_dict() excludes model when None (file size optimization)"""
-        from mcp_audit.base_tracker import Call
+        from token_audit.base_tracker import Call
 
         call = Call(
             index=1,
@@ -1524,7 +1531,7 @@ class TestMultiModelDataStructures:
 
     def test_session_has_models_used_field(self) -> None:
         """Test Session has models_used field"""
-        from mcp_audit.base_tracker import Session
+        from token_audit.base_tracker import Session
 
         session = Session()
         assert hasattr(session, "models_used")
@@ -1532,7 +1539,7 @@ class TestMultiModelDataStructures:
 
     def test_session_has_model_usage_field(self) -> None:
         """Test Session has model_usage field"""
-        from mcp_audit.base_tracker import Session
+        from token_audit.base_tracker import Session
 
         session = Session()
         assert hasattr(session, "model_usage")
@@ -1540,7 +1547,7 @@ class TestMultiModelDataStructures:
 
     def test_model_usage_dataclass(self) -> None:
         """Test ModelUsage dataclass exists and has expected fields"""
-        from mcp_audit.base_tracker import ModelUsage
+        from token_audit.base_tracker import ModelUsage
 
         usage = ModelUsage(
             model="claude-sonnet-4-20250514",
@@ -1563,7 +1570,7 @@ class TestMultiModelDataStructures:
 
     def test_model_usage_to_dict(self) -> None:
         """Test ModelUsage.to_dict() returns expected format"""
-        from mcp_audit.base_tracker import ModelUsage
+        from token_audit.base_tracker import ModelUsage
 
         usage = ModelUsage(
             model="claude-sonnet-4-20250514",
@@ -1586,7 +1593,7 @@ class TestMultiModelDataStructures:
 
     def test_session_to_dict_includes_models_used(self) -> None:
         """Test Session.to_dict() includes models_used in session block"""
-        from mcp_audit.base_tracker import Session
+        from token_audit.base_tracker import Session
 
         session = Session()
         session.models_used = ["claude-sonnet-4-20250514", "claude-opus-4-5-20251101"]
@@ -1598,7 +1605,7 @@ class TestMultiModelDataStructures:
 
     def test_session_to_dict_includes_model_usage(self) -> None:
         """Test Session.to_dict() includes model_usage block when populated"""
-        from mcp_audit.base_tracker import ModelUsage, Session
+        from token_audit.base_tracker import ModelUsage, Session
 
         session = Session()
         session.model_usage = {
@@ -1625,7 +1632,7 @@ class TestMultiModelDataStructures:
 
     def test_session_to_dict_excludes_model_usage_when_empty(self) -> None:
         """Test Session.to_dict() excludes model_usage when empty"""
-        from mcp_audit.base_tracker import Session
+        from token_audit.base_tracker import Session
 
         session = Session()
         session.model_usage = {}  # Empty
@@ -1634,7 +1641,7 @@ class TestMultiModelDataStructures:
 
     def test_session_to_dict_models_used_empty_list(self) -> None:
         """Test Session.to_dict() includes empty models_used when not populated"""
-        from mcp_audit.base_tracker import Session
+        from token_audit.base_tracker import Session
 
         session = Session()
         result = session.to_dict()
@@ -1646,7 +1653,7 @@ class TestMultiModelAggregation:
 
     def test_record_tool_call_accepts_model_param(self, tmp_path, monkeypatch) -> None:
         """Test record_tool_call accepts model parameter"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1668,7 +1675,7 @@ class TestMultiModelAggregation:
 
     def test_finalize_session_aggregates_by_model(self, tmp_path, monkeypatch) -> None:
         """Test finalize_session aggregates tokens by model"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1718,7 +1725,7 @@ class TestMultiModelAggregation:
 
     def test_finalize_session_fallback_to_session_model(self, tmp_path, monkeypatch) -> None:
         """Test finalize_session uses session model when call model is None"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1743,7 +1750,7 @@ class TestMultiModelAggregation:
 
     def test_finalize_session_fallback_to_unknown(self, tmp_path, monkeypatch) -> None:
         """Test finalize_session uses 'unknown' when no model info available"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1766,7 +1773,7 @@ class TestMultiModelAggregation:
 
     def test_models_used_includes_session_model_no_tool_calls(self, tmp_path, monkeypatch) -> None:
         """Test models_used includes session model even with no MCP tool calls (task-123)"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1788,7 +1795,7 @@ class TestMultiModelAggregation:
         self, tmp_path, monkeypatch
     ) -> None:
         """Test models_used includes both session model and tool call models (task-123)"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1814,7 +1821,7 @@ class TestMultiModelAggregation:
 
     def test_single_model_session_backward_compatible(self, tmp_path, monkeypatch) -> None:
         """Test single-model sessions work correctly (backward compatibility)"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         # Create mock Codex directory for CI
         mock_codex_dir = tmp_path / ".codex"
@@ -1850,7 +1857,7 @@ class TestMultiModelAggregation:
         """Test model_usage is correctly serialized in session JSON"""
         import json
 
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1897,7 +1904,7 @@ class TestMultiModelTUIDisplay:
 
     def test_convert_model_usage_for_snapshot_empty(self, tmp_path, monkeypatch) -> None:
         """Test _convert_model_usage_for_snapshot returns None for empty model_usage"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1910,7 +1917,7 @@ class TestMultiModelTUIDisplay:
 
     def test_convert_model_usage_for_snapshot_single_model(self, tmp_path, monkeypatch) -> None:
         """Test _convert_model_usage_for_snapshot with single model"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1938,7 +1945,7 @@ class TestMultiModelTUIDisplay:
 
     def test_convert_model_usage_for_snapshot_multi_model(self, tmp_path, monkeypatch) -> None:
         """Test _convert_model_usage_for_snapshot with multiple models"""
-        from mcp_audit.codex_cli_adapter import CodexCLIAdapter
+        from token_audit.codex_cli_adapter import CodexCLIAdapter
 
         mock_codex_dir = tmp_path / ".codex"
         mock_codex_dir.mkdir(parents=True)
@@ -1980,7 +1987,7 @@ class TestMultiModelTUIDisplay:
 
     def test_display_snapshot_multi_model_fields(self) -> None:
         """Test DisplaySnapshot has multi-model fields"""
-        from mcp_audit.display.snapshot import DisplaySnapshot
+        from token_audit.display.snapshot import DisplaySnapshot
 
         # Create snapshot with multi-model data
         snapshot = DisplaySnapshot.create(
@@ -2004,7 +2011,7 @@ class TestMultiModelTUIDisplay:
 
     def test_display_snapshot_single_model_defaults(self) -> None:
         """Test DisplaySnapshot defaults for single model (backward compatible)"""
-        from mcp_audit.display.snapshot import DisplaySnapshot
+        from token_audit.display.snapshot import DisplaySnapshot
 
         # Create snapshot without multi-model data
         snapshot = DisplaySnapshot.create(
@@ -2026,7 +2033,7 @@ class TestStaticCostDataStructure:
 
     def test_static_cost_creation_default(self) -> None:
         """Test StaticCost can be created with defaults"""
-        from mcp_audit.base_tracker import StaticCost
+        from token_audit.base_tracker import StaticCost
 
         static_cost = StaticCost()
 
@@ -2037,7 +2044,7 @@ class TestStaticCostDataStructure:
 
     def test_static_cost_creation_with_values(self) -> None:
         """Test StaticCost can be created with custom values"""
-        from mcp_audit.base_tracker import StaticCost
+        from token_audit.base_tracker import StaticCost
 
         static_cost = StaticCost(
             total_tokens=5000,
@@ -2054,7 +2061,7 @@ class TestStaticCostDataStructure:
 
     def test_static_cost_to_dict(self) -> None:
         """Test StaticCost.to_dict() produces correct output"""
-        from mcp_audit.base_tracker import StaticCost
+        from token_audit.base_tracker import StaticCost
 
         static_cost = StaticCost(
             total_tokens=3000,
@@ -2072,7 +2079,7 @@ class TestStaticCostDataStructure:
 
     def test_session_has_static_cost_field(self) -> None:
         """Test Session has optional static_cost field"""
-        from mcp_audit.base_tracker import Session, StaticCost
+        from token_audit.base_tracker import Session, StaticCost
 
         session = Session()
 
@@ -2086,7 +2093,7 @@ class TestStaticCostDataStructure:
 
     def test_session_to_dict_includes_static_cost_when_set(self) -> None:
         """Test Session.to_dict() includes static_cost when set"""
-        from mcp_audit.base_tracker import Session, StaticCost
+        from token_audit.base_tracker import Session, StaticCost
 
         session = Session()
         session.static_cost = StaticCost(
@@ -2104,7 +2111,7 @@ class TestStaticCostDataStructure:
 
     def test_session_to_dict_excludes_static_cost_when_none(self) -> None:
         """Test Session.to_dict() excludes static_cost when None"""
-        from mcp_audit.base_tracker import Session
+        from token_audit.base_tracker import Session
 
         session = Session()
         session.static_cost = None

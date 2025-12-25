@@ -1,6 +1,8 @@
 # Gemini CLI Platform Guide
 
-This guide explains how to use MCP Audit with [Gemini CLI](https://github.com/google-gemini/gemini-cli), Google's AI coding assistant.
+This guide explains how to use Token Audit with [Gemini CLI](https://github.com/google-gemini/gemini-cli), Google's AI coding assistant.
+
+> **v1.0 Feature**: Want to use token-audit as an MCP server inside Gemini CLI? See [MCP Server Integration: Gemini CLI](../mcp-server-integration/gemini-cli.md).
 
 > **📖 See [Gemini CLI Setup Guide](../gemini-cli-setup.md) for detailed configuration options.**
 
@@ -30,13 +32,13 @@ This guide explains how to use MCP Audit with [Gemini CLI](https://github.com/go
 ## Installation
 
 ```bash
-pipx install mcp-audit
+pipx install token-audit
 ```
 
 Or with pip:
 
 ```bash
-pip install mcp-audit
+pip install token-audit
 ```
 
 ### Optional: Gemma Tokenizer (100% Accuracy)
@@ -44,10 +46,10 @@ pip install mcp-audit
 For exact token counts, download the Gemma tokenizer:
 
 ```bash
-mcp-audit tokenizer download
+token-audit tokenizer download
 ```
 
-This downloads ~4MB from GitHub Releases (no account required). Without it, mcp-audit uses tiktoken (~95% accuracy).
+This downloads ~4MB from GitHub Releases (no account required). Without it, token-audit uses tiktoken (~95% accuracy).
 
 ---
 
@@ -59,10 +61,10 @@ Open a new terminal **in your project directory** and run:
 
 ```bash
 cd /path/to/your/project
-mcp-audit collect --platform gemini-cli
+token-audit collect --platform gemini-cli
 ```
 
-> **Important**: Run from your project directory so MCP Audit can auto-detect the project hash.
+> **Important**: Run from your project directory so Token Audit can auto-detect the project hash.
 
 ### 2. Use Gemini CLI Normally
 
@@ -73,7 +75,7 @@ cd /path/to/your/project
 gemini
 ```
 
-Work as usual. MCP Audit will track:
+Work as usual. Token Audit will track:
 - All model interactions (tokens used)
 - All MCP tool calls (call counts + estimated tokens)
 - Thinking/reasoning tokens (Gemini 2.0+)
@@ -83,7 +85,7 @@ Work as usual. MCP Audit will track:
 When done, press `Ctrl+C` to see the session summary, or generate a report:
 
 ```bash
-mcp-audit report
+token-audit report
 ```
 
 ---
@@ -100,13 +102,13 @@ Gemini CLI provides **message-level token counts** with per-tool estimation:
 | Cache tracking | ✅ Read only | Cache creation not reported |
 | Cost estimates | ✅ Accurate | Based on session totals + model pricing |
 
-### Token Estimation (v0.4.0)
+### Token Estimation
 
-MCP Audit supports two accuracy levels for per-tool token estimation:
+Token Audit supports two accuracy levels for per-tool token estimation:
 
 | Mode | Accuracy | Requirement |
 |------|----------|-------------|
-| With Gemma tokenizer | **100%** | `mcp-audit tokenizer download` |
+| With Gemma tokenizer | **100%** | `token-audit tokenizer download` |
 | Without tokenizer | **~95%** | None (works immediately) |
 
 **With Gemma tokenizer**:
@@ -123,10 +125,10 @@ MCP Audit supports two accuracy levels for per-tool token estimation:
 
 ```bash
 # Download from GitHub Releases (recommended)
-mcp-audit tokenizer download
+token-audit tokenizer download
 
 # Check status
-mcp-audit tokenizer status
+token-audit tokenizer status
 
 # For corporate networks, see manual install guide
 ```
@@ -143,15 +145,14 @@ Gemini CLI stores sessions per-project using a SHA256 hash:
 ~/.gemini/tmp/<project_hash>/chats/session-*.json
 ```
 
-MCP Audit auto-detects the hash from your current directory, or you can specify:
+Token Audit auto-detects the hash from your current directory:
 
 ```bash
 # Include existing session data (not just new events)
-mcp-audit collect --platform gemini-cli --from-start
-
-# Specify project hash manually
-mcp-audit collect --platform gemini-cli --project-hash abc123...
+token-audit collect --platform gemini-cli --from-start
 ```
+
+> **Note**: Always run token-audit from the same directory as your Gemini CLI session for correct project detection.
 
 ---
 
@@ -159,7 +160,7 @@ mcp-audit collect --platform gemini-cli --project-hash abc123...
 
 Gemini CLI provides detailed token breakdowns per message:
 
-| Gemini Token | MCP Audit Field | Description |
+| Gemini Token | Token Audit Field | Description |
 |--------------|-----------------|-------------|
 | `input` | `input_tokens` | Prompts and context |
 | `output` | `output_tokens` | Model responses |
@@ -175,14 +176,14 @@ Gemini CLI provides detailed token breakdowns per message:
 
 ```bash
 # Use Catppuccin Mocha theme
-mcp-audit collect --platform gemini-cli --theme mocha
+token-audit collect --platform gemini-cli --theme mocha
 
 # Available themes: auto, dark, light, mocha, latte, hc-dark, hc-light
 ```
 
 ### Pricing Configuration
 
-Edit `~/.mcp-audit/mcp-audit.toml`:
+Edit `~/.token-audit/token-audit.toml`:
 
 ```toml
 [pricing.gemini]
@@ -221,9 +222,9 @@ Built-in tools appear in the "Built-in Tools" count, not the MCP server hierarch
 ## Example Output
 
 ```
-$ mcp-audit collect --platform gemini-cli
+$ token-audit collect --platform gemini-cli
 
-MCP Audit v0.4.0 - Gemini CLI
+Token Audit v1.0.0 - Gemini CLI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Project: my-project │ Elapsed: 15m 22s
@@ -266,18 +267,14 @@ Built-in Tools: 67 calls
 
 ### Wrong Project Hash
 
-Ensure you're in the correct directory when running MCP Audit:
+Ensure you're in the correct directory when running Token Audit:
 
 ```bash
 cd /path/to/your/project
-mcp-audit collect --platform gemini-cli
+token-audit collect --platform gemini-cli
 ```
 
-Or specify the hash manually:
-
-```bash
-mcp-audit collect --platform gemini-cli --project-hash <correct-hash>
-```
+Token Audit auto-detects the project hash from your current working directory. If detection fails, verify you're running from the same directory where you started Gemini CLI.
 
 ### Tokenizer Not Found
 
@@ -285,21 +282,22 @@ If you see "Estimated (tiktoken)" instead of "Estimated (Gemma)":
 
 ```bash
 # Check tokenizer status
-mcp-audit tokenizer status
+token-audit tokenizer status
 
 # Download if missing
-mcp-audit tokenizer download
+token-audit tokenizer download
 ```
 
 ---
 
 ## See Also
 
-- [Getting Started](../GETTING-STARTED.md) - Installation and first session
-- [Feature Reference](../FEATURES.md) - Complete feature guide
-- [Configuration Reference](../CONFIGURATION.md) - CLI options and pricing
-- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues and solutions
+- [MCP Server Integration: Gemini CLI](../mcp-server-integration/gemini-cli.md) - Use token-audit as an MCP server (v1.0)
+- [Getting Started](../getting-started.md) - Installation and first session
+- [Feature Reference](../features.md) - Complete feature guide
+- [Configuration Reference](../configuration.md) - CLI options and pricing
+- [Troubleshooting](../troubleshooting.md) - Common issues and solutions
 - [Complete Setup Guide](../gemini-cli-setup.md) - Detailed configuration options
 - [Manual Tokenizer Install](../manual-tokenizer-install.md) - For corporate networks
-- [Architecture](../architecture.md) - How MCP Audit works internally
+- [Architecture](../architecture.md) - How Token Audit works internally
 - [Data Contract](../data-contract.md) - Session schema documentation

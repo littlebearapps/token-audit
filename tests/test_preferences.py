@@ -1,4 +1,4 @@
-"""Tests for mcp_audit.preferences module.
+"""Tests for token_audit.preferences module.
 
 v0.7.0 - task-105.3, task-105.4
 """
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_audit.preferences import (
+from token_audit.preferences import (
     MAX_PINNED_SESSIONS,
     PREFERENCES_SCHEMA_VERSION,
     Preferences,

@@ -1,6 +1,6 @@
 # Performance Profiling Guide
 
-This guide covers how to measure and optimize mcp-audit performance.
+This guide covers how to measure and optimize token-audit performance.
 
 ## Performance Targets (v0.9.0)
 
@@ -10,6 +10,20 @@ This guide covers how to measure and optimize mcp-audit performance.
 | Session load (1000 calls) | <500ms | ~2ms |
 | Report generation (100 sessions) | <2s | ~20ms |
 | Live tracking memory | <100MB | ~1MB |
+
+## MCP Server Performance Targets (v1.0.0)
+
+| Tool | Target | Description |
+|------|--------|-------------|
+| `start_tracking` | <100ms | Initialize live session tracker |
+| `get_metrics` | <100ms | Retrieve current session metrics |
+| `get_recommendations` | <100ms | Generate efficiency recommendations |
+| `analyze_session` | <200ms | Deep session analysis with smells |
+| `get_best_practices` | <50ms | Return cached best practices (no search) |
+| `get_best_practices` (search) | <100ms | Search best practices by query |
+| `analyze_config` | <100ms | Discover and analyze MCP configs |
+| `get_trends` | <200ms | Cross-session smell aggregation |
+| JSONL streaming | >1000 events/sec | Event processing throughput |
 
 ## Running Benchmarks
 
@@ -44,8 +58,8 @@ python -c "
 import cProfile
 import pstats
 from datetime import datetime
-from mcp_audit.display.rich_display import RichDisplay
-from mcp_audit.display.snapshot import DisplaySnapshot
+from token_audit.display.rich_display import RichDisplay
+from token_audit.display.snapshot import DisplaySnapshot
 
 # Create test snapshot
 snapshot = DisplaySnapshot.create(
@@ -79,14 +93,14 @@ python -c "
 import cProfile
 import pstats
 from pathlib import Path
-from mcp_audit.session_manager import SessionManager
+from token_audit.session_manager import SessionManager
 
 manager = SessionManager()
 
 # Profile session load
 profiler = cProfile.Profile()
 profiler.enable()
-session = manager.load_session(Path('~/.mcp-audit/sessions/claude_code/').expanduser())
+session = manager.load_session(Path('~/.token-audit/sessions/claude_code/').expanduser())
 profiler.disable()
 
 stats = pstats.Stats(profiler)
@@ -101,8 +115,8 @@ stats.print_stats(20)
 
 ```python
 import tracemalloc
-from mcp_audit.display.rich_display import RichDisplay
-from mcp_audit.display.snapshot import DisplaySnapshot
+from token_audit.display.rich_display import RichDisplay
+from token_audit.display.snapshot import DisplaySnapshot
 
 tracemalloc.start()
 
@@ -169,9 +183,19 @@ tests/benchmarks/
     │   ├── test_display_snapshot_memory
     │   ├── test_tui_memory_usage
     │   └── test_session_load_memory
-    └── TestBaselineMeasurements     # Baseline tracking
-        ├── test_measure_index_update_baseline
-        └── test_measure_snapshot_creation_baseline
+    ├── TestBaselineMeasurements     # Baseline tracking
+    │   ├── test_measure_index_update_baseline
+    │   └── test_measure_snapshot_creation_baseline
+    └── TestMCPServerPerformance     # MCP server tool benchmarks (v1.0)
+        ├── test_start_tracking_response_time
+        ├── test_get_metrics_response_time
+        ├── test_get_recommendations_response_time
+        ├── test_analyze_session_response_time
+        ├── test_get_best_practices_response_time
+        ├── test_get_best_practices_search_response_time
+        ├── test_analyze_config_response_time
+        ├── test_get_trends_response_time
+        └── test_jsonl_streaming_throughput
 ```
 
 ## Adding New Benchmarks

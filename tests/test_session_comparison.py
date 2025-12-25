@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_audit.display.session_browser import (
+from token_audit.display.session_browser import (
     BrowserMode,
     BrowserState,
     ComparisonData,
@@ -193,7 +193,7 @@ class TestComparisonDataDataclass:
 class TestSessionBrowserSelection:
     """Tests for session selection in SessionBrowser."""
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_toggle_selection_adds_session(self, mock_theme) -> None:
         """Test _toggle_session_selection adds session when not selected."""
         mock_theme.return_value = MagicMock()
@@ -208,7 +208,7 @@ class TestSessionBrowserSelection:
 
         assert 0 in browser.state.selected_sessions
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_toggle_selection_removes_session(self, mock_theme) -> None:
         """Test _toggle_session_selection removes session when already selected."""
         mock_theme.return_value = MagicMock()
@@ -224,7 +224,7 @@ class TestSessionBrowserSelection:
 
         assert 0 not in browser.state.selected_sessions
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_toggle_selection_empty_sessions(self, mock_theme) -> None:
         """Test _toggle_session_selection does nothing with empty session list."""
         mock_theme.return_value = MagicMock()
@@ -247,7 +247,7 @@ class TestSessionBrowserSelection:
 class TestOpenComparisonView:
     """Tests for opening comparison view."""
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_open_comparison_requires_two_sessions(self, mock_theme) -> None:
         """Test _open_comparison_view shows warning if < 2 sessions selected."""
         mock_theme.return_value = MagicMock()
@@ -266,7 +266,7 @@ class TestOpenComparisonView:
         assert browser._notification is not None
         assert browser._notification.level == "warning"
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_open_comparison_changes_mode(self, mock_theme) -> None:
         """Test _open_comparison_view changes to COMPARISON mode."""
         mock_theme.return_value = MagicMock()
@@ -303,7 +303,7 @@ class TestOpenComparisonView:
 class TestComputeComparisonData:
     """Tests for _compute_comparison_data method."""
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_compute_requires_two_sessions(self, mock_theme) -> None:
         """Test _compute_comparison_data returns None if < 2 sessions."""
         mock_theme.return_value = MagicMock()
@@ -316,7 +316,7 @@ class TestComputeComparisonData:
         result = browser._compute_comparison_data()
         assert result is None
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_compute_token_deltas(self, mock_theme) -> None:
         """Test token delta computation."""
         mock_theme.return_value = MagicMock()
@@ -342,7 +342,7 @@ class TestComputeComparisonData:
             # 150000 - 100000 = 50000
             assert result.token_deltas[0] == 50000
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_compute_mcp_share_deltas(self, mock_theme) -> None:
         """Test MCP share delta computation."""
         mock_theme.return_value = MagicMock()
@@ -383,7 +383,7 @@ class TestComputeComparisonData:
 class TestSmellMatrix:
     """Tests for smell matrix computation."""
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_smell_matrix_empty_when_no_smells(self, mock_theme) -> None:
         """Test smell matrix is empty when no smells detected."""
         mock_theme.return_value = MagicMock()
@@ -408,7 +408,7 @@ class TestSmellMatrix:
             assert result is not None
             assert result.smell_matrix == {}
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_smell_matrix_baseline_only(self, mock_theme) -> None:
         """Test smell matrix when only baseline has smell."""
         mock_theme.return_value = MagicMock()
@@ -440,7 +440,7 @@ class TestSmellMatrix:
             assert "HIGH_VARIANCE" in result.smell_matrix
             assert result.smell_matrix["HIGH_VARIANCE"] == [True, False]
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_smell_matrix_both_sessions(self, mock_theme) -> None:
         """Test smell matrix when both sessions have smells."""
         mock_theme.return_value = MagicMock()
@@ -492,7 +492,7 @@ class TestSmellMatrix:
 class TestToolChanges:
     """Tests for tool changes computation."""
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_tool_changes_computed(self, mock_theme) -> None:
         """Test that tool changes are computed correctly."""
         mock_theme.return_value = MagicMock()
@@ -542,7 +542,7 @@ class TestToolChanges:
 class TestLoadSessionData:
     """Tests for _load_session_data method."""
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_load_valid_json(self, mock_theme) -> None:
         """Test loading valid session JSON."""
         mock_theme.return_value = MagicMock()
@@ -558,7 +558,7 @@ class TestLoadSessionData:
             assert result is not None
             assert "token_usage" in result
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_load_invalid_json(self, mock_theme) -> None:
         """Test loading invalid JSON returns None."""
         mock_theme.return_value = MagicMock()
@@ -572,7 +572,7 @@ class TestLoadSessionData:
 
             assert result is None
 
-    @patch("mcp_audit.display.session_browser.get_active_theme")
+    @patch("token_audit.display.session_browser.get_active_theme")
     def test_load_missing_file(self, mock_theme) -> None:
         """Test loading missing file returns None."""
         mock_theme.return_value = MagicMock()

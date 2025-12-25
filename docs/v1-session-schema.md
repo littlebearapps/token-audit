@@ -1,8 +1,8 @@
-# MCP Audit v1.7.0 Session Schema
+# Token Audit v1.7.0 Session Schema
 
 **Version**: 1.7.0
 **Last Updated**: 2025-12-14
-**Status**: Active (shipped in v0.8.0)
+**Status**: Active (shipped in v1.0.0)
 
 This document defines the v1.7.0 session JSON schema, extending v1.6.0 with expanded smell taxonomy, recommendations engine, and cross-session aggregation.
 
@@ -10,7 +10,7 @@ This document defines the v1.7.0 session JSON schema, extending v1.6.0 with expa
 
 ## Schema Overview
 
-The session schema is the canonical format for MCP Audit session logs stored in `~/.mcp-audit/sessions/`.
+The session schema is the canonical format for Token Audit session logs stored in `~/.token-audit/sessions/`.
 
 ### What's New in v1.5.0
 
@@ -31,11 +31,11 @@ The session schema is the canonical format for MCP Audit session logs stored in 
 {
   "_file": {
     "name": "zen-mcp-2025-12-07T14-32-05.json",
-    "type": "mcp_audit_session",
+    "type": "token_audit_session",
     "purpose": "Complete MCP session log with token usage, tool call statistics, and smell detection for AI agent analysis",
     "schema_version": "1.5.0",
-    "schema_docs": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/v1-session-schema.md",
-    "generated_by": "mcp-audit v0.5.0",
+    "schema_docs": "https://github.com/littlebearapps/token-audit/blob/main/docs/v1-session-schema.md",
+    "generated_by": "token-audit v0.5.0",
     "generated_at": "2025-12-07T14:44:55+11:00"
   },
 
@@ -353,4 +353,4 @@ v1.5.0 writers should:
 
 - [Data Contract](data-contract.md) - Backward compatibility guarantees
 - [AI Export Schema](ai-export-schema.md) - Compact format for AI analysis
-- [Smell Engine Spec](ideas/mcp-audit-smell-engine-spec.md) - Smell detection rules
+- [Smell Engine Spec](ideas/token-audit-smell-engine-spec.md) - Smell detection rules

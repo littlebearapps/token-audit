@@ -10,13 +10,13 @@ import pytest
 from pathlib import Path
 from typing import Dict, Any
 
-from mcp_audit.schema_analyzer import (
+from token_audit.schema_analyzer import (
     SchemaAnalyzer,
     ServerSchema,
     discover_mcp_config,
     calculate_context_tax,
 )
-from mcp_audit.base_tracker import StaticCost
+from token_audit.base_tracker import StaticCost
 
 
 class TestServerSchema:

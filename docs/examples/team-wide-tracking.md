@@ -1,6 +1,6 @@
 # Example: Team-Wide Tracking
 
-Aggregate MCP Audit data across multiple projects and team members.
+Aggregate Token Audit data across multiple projects and team members.
 
 ---
 
@@ -17,7 +17,7 @@ Your team uses AI coding assistants across multiple projects:
 
 ## Prerequisites
 
-- MCP Audit installed on all team member machines
+- Token Audit installed on all team member machines
 - Multiple projects being tracked
 - Shared configuration strategy
 
@@ -27,11 +27,11 @@ Your team uses AI coding assistants across multiple projects:
 
 ### Step 1: Standardize Configuration
 
-Create a team-wide `mcp-audit.toml` configuration:
+Create a team-wide `token-audit.toml` configuration:
 
 ```toml
-# team-mcp-audit.toml
-# Distribute to all team members at ~/.mcp-audit/mcp-audit.toml
+# team-token-audit.toml
+# Distribute to all team members at ~/.token-audit/token-audit.toml
 
 [pricing.anthropic]
 "claude-sonnet-4-20250514" = { input = 3.00, output = 15.00, cache_create = 3.75, cache_read = 0.30 }
@@ -60,7 +60,7 @@ Use consistent project identifiers:
 ```bash
 # Before starting work, navigate to project directory
 cd /path/to/project-name
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 Sessions are automatically tagged with the working directory path.
@@ -71,10 +71,10 @@ Each team member generates their reports:
 
 ```bash
 # Weekly report
-mcp-audit report --since "1 week ago"
+token-audit report --since "1 week ago"
 
 # Export to JSON for aggregation
-mcp-audit export json > ~/reports/$(whoami)-$(date +%Y%m%d).json
+token-audit export json > ~/reports/$(whoami)-$(date +%Y%m%d).json
 ```
 
 ### Step 4: Aggregate Team Data
@@ -83,11 +83,11 @@ Collect JSON exports from all team members:
 
 ```bash
 # On aggregation machine
-mkdir -p /shared/mcp-audit-reports
+mkdir -p /shared/token-audit-reports
 
 # Team members copy their exports
-# alice: scp ~/reports/*.json admin@server:/shared/mcp-audit-reports/
-# bob: scp ~/reports/*.json admin@server:/shared/mcp-audit-reports/
+# alice: scp ~/reports/*.json admin@server:/shared/token-audit-reports/
+# bob: scp ~/reports/*.json admin@server:/shared/token-audit-reports/
 ```
 
 ### Step 5: Generate Team Dashboard
@@ -96,7 +96,7 @@ Create a simple aggregation script:
 
 ```python
 #!/usr/bin/env python3
-"""team_dashboard.py - Aggregate team MCP Audit data"""
+"""team_dashboard.py - Aggregate team Token Audit data"""
 
 import json
 from pathlib import Path
@@ -129,7 +129,7 @@ def aggregate_reports(report_dir: str):
     return dict(team_totals)
 
 if __name__ == "__main__":
-    totals = aggregate_reports("/shared/mcp-audit-reports")
+    totals = aggregate_reports("/shared/token-audit-reports")
 
     print("Team AI Usage Summary")
     print("=" * 60)
@@ -156,7 +156,7 @@ Analyze patterns across the team:
 # Look for: high cache ratios, low tokens/call, minimal smells
 
 # Example analysis
-mcp-audit smells --list  # See what patterns to avoid
+token-audit report --smells  # See what patterns to avoid
 ```
 
 Share findings:
@@ -245,7 +245,7 @@ Recommendations:
 
 ```bash
 # Weekly report to Slack
-mcp-audit report --since "1 week ago" --format json | \
+token-audit report --since "1 week ago" --format json | \
   curl -X POST -H 'Content-type: application/json' \
   --data @- https://hooks.slack.com/services/XXX
 ```
@@ -254,7 +254,7 @@ mcp-audit report --since "1 week ago" --format json | \
 
 ```bash
 # Alert if daily cost exceeds threshold
-DAILY_COST=$(mcp-audit report --since "1 day ago" --format json | jq '.cost_usd')
+DAILY_COST=$(token-audit report --since "1 day ago" --format json | jq '.cost_usd')
 if (( $(echo "$DAILY_COST > 20" | bc -l) )); then
   echo "High AI cost alert: $DAILY_COST"
 fi
@@ -269,4 +269,4 @@ fi
 
 ---
 
-*See [Configuration Reference](../CONFIGURATION.md) for full config options.*
+*See [Configuration Reference](../configuration.md) for full config options.*

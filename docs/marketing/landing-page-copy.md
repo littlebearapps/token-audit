@@ -1,7 +1,7 @@
-# MCP Audit Landing Page Copy
+# Token Audit Landing Page Copy
 
-**Target URL:** littlebearapps.com/mcp-audit
-**Version:** v0.9.0 content prep
+**Target URL:** littlebearapps.com/token-audit
+**Version:** v1.0.0
 **Last Updated:** 2025-12-14
 
 ---
@@ -18,7 +18,7 @@ Investigate context bloat and high token usage at the source. Track every MCP to
 **Get Started** → Links to Installation section or docs
 
 ### Secondary CTA
-**View on GitHub** → https://github.com/littlebearapps/mcp-audit
+**View on GitHub** → https://github.com/littlebearapps/token-audit
 
 ---
 
@@ -46,7 +46,7 @@ Tokens add up faster than expected when switching models or using multiple MCP s
 **See exactly what's eating your tokens**
 
 ### Value Proposition
-MCP Audit gives you real-time visibility into token consumption across your entire MCP stack. Track per-server, per-tool usage. Detect inefficient patterns automatically. Optimize your agent workflows for faster, cheaper, more predictable results.
+Token Audit gives you real-time visibility into token consumption across your entire MCP stack. Track per-server, per-tool usage. Detect inefficient patterns automatically. Optimize your agent workflows for faster, cheaper, more predictable results.
 
 ### Key Benefits
 - **Track every token** - Per-server, per-tool breakdown in real-time
@@ -81,7 +81,7 @@ Track costs when switching between models mid-session. Dynamic pricing for 2,000
 ### Feature 4: Privacy-First Design
 **Icon:** Lock or shield
 
-No proxies. No interception. No cloud uploads. All data stays local in `~/.mcp-audit/sessions/`. Works alongside existing workflows with zero setup overhead.
+No proxies. No interception. No cloud uploads. All data stays local in `~/.token-audit/sessions/`. Works alongside existing workflows with zero setup overhead.
 
 ### Feature 5: Cross-Platform Support
 **Icon:** Multiple platform logos
@@ -117,20 +117,20 @@ Works with the AI coding agents you already use:
 
 ```bash
 # Install
-pipx install mcp-audit
+pipx install token-audit
 
 # Start tracking
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 
 # Optional: Gemini tokenizer for 100% accuracy
-mcp-audit tokenizer download
+token-audit tokenizer download
 ```
 
 ### What Happens Next
-1. Run `mcp-audit collect` in one terminal
+1. Run `token-audit collect` in one terminal
 2. Use your AI agent normally in another
 3. Watch real-time token usage in the TUI
-4. Generate reports with `mcp-audit report`
+4. Generate reports with `token-audit report`
 
 ---
 
@@ -155,7 +155,7 @@ Track usage across platforms and models. Achieve 40-60% cost savings.
 
 ## Comparison Section
 
-| Feature | MCP Audit | ccusage | Usage Monitor |
+| Feature | Token Audit | ccusage | Usage Monitor |
 |---------|-----------|---------|---------------|
 | MCP token breakdown | Per-tool | No | No |
 | Smell detection | 12 patterns | No | No |
@@ -165,7 +165,7 @@ Track usage across platforms and models. Achieve 40-60% cost savings.
 | Billing history | No | Yes | No |
 | Session limits | No | No | Yes |
 
-**MCP Audit** = Deep MCP profiling | **ccusage** = Billing history | **Usage Monitor** = Session limits
+**Token Audit** = Deep MCP profiling | **ccusage** = Billing history | **Usage Monitor** = Session limits
 
 ---
 
@@ -175,20 +175,20 @@ Track usage across platforms and models. Achieve 40-60% cost savings.
 **Start tracking your MCP tokens today**
 
 ```bash
-pipx install mcp-audit
+pipx install token-audit
 ```
 
 **No signup. No cloud account. Just install and start tracking.**
 
-- [Get Started](docs) | [GitHub](https://github.com/littlebearapps/mcp-audit) | [PyPI](https://pypi.org/project/mcp-audit/)
+- [Get Started](docs) | [GitHub](https://github.com/littlebearapps/token-audit) | [PyPI](https://pypi.org/project/token-audit/)
 
 ---
 
 ## SEO Metadata
 
 ```yaml
-title: "MCP Audit - Real-time Token Profiler for AI Coding Agents"
+title: "Token Audit - Real-time Token Profiler for AI Coding Agents"
 description: "Track MCP token usage in Claude Code, Codex CLI & Gemini CLI. Detect context bloat, optimize costs, and prevent early auto-compaction. Free and open source."
-keywords: "mcp audit, mcp server, token tracking, claude code, codex cli, gemini cli, context window, llm costs, context bloat, auto-compaction"
+keywords: "token audit, mcp server, token tracking, claude code, codex cli, gemini cli, context window, llm costs, context bloat, auto-compaction"
 og_image: "hero-demo.gif"
 ```

@@ -1,4 +1,4 @@
-# Getting Started with MCP Audit
+# Getting Started with Token Audit
 
 Get up and running in 5 minutes. This guide walks you through installation, your first session, and understanding the TUI dashboard.
 
@@ -21,7 +21,7 @@ Before you begin, ensure you have:
 ### Option 1: pipx (Recommended)
 
 ```bash
-pipx install mcp-audit
+pipx install token-audit
 ```
 
 pipx provides isolated installation, preventing dependency conflicts.
@@ -29,19 +29,19 @@ pipx provides isolated installation, preventing dependency conflicts.
 ### Option 2: pip
 
 ```bash
-pip install mcp-audit
+pip install token-audit
 ```
 
 ### Option 3: uv
 
 ```bash
-uv pip install mcp-audit
+uv pip install token-audit
 ```
 
 ### Verify Installation
 
 ```bash
-mcp-audit --version
+token-audit --version
 ```
 
 ---
@@ -53,16 +53,16 @@ Follow these 5 steps to track your first AI coding session.
 ### Step 1: Open Two Terminals
 
 You'll need two terminal windows:
-- **Terminal A**: Run MCP Audit (the tracker)
+- **Terminal A**: Run Token Audit (the tracker)
 - **Terminal B**: Run your AI coding agent (Claude Code, Codex CLI, or Gemini CLI)
 
-### Step 2: Start MCP Audit
+### Step 2: Start Token Audit
 
 In Terminal A, navigate to your project directory and start tracking:
 
 ```bash
 cd /path/to/your/project
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 Replace `claude-code` with `codex-cli` or `gemini-cli` if using those platforms.
@@ -70,7 +70,7 @@ Replace `claude-code` with `codex-cli` or `gemini-cli` if using those platforms.
 You'll see the TUI dashboard appear:
 
 ```
-MCP Audit v0.8.0 - Claude Code Session
+Token Audit v1.0.0 - Claude Code Session
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Status: Waiting for events...
@@ -121,7 +121,7 @@ When finished, press `Ctrl+C` in Terminal A to stop tracking. Your session is au
 Session Complete
 ─────────────────
 Duration: 45m 12s
-Saved to: ~/.mcp-audit/sessions/claude_code/2025-01-15/session-abc123.json
+Saved to: ~/.token-audit/sessions/claude_code/2025-01-15/session-abc123.json
 ```
 
 ---
@@ -131,13 +131,13 @@ Saved to: ~/.mcp-audit/sessions/claude_code/2025-01-15/session-abc123.json
 After a session, view where your tokens went:
 
 ```bash
-mcp-audit report ~/.mcp-audit/sessions/ --top-n 5
+token-audit report ~/.token-audit/sessions/ --top-n 5
 ```
 
 Output:
 
 ```markdown
-# MCP Audit Report
+# Token Audit Report
 
 ## Summary
 - Sessions: 1
@@ -209,10 +209,10 @@ Cache Hit: 72.1%
 For 100% accurate token counts with Gemini CLI, download the Gemma tokenizer:
 
 ```bash
-mcp-audit tokenizer download
+token-audit tokenizer download
 ```
 
-Without it, MCP Audit uses tiktoken (~95% accuracy) and displays an "Estimated" badge.
+Without it, Token Audit uses tiktoken (~95% accuracy) and displays an "Estimated" badge.
 
 ---
 
@@ -226,12 +226,12 @@ Now that you have your first session tracked, explore these guides:
 - [Gemini CLI Guide](platforms/gemini-cli.md) — Google AI integration
 
 ### Feature Deep-Dives
-- [Feature Reference](FEATURES.md) — TUI panels, smell detection, exports
-- [Configuration Reference](CONFIGURATION.md) — Themes, pricing, CLI options
+- [Feature Reference](features.md) — TUI panels, smell detection, exports
+- [Configuration Reference](configuration.md) — Themes, pricing, CLI options
 
 ### Troubleshooting
-- [Troubleshooting Guide](TROUBLESHOOTING.md) — Common issues and solutions
-- [FAQ](FAQ.md) — Frequently asked questions
+- [Troubleshooting Guide](troubleshooting.md) — Common issues and solutions
+- [FAQ](faq.md) — Frequently asked questions
 
 ### Usage Examples
 - [Debugging a Slow Session](examples/debugging-slow-session.md)
@@ -246,19 +246,19 @@ Now that you have your first session tracked, explore these guides:
 
 ```bash
 # Track a session
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 
 # Generate report
-mcp-audit report ~/.mcp-audit/sessions/
+token-audit report ~/.token-audit/sessions/
 
 # Browse past sessions
-mcp-audit ui
+token-audit ui
 
 # Export for AI analysis
-mcp-audit export ai-prompt
+token-audit report --format ai
 
-# Check configuration
-mcp-audit init
+# Check tokenizer status
+token-audit tokenizer status
 ```
 
 ### Keyboard Shortcuts (TUI)
@@ -271,8 +271,8 @@ mcp-audit init
 
 ### Session Storage
 
-Sessions are saved to: `~/.mcp-audit/sessions/<platform>/<date>/`
+Sessions are saved to: `~/.token-audit/sessions/<platform>/<date>/`
 
 ---
 
-*Need help? See [Troubleshooting](TROUBLESHOOTING.md) or ask in [GitHub Discussions](https://github.com/littlebearapps/mcp-audit/discussions).*
+*Need help? See [Troubleshooting](troubleshooting.md) or ask in [GitHub Discussions](https://github.com/littlebearapps/token-audit/discussions).*

@@ -1,12 +1,12 @@
 # Example: AI-Assisted Review
 
-Use MCP Audit's AI export feature to get intelligent analysis of your sessions.
+Use Token Audit's AI export feature to get intelligent analysis of your sessions.
 
 ---
 
 ## The Problem
 
-You have MCP Audit data but want:
+You have Token Audit data but want:
 - Deeper insights than the built-in reports provide
 - Natural language recommendations
 - Pattern analysis across multiple sessions
@@ -18,7 +18,7 @@ You have MCP Audit data but want:
 
 ## Prerequisites
 
-- MCP Audit installed with tracked sessions
+- Token Audit installed with tracked sessions
 - Access to an AI assistant (Claude, GPT, Gemini, etc.)
 - Understanding of your typical workflow patterns
 
@@ -31,7 +31,7 @@ You have MCP Audit data but want:
 Track a typical work session:
 
 ```bash
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 Work normally for 15-30 minutes, then stop tracking (`Ctrl+C`).
@@ -41,13 +41,13 @@ Work normally for 15-30 minutes, then stop tracking (`Ctrl+C`).
 Use the AI export format:
 
 ```bash
-mcp-audit export ai-prompt
+token-audit report --format ai
 ```
 
 This generates a structured prompt optimized for AI analysis:
 
 ```markdown
-# MCP Audit Session Analysis Request
+# Token Audit Session Analysis Request
 
 ## Session Overview
 - Platform: Claude Code
@@ -93,7 +93,7 @@ Copy the export and paste into your preferred AI assistant:
 
 **Claude:**
 ```
-Here's my MCP Audit session data. Please analyze it and suggest improvements:
+Here's my Token Audit session data. Please analyze it and suggest improvements:
 
 [paste export]
 ```
@@ -158,11 +158,11 @@ Based on AI feedback, adjust your workflow:
 After applying changes, track another session:
 
 ```bash
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 # Work with new approach
 # Stop tracking
 
-mcp-audit export ai-prompt > after-optimization.md
+token-audit report --format ai > after-optimization.md
 ```
 
 Compare before/after metrics:
@@ -180,7 +180,7 @@ Compare before/after metrics:
 ### AI Export Format
 
 ```markdown
-# MCP Audit Session Analysis Request
+# Token Audit Session Analysis Request
 
 ## Session Overview
 - Platform: Claude Code
@@ -287,4 +287,4 @@ the key differences and what can I learn from the efficient one?
 
 ---
 
-*See [Feature Reference](../FEATURES.md#ai-export) for export format details.*
+*See [Feature Reference](../features.md#ai-export) for export format details.*

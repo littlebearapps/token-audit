@@ -21,7 +21,7 @@ assignees: ''
 <!-- Output of: python --version -->
 
 **MCP Audit Version**:
-<!-- Output of: mcp-audit --version -->
+<!-- Output of: token-audit --version -->
 
 **Operating System**:
 <!-- e.g., macOS 14.0, Ubuntu 22.04, Windows 11 -->

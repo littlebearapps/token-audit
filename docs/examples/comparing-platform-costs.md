@@ -17,7 +17,7 @@ You use multiple AI coding platforms and want to understand:
 
 ## Prerequisites
 
-- MCP Audit installed
+- Token Audit installed
 - At least two AI platforms installed (Claude Code, Codex CLI, or Gemini CLI)
 - A repeatable task you can perform on multiple platforms
 
@@ -36,7 +36,7 @@ Select a task you can perform identically on each platform:
 
 ```bash
 # Terminal 1: Start tracking
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 In Claude Code, perform your task. When done, press `Ctrl+C` and note the metrics:
@@ -53,7 +53,7 @@ Cost: $0.12
 
 ```bash
 # Terminal 1: Start tracking
-mcp-audit collect --platform codex-cli
+token-audit collect --platform codex-cli
 ```
 
 In Codex CLI, perform the same task. Press `Ctrl+C` when done:
@@ -70,7 +70,7 @@ Cost: $0.08
 
 ```bash
 # Terminal 1: Start tracking
-mcp-audit collect --platform gemini-cli
+token-audit collect --platform gemini-cli
 ```
 
 Perform the same task in Gemini CLI:
@@ -89,12 +89,12 @@ Generate reports for all sessions:
 
 ```bash
 # List recent sessions
-mcp-audit report --list
+token-audit report --list
 
 # Generate individual reports
-mcp-audit report <claude-session-id>
-mcp-audit report <codex-session-id>
-mcp-audit report <gemini-session-id>
+token-audit report <claude-session-id>
+token-audit report <codex-session-id>
+token-audit report <gemini-session-id>
 ```
 
 ### Step 6: Analyze the Data
@@ -175,13 +175,13 @@ For more robust comparisons, track multiple sessions per platform:
 
 ```bash
 # Aggregate Claude Code sessions
-mcp-audit report ~/.mcp-audit/sessions/ --platform claude-code --aggregate
+token-audit report ~/.token-audit/sessions/ --platform claude-code --aggregate
 
 # Aggregate Codex CLI sessions
-mcp-audit report ~/.mcp-audit/sessions/ --platform codex-cli --aggregate
+token-audit report ~/.token-audit/sessions/ --platform codex-cli --aggregate
 
 # Aggregate Gemini CLI sessions
-mcp-audit report ~/.mcp-audit/sessions/ --platform gemini-cli --aggregate
+token-audit report ~/.token-audit/sessions/ --platform gemini-cli --aggregate
 ```
 
 This provides statistically meaningful comparisons across typical usage patterns.

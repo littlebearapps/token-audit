@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/schema/session-v1.7.0.json",
-  "title": "MCP Audit Session Schema v1.7.0",
-  "description": "JSON Schema for mcp-audit session files (v1.7.0 - Analysis Layer)",
+  "$id": "https://github.com/littlebearapps/token-audit/blob/main/docs/schema/session-v1.7.0.json",
+  "title": "Token Audit Session Schema v1.7.0",
+  "description": "JSON Schema for token-audit session files (v1.7.0 - Analysis Layer)",
   "type": "object",
   "required": ["_file", "session", "token_usage", "cost_estimate_usd"],
   "properties": {
@@ -17,7 +17,7 @@
         },
         "type": {
           "type": "string",
-          "const": "mcp_audit_session",
+          "const": "token_audit_session",
           "description": "File type identifier"
         },
         "purpose": {
@@ -295,7 +295,7 @@
           "cache_read_tokens": {"type": "integer", "minimum": 0},
           "total_tokens": {"type": "integer", "minimum": 0},
           "duration_ms": {"type": ["integer", "null"], "minimum": 0},
-          "content_hash": {"type": "string"},
+          "content_hash": {"type": ["string", "null"]},
           "is_estimated": {"type": "boolean", "description": "Token estimation flag (v1.4.0+)"},
           "estimation_method": {"type": "string", "enum": ["tiktoken", "sentencepiece", "character"]},
           "estimation_encoding": {"type": "string"}
@@ -323,7 +323,8 @@
               "BURST_PATTERN",
               "LARGE_PAYLOAD",
               "SEQUENTIAL_READS",
-              "CACHE_MISS_STREAK"
+              "CACHE_MISS_STREAK",
+              "CREDENTIAL_EXPOSURE"
             ],
             "description": "Smell pattern identifier"
           },

@@ -5,11 +5,11 @@ For users on corporate networks with restricted internet access.
 ## Download Options
 
 1. **GitHub Releases** (recommended)
-   - Visit: https://github.com/littlebearapps/mcp-audit/releases
+   - Visit: https://github.com/littlebearapps/token-audit/releases
    - Download: `gemma-tokenizer-v{version}.tar.gz`
 
 2. **Direct link** (latest release)
-   - https://github.com/littlebearapps/mcp-audit/releases/latest
+   - https://github.com/littlebearapps/token-audit/releases/latest
 
 ## Installation Steps
 
@@ -20,25 +20,25 @@ For users on corporate networks with restricted internet access.
    ```
 3. Create the cache directory:
    ```bash
-   mkdir -p ~/.cache/mcp-audit
+   mkdir -p ~/.cache/token-audit
    ```
 4. Copy the tokenizer:
    ```bash
-   cp gemma-tokenizer/tokenizer.model ~/.cache/mcp-audit/
+   cp gemma-tokenizer/tokenizer.model ~/.cache/token-audit/
    ```
 5. Verify installation:
    ```bash
-   mcp-audit tokenizer status
+   token-audit tokenizer status
    ```
 
 ## Verification
 
 ```bash
-$ mcp-audit tokenizer status
+$ token-audit tokenizer status
 Gemma Tokenizer Status
 ========================================
 ✓ Installed
-  Location: ~/.cache/mcp-audit/tokenizer.model
+  Location: ~/.cache/token-audit/tokenizer.model
   Source: Downloaded (persistent)
 
 Gemini CLI Accuracy: 100% (exact match)
@@ -57,11 +57,11 @@ Each release includes a `.sha256` checksum file:
 
 ```bash
 # Download both files
-curl -LO https://github.com/littlebearapps/mcp-audit/releases/download/v0.4.0/gemma-tokenizer-v0.4.0.tar.gz
-curl -LO https://github.com/littlebearapps/mcp-audit/releases/download/v0.4.0/gemma-tokenizer-v0.4.0.tar.gz.sha256
+curl -LO https://github.com/littlebearapps/token-audit/releases/download/v1.0.0/gemma-tokenizer-v1.0.0.tar.gz
+curl -LO https://github.com/littlebearapps/token-audit/releases/download/v1.0.0/gemma-tokenizer-v1.0.0.tar.gz.sha256
 
 # Verify checksum
-sha256sum -c gemma-tokenizer-v0.4.0.tar.gz.sha256
+sha256sum -c gemma-tokenizer-v1.0.0.tar.gz.sha256
 ```
 
 ## Without Tokenizer

@@ -101,7 +101,7 @@ Model information is in `turn_context` events:
   "timestamp": "2025-12-10T05:14:13.418Z",
   "type": "turn_context",
   "payload": {
-    "cwd": "/Users/.../mcp-audit/main",
+    "cwd": "/Users/.../token-audit/main",
     "approval_policy": "never",
     "sandbox_policy": {"type": "read-only"},
     "model": "gpt-5.1",

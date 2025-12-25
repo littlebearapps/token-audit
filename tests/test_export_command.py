@@ -25,7 +25,7 @@ class TestStorageHelpers:
 
     def test_load_session_file_valid(self) -> None:
         """Test loading a valid session JSON file."""
-        from mcp_audit.storage import load_session_file
+        from token_audit.storage import load_session_file
 
         session_data = {
             "session": {"platform": "claude-code", "project": "test"},
@@ -47,7 +47,7 @@ class TestStorageHelpers:
 
     def test_load_session_file_invalid_json(self) -> None:
         """Test loading an invalid JSON file returns None."""
-        from mcp_audit.storage import load_session_file
+        from token_audit.storage import load_session_file
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("not valid json")
@@ -62,14 +62,14 @@ class TestStorageHelpers:
 
     def test_load_session_file_missing(self) -> None:
         """Test loading a missing file returns None."""
-        from mcp_audit.storage import load_session_file
+        from token_audit.storage import load_session_file
 
         loaded = load_session_file(Path("/nonexistent/path.json"))
         assert loaded is None
 
     def test_get_latest_session_missing_dir(self) -> None:
         """Test get_latest_session with missing directory returns None."""
-        from mcp_audit.storage import get_latest_session
+        from token_audit.storage import get_latest_session
 
         result = get_latest_session(Path("/nonexistent/directory"))
         assert result is None
@@ -85,7 +85,7 @@ class TestAIPromptGeneration:
 
     def test_generate_markdown_basic(self) -> None:
         """Test markdown generation with basic session data."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         session_data = {
             "session": {
@@ -134,7 +134,7 @@ class TestAIPromptGeneration:
 
     def test_generate_markdown_with_smells(self) -> None:
         """Test markdown generation includes smells."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         session_data = {
             "session": {"platform": "claude-code"},
@@ -163,7 +163,7 @@ class TestAIPromptGeneration:
 
     def test_generate_json_basic(self) -> None:
         """Test JSON generation with basic session data."""
-        from mcp_audit.cli import generate_ai_prompt_json
+        from token_audit.cli import generate_ai_prompt_json
 
         session_data = {
             "session": {
@@ -199,19 +199,19 @@ class TestFormatDuration:
 
     def test_seconds(self) -> None:
         """Test formatting duration in seconds."""
-        from mcp_audit.cli import _format_duration
+        from token_audit.cli import _format_duration
 
         assert _format_duration(45) == "45s"
 
     def test_minutes(self) -> None:
         """Test formatting duration in minutes."""
-        from mcp_audit.cli import _format_duration
+        from token_audit.cli import _format_duration
 
         assert _format_duration(125) == "2m 5s"
 
     def test_hours(self) -> None:
         """Test formatting duration in hours."""
-        from mcp_audit.cli import _format_duration
+        from token_audit.cli import _format_duration
 
         assert _format_duration(3725) == "1h 2m"
 
@@ -257,7 +257,7 @@ class TestPinnedMCPFocusExport:
 
     def test_markdown_with_pinned_focus(self, session_data_with_servers: Dict[str, Any]) -> None:
         """Test markdown generation with --pinned-focus flag."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         output = generate_ai_prompt_markdown(
             session_data_with_servers,
@@ -276,7 +276,7 @@ class TestPinnedMCPFocusExport:
         self, session_data_with_servers: Dict[str, Any]
     ) -> None:
         """Test markdown when pinned server wasn't used."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         output = generate_ai_prompt_markdown(
             session_data_with_servers,
@@ -292,7 +292,7 @@ class TestPinnedMCPFocusExport:
         self, session_data_with_servers: Dict[str, Any]
     ) -> None:
         """Test markdown generation with --full-mcp-breakdown flag."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         output = generate_ai_prompt_markdown(
             session_data_with_servers,
@@ -309,7 +309,7 @@ class TestPinnedMCPFocusExport:
         self, session_data_with_servers: Dict[str, Any]
     ) -> None:
         """Test that pinned servers are marked in full breakdown."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         output = generate_ai_prompt_markdown(
             session_data_with_servers,
@@ -324,7 +324,7 @@ class TestPinnedMCPFocusExport:
         self, session_data_with_servers: Dict[str, Any]
     ) -> None:
         """Test that pinned servers appear in session summary."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         output = generate_ai_prompt_markdown(
             session_data_with_servers,
@@ -336,7 +336,7 @@ class TestPinnedMCPFocusExport:
 
     def test_json_with_pinned_servers(self, session_data_with_servers: Dict[str, Any]) -> None:
         """Test JSON export includes pinned servers."""
-        from mcp_audit.cli import generate_ai_prompt_json
+        from token_audit.cli import generate_ai_prompt_json
 
         output = generate_ai_prompt_json(
             session_data_with_servers,
@@ -350,7 +350,7 @@ class TestPinnedMCPFocusExport:
 
     def test_json_with_pinned_focus(self, session_data_with_servers: Dict[str, Any]) -> None:
         """Test JSON export includes pinned server analysis."""
-        from mcp_audit.cli import generate_ai_prompt_json
+        from token_audit.cli import generate_ai_prompt_json
 
         output = generate_ai_prompt_json(
             session_data_with_servers,
@@ -366,7 +366,7 @@ class TestPinnedMCPFocusExport:
 
     def test_json_with_full_breakdown(self, session_data_with_servers: Dict[str, Any]) -> None:
         """Test JSON export includes full server breakdown."""
-        from mcp_audit.cli import generate_ai_prompt_json
+        from token_audit.cli import generate_ai_prompt_json
 
         output = generate_ai_prompt_json(
             session_data_with_servers,
@@ -386,7 +386,7 @@ class TestPinnedMCPFocusExport:
         self, session_data_with_servers: Dict[str, Any]
     ) -> None:
         """Test JSON export includes context-aware questions."""
-        from mcp_audit.cli import generate_ai_prompt_json
+        from token_audit.cli import generate_ai_prompt_json
 
         output = generate_ai_prompt_json(
             session_data_with_servers,
@@ -403,7 +403,7 @@ class TestRecommendationsExport:
 
     def test_markdown_includes_recommendations_section(self) -> None:
         """Test that smells generate recommendations in markdown."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         session_data = {
             "session": {"platform": "claude-code", "duration_seconds": 300},
@@ -440,7 +440,7 @@ class TestRecommendationsExport:
 
     def test_json_includes_recommendations(self) -> None:
         """Test that smells generate recommendations in JSON."""
-        from mcp_audit.cli import generate_ai_prompt_json
+        from token_audit.cli import generate_ai_prompt_json
 
         session_data = {
             "session": {"platform": "claude-code"},
@@ -477,7 +477,7 @@ class TestContextAwareQuestions:
 
     def test_top_consumer_question(self) -> None:
         """Test question generated for dominant tool."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         session_data = {
             "session": {"platform": "claude-code", "duration_seconds": 300},
@@ -509,7 +509,7 @@ class TestContextAwareQuestions:
 
     def test_unused_pinned_server_question(self) -> None:
         """Test question when pinned server not used."""
-        from mcp_audit.cli import generate_ai_prompt_markdown
+        from token_audit.cli import generate_ai_prompt_markdown
 
         session_data = {
             "session": {"platform": "claude-code", "duration_seconds": 300},

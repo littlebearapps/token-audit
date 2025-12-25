@@ -1,6 +1,8 @@
 # Claude Code Platform Guide
 
-This guide explains how to use MCP Audit with [Claude Code](https://claude.ai/claude-code), Anthropic's AI coding assistant.
+This guide explains how to use Token Audit with [Claude Code](https://claude.ai/claude-code), Anthropic's AI coding assistant.
+
+> **v1.0 Feature**: Want to use token-audit as an MCP server inside Claude Code? See [MCP Server Integration: Claude Code](../mcp-server-integration/claude-code.md).
 
 ---
 
@@ -28,13 +30,13 @@ This guide explains how to use MCP Audit with [Claude Code](https://claude.ai/cl
 ## Installation
 
 ```bash
-pipx install mcp-audit
+pipx install token-audit
 ```
 
 Or with pip:
 
 ```bash
-pip install mcp-audit
+pip install token-audit
 ```
 
 ---
@@ -46,13 +48,13 @@ pip install mcp-audit
 Open a new terminal and run:
 
 ```bash
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 You'll see a live TUI dashboard:
 
 ```
-MCP Audit v0.5.0 - Claude Code Session
+Token Audit v1.0.0 - Claude Code Session
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Status: Tracking...
@@ -74,18 +76,18 @@ In a separate terminal, start Claude Code:
 claude
 ```
 
-Work as usual. MCP Audit will track:
+Work as usual. Token Audit will track:
 - All model interactions (tokens used)
 - All MCP tool calls (which tools, how many tokens)
 - Cache efficiency (cache hits vs misses)
 
 ### 3. Stop Tracking
 
-When done, press `Ctrl+C` in the MCP Audit terminal:
+When done, press `Ctrl+C` in the Token Audit terminal:
 
 ```
 ^C
-Session complete!
+Session complete
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Duration:    45 minutes
@@ -94,14 +96,14 @@ Cost (USD):  $0.15
 MCP Tools:   42 calls across 3 servers
 
 Session saved to:
-~/.mcp-audit/sessions/claude_code/2025-12-08/session-20251208T103045-abc123.jsonl
+~/.token-audit/sessions/claude_code/2025-12-08/session-20251208T103045-abc123.jsonl
 ```
 
 ---
 
 ## How It Works
 
-MCP Audit monitors Claude Code's session log files located at:
+Token Audit monitors Claude Code's session log files located at:
 
 ```
 ~/.claude/projects/<project_hash>/session.jsonl
@@ -115,7 +117,7 @@ It parses events in real-time to extract:
 ### File Watcher Approach
 
 ```
-Claude Code          MCP Audit
+Claude Code          Token Audit
     │                    │
     │ writes events      │
     ▼                    │
@@ -132,7 +134,7 @@ session.jsonl ──────────►│
 
 ### Auto-Detection
 
-MCP Audit automatically detects:
+Token Audit automatically detects:
 - **Project name**: From your current working directory
 - **Model**: From Claude Code's session metadata
 - **MCP servers**: From tool call events
@@ -141,18 +143,18 @@ MCP Audit automatically detects:
 
 ```bash
 # Specify project name
-mcp-audit collect --platform claude-code --project "my-feature"
+token-audit collect --platform claude-code --project "my-feature"
 
 # Use a specific theme
-mcp-audit collect --platform claude-code --theme mocha
+token-audit collect --platform claude-code --theme mocha
 
 # Pin specific servers at top of MCP panel
-mcp-audit collect --platform claude-code --pin-server zen --pin-server brave-search
+token-audit collect --platform claude-code --pin-server zen --pin-server brave-search
 ```
 
 ### Theme Options
 
-MCP Audit supports multiple color themes:
+Token Audit supports multiple color themes:
 
 | Theme | Description |
 |-------|-------------|
@@ -166,15 +168,15 @@ MCP Audit supports multiple color themes:
 
 ```bash
 # Use Catppuccin Mocha theme
-mcp-audit collect --platform claude-code --theme mocha
+token-audit collect --platform claude-code --theme mocha
 
 # Or set via environment variable
-export MCP_AUDIT_THEME=mocha
+export TOKEN_AUDIT_THEME=mocha
 ```
 
 ### Pricing Configuration
 
-Create or edit `~/.mcp-audit/mcp-audit.toml`:
+Create or edit `~/.token-audit/token-audit.toml`:
 
 ```toml
 [pricing.claude]
@@ -201,15 +203,15 @@ Claude Code provides **native token attribution** — the most accurate tracking
 
 **No estimation needed** — Claude Code exposes exact per-tool token counts directly.
 
-### v0.5.0 Features
+### Key Features
 
 **Data Quality Indicators**: Claude Code sessions have `accuracy_level: "exact"` with 100% confidence.
 
-**Smell Detection**: All 5 anti-patterns detected: HIGH_VARIANCE, TOP_CONSUMER, HIGH_MCP_SHARE, CHATTY, LOW_CACHE_HIT.
+**Smell Detection**: All 12 anti-patterns detected including HIGH_VARIANCE, TOP_CONSUMER, HIGH_MCP_SHARE, CHATTY, LOW_CACHE_HIT, and more.
 
 **AI Export**: Export session data for AI analysis:
 ```bash
-mcp-audit export ai-prompt
+token-audit report --format ai
 ```
 
 ---
@@ -218,7 +220,7 @@ mcp-audit export ai-prompt
 
 ### Supported MCP Servers
 
-MCP Audit tracks all MCP servers configured in Claude Code:
+Token Audit tracks all MCP servers configured in Claude Code:
 
 | Server | Common Tools | Notes |
 |--------|--------------|-------|
@@ -274,25 +276,25 @@ Built-in tools appear in the "Built-in Tools" section, not the MCP server hierar
 ### Terminal Report
 
 ```bash
-mcp-audit report
+token-audit report
 ```
 
 ### JSON Export
 
 ```bash
-mcp-audit report --format json --output report.json
+token-audit report --format json --output report.json
 ```
 
 ### CSV for Spreadsheets
 
 ```bash
-mcp-audit report --format csv --output report.csv
+token-audit report --format csv --output report.csv
 ```
 
 ### Aggregate Multiple Sessions
 
 ```bash
-mcp-audit report ~/.mcp-audit/sessions/ --aggregate --top-n 10
+token-audit report ~/.token-audit/sessions/ --aggregate --top-n 10
 ```
 
 ---
@@ -309,7 +311,7 @@ mcp-audit report ~/.mcp-audit/sessions/ --aggregate --top-n 10
    ```bash
    ls ~/.claude/projects/
    ```
-3. Start MCP Audit **before** starting Claude Code (only new events are tracked)
+3. Start Token Audit **before** starting Claude Code (only new events are tracked)
 
 ### Missing MCP Data
 
@@ -321,7 +323,7 @@ mcp-audit report ~/.mcp-audit/sessions/ --aggregate --top-n 10
    cat ~/.claude/settings.json | grep -A 20 mcpServers
    ```
 2. Use an MCP tool in Claude Code to trigger events
-3. Check for parsing errors in MCP Audit output
+3. Check for parsing errors in Token Audit output
 
 ### High Cache Miss Rate
 
@@ -340,13 +342,13 @@ mcp-audit report ~/.mcp-audit/sessions/ --aggregate --top-n 10
 
 ### Session Organization
 
-- Run one MCP Audit instance per Claude Code session
+- Run one Token Audit instance per Claude Code session
 - Name projects descriptively: `--project "feature-auth-refactor"`
 - Review sessions weekly to identify patterns
 
 ### Cost Optimization
 
-Based on MCP Audit data:
+Based on Token Audit data:
 
 1. **Spot expensive tools**:
    - `thinkdeep`: Use for complex debugging only
@@ -367,7 +369,7 @@ Based on MCP Audit data:
 ### Sample TUI Output
 
 ```
-MCP Audit v0.5.0 - Claude Code
+Token Audit v1.0.0 - Claude Code
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Project: my-project │ Elapsed: 12m 34s
@@ -412,9 +414,10 @@ Estimated cost:   $0.23
 
 ## See Also
 
-- [Getting Started](../GETTING-STARTED.md) - Installation and first session
-- [Feature Reference](../FEATURES.md) - Complete feature guide
-- [Configuration Reference](../CONFIGURATION.md) - CLI options and pricing
-- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues and solutions
-- [Architecture](../architecture.md) - How MCP Audit works internally
+- [MCP Server Integration: Claude Code](../mcp-server-integration/claude-code.md) - Use token-audit as an MCP server (v1.0)
+- [Getting Started](../getting-started.md) - Installation and first session
+- [Feature Reference](../features.md) - Complete feature guide
+- [Configuration Reference](../configuration.md) - CLI options and pricing
+- [Troubleshooting](../troubleshooting.md) - Common issues and solutions
+- [Architecture](../architecture.md) - How Token Audit works internally
 - [Data Contract](../data-contract.md) - Session schema documentation

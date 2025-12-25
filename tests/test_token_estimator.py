@@ -6,7 +6,7 @@ on platforms that don't have native per-tool token attribution.
 
 import pytest
 
-from mcp_audit.token_estimator import (
+from token_audit.token_estimator import (
     FUNCTION_CALL_OVERHEAD,
     TokenEstimator,
     count_tokens,
@@ -415,7 +415,7 @@ class TestDisplaySnapshotEstimationFields:
     def test_snapshot_has_estimation_fields(self):
         """DisplaySnapshot should have estimation tracking fields."""
         from datetime import datetime
-        from mcp_audit.display import DisplaySnapshot
+        from token_audit.display import DisplaySnapshot
 
         snapshot = DisplaySnapshot.create(
             project="test",
@@ -433,7 +433,7 @@ class TestDisplaySnapshotEstimationFields:
     def test_snapshot_defaults_to_zero_estimates(self):
         """DisplaySnapshot should default to no estimation."""
         from datetime import datetime
-        from mcp_audit.display import DisplaySnapshot
+        from token_audit.display import DisplaySnapshot
 
         snapshot = DisplaySnapshot.create(
             project="test",
@@ -451,7 +451,7 @@ class TestGemmaTokenizerDownload:
 
     def test_check_gemma_tokenizer_status(self):
         """check_gemma_tokenizer_status should return status dict."""
-        from mcp_audit.token_estimator import check_gemma_tokenizer_status
+        from token_audit.token_estimator import check_gemma_tokenizer_status
 
         status = check_gemma_tokenizer_status()
 
@@ -475,14 +475,14 @@ class TestGemmaTokenizerDownload:
 
     def test_check_status_sentencepiece_available(self):
         """sentencepiece should be available (it's a dependency)."""
-        from mcp_audit.token_estimator import check_gemma_tokenizer_status
+        from token_audit.token_estimator import check_gemma_tokenizer_status
 
         status = check_gemma_tokenizer_status()
         assert status["sentencepiece_available"] is True
 
     def test_download_returns_tuple(self):
         """download_gemma_tokenizer should return (success, message) tuple."""
-        from mcp_audit.token_estimator import download_gemma_tokenizer
+        from token_audit.token_estimator import download_gemma_tokenizer
 
         # Without token, should fail with helpful message
         success, message = download_gemma_tokenizer()
@@ -493,7 +493,7 @@ class TestGemmaTokenizerDownload:
 
     def test_download_without_token_behavior(self):
         """Download without token should either fail with guidance or use cache."""
-        from mcp_audit.token_estimator import download_gemma_tokenizer
+        from token_audit.token_estimator import download_gemma_tokenizer
 
         # Use force=True to bypass the "already exists" check
         success, message = download_gemma_tokenizer(force=True)
@@ -521,13 +521,13 @@ class TestGemmaTokenizerDownload:
     def test_get_cache_dir(self):
         """get_cache_dir should return a Path object."""
         from pathlib import Path
-        from mcp_audit.token_estimator import TokenEstimator
+        from token_audit.token_estimator import TokenEstimator
 
         cache_dir = TokenEstimator.get_cache_dir()
 
         assert isinstance(cache_dir, Path)
         assert cache_dir.exists()
-        assert "mcp-audit" in str(cache_dir)
+        assert "token-audit" in str(cache_dir)
 
 
 class TestPathTraversalProtection:
@@ -535,7 +535,7 @@ class TestPathTraversalProtection:
 
     def test_rejects_absolute_path(self):
         """Test rejection of absolute paths in tarball."""
-        from mcp_audit.token_estimator import _validate_tarball_member
+        from token_audit.token_estimator import _validate_tarball_member
 
         assert _validate_tarball_member("/etc/passwd") is False
         assert _validate_tarball_member("/tmp/evil.txt") is False
@@ -543,7 +543,7 @@ class TestPathTraversalProtection:
 
     def test_rejects_path_traversal(self):
         """Test rejection of path traversal attempts."""
-        from mcp_audit.token_estimator import _validate_tarball_member
+        from token_audit.token_estimator import _validate_tarball_member
 
         assert _validate_tarball_member("../../../etc/passwd") is False
         assert _validate_tarball_member("foo/../../bar") is False
@@ -552,7 +552,7 @@ class TestPathTraversalProtection:
 
     def test_accepts_valid_paths(self):
         """Test acceptance of valid relative paths."""
-        from mcp_audit.token_estimator import _validate_tarball_member
+        from token_audit.token_estimator import _validate_tarball_member
 
         assert _validate_tarball_member("tokenizer.model") is True
         assert _validate_tarball_member("gemma-tokenizer/tokenizer.model") is True
@@ -566,7 +566,7 @@ class TestGitHubDownload:
 
     def test_download_from_github_returns_tuple(self):
         """download_gemma_from_github should return (success, message) tuple."""
-        from mcp_audit.token_estimator import download_gemma_from_github
+        from token_audit.token_estimator import download_gemma_from_github
 
         # Test with existing tokenizer (should be bundled or skip)
         success, message = download_gemma_from_github()
@@ -577,10 +577,10 @@ class TestGitHubDownload:
 
     def test_download_already_exists_without_force(self, monkeypatch, tmp_path):
         """Test skip when tokenizer already exists."""
-        from mcp_audit.token_estimator import download_gemma_from_github, TokenEstimator
+        from token_audit.token_estimator import download_gemma_from_github, TokenEstimator
 
         # Create fake existing tokenizer
-        cache_dir = tmp_path / ".cache" / "mcp-audit"
+        cache_dir = tmp_path / ".cache" / "token-audit"
         cache_dir.mkdir(parents=True)
         (cache_dir / "tokenizer.model").write_bytes(b"fake tokenizer")
 
@@ -600,7 +600,7 @@ class TestGitHubDownload:
         """Test proper handling of network errors."""
         import urllib.request
         from urllib.error import URLError
-        from mcp_audit.token_estimator import download_gemma_from_github
+        from token_audit.token_estimator import download_gemma_from_github
 
         def raise_url_error(*args, **kwargs):
             raise URLError("Network unreachable")
@@ -622,7 +622,7 @@ class TestRateLimitHandling:
         """Test proper handling of GitHub rate limit (403)."""
         import urllib.request
         from urllib.error import HTTPError
-        from mcp_audit.token_estimator import download_gemma_from_github
+        from token_audit.token_estimator import download_gemma_from_github
 
         def raise_403(*args, **kwargs):
             raise HTTPError("url", 403, "Forbidden", {}, None)
@@ -639,7 +639,7 @@ class TestRateLimitHandling:
         """Test proper handling of missing release (404)."""
         import urllib.request
         from urllib.error import HTTPError
-        from mcp_audit.token_estimator import download_gemma_from_github
+        from token_audit.token_estimator import download_gemma_from_github
 
         def raise_404(*args, **kwargs):
             raise HTTPError("url", 404, "Not Found", {}, None)
@@ -658,7 +658,7 @@ class TestVersionMetadata:
 
     def test_status_has_version_fields(self):
         """Test status includes version and downloaded_at fields."""
-        from mcp_audit.token_estimator import check_gemma_tokenizer_status
+        from token_audit.token_estimator import check_gemma_tokenizer_status
 
         # Verify the function returns the expected structure
         status = check_gemma_tokenizer_status()
@@ -667,7 +667,7 @@ class TestVersionMetadata:
 
     def test_status_source_is_valid(self):
         """Test status source is one of expected values."""
-        from mcp_audit.token_estimator import check_gemma_tokenizer_status
+        from token_audit.token_estimator import check_gemma_tokenizer_status
 
         status = check_gemma_tokenizer_status()
         assert status["source"] in ("bundled", "cached", "not_found")
@@ -724,8 +724,8 @@ class TestCICDPredictability:
 
     def test_download_never_prompts_for_input(self, monkeypatch):
         """Test that download command never prompts for user input."""
-        from mcp_audit.token_estimator import download_gemma_from_github
-        import mcp_audit.token_estimator as te_module
+        from token_audit.token_estimator import download_gemma_from_github
+        import token_audit.token_estimator as te_module
 
         # Track if input() was called
         input_called = []
@@ -756,7 +756,7 @@ class TestCICDPredictability:
 
     def test_functions_return_deterministic_types(self):
         """Test that all functions return expected types (no exceptions)."""
-        from mcp_audit.token_estimator import (
+        from token_audit.token_estimator import (
             check_gemma_tokenizer_status,
             download_gemma_from_github,
             download_gemma_tokenizer,

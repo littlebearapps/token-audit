@@ -109,7 +109,7 @@ Since Ollama doesn't persist sessions, we need to **intercept API traffic** to t
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A. Proxy Mode** | Run mcp-audit as HTTP proxy between client and Ollama | Full capture, works with any client | Requires config change |
+| **A. Proxy Mode** | Run token-audit as HTTP proxy between client and Ollama | Full capture, works with any client | Requires config change |
 | **B. Log Watcher** | Monitor Ollama server logs | No config needed | Limited data in logs |
 | **C. API Polling** | Poll `/api/ps` for active models | Simple | No conversation data |
 | **D. Wrapper Script** | Wrap `ollama run` command | Works with CLI | Complex, may miss API clients |
@@ -118,7 +118,7 @@ Since Ollama doesn't persist sessions, we need to **intercept API traffic** to t
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│ Ollama CLI  │────▶│  mcp-audit   │────▶│ Ollama API   │
+│ Ollama CLI  │────▶│  token-audit   │────▶│ Ollama API   │
 │ or Client   │     │  Proxy       │     │ :11434       │
 └─────────────┘     └──────────────┘     └──────────────┘
                           │
@@ -130,7 +130,7 @@ Since Ollama doesn't persist sessions, we need to **intercept API traffic** to t
 ```
 
 **Implementation**:
-1. `mcp-audit proxy --port 11435` starts local proxy
+1. `token-audit proxy --port 11435` starts local proxy
 2. User configures clients to use `:11435` instead of `:11434`
 3. Proxy forwards requests, logs all traffic
 4. Creates session files compatible with existing adapters
@@ -141,8 +141,8 @@ Since Ollama doesn't persist sessions, we need to **intercept API traffic** to t
 # User sets this once
 export OLLAMA_HOST=http://localhost:11435
 
-# mcp-audit runs proxy
-mcp-audit ollama-proxy --upstream http://localhost:11434
+# token-audit runs proxy
+token-audit ollama-proxy --upstream http://localhost:11434
 ```
 
 ---
@@ -194,7 +194,7 @@ Ollama supports tool calling but uses its own format (not MCP):
 1. **Create `ollama_proxy.py`**: HTTP proxy that intercepts Ollama API traffic
 2. **Session logging**: Write intercepted data to JSONL session files
 3. **Adapter integration**: Create `OllamaProxyAdapter` to read logged sessions
-4. **CLI command**: `mcp-audit ollama-proxy` to start proxy mode
+4. **CLI command**: `token-audit ollama-proxy` to start proxy mode
 5. **Documentation**: Setup guide for proxy configuration
 
 ---

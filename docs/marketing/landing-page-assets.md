@@ -1,8 +1,8 @@
-# MCP Audit Landing Page Assets
+# Token Audit Landing Page Assets
 
 **Last Updated:** 2025-12-14
 
-Asset checklist for littlebearapps.com/mcp-audit landing page.
+Asset checklist for littlebearapps.com/token-audit landing page.
 
 ---
 
@@ -10,7 +10,7 @@ Asset checklist for littlebearapps.com/mcp-audit landing page.
 
 | Asset | Filename | Specs | How to Create |
 |-------|----------|-------|---------------|
-| Demo GIF | `hero-demo.gif` | 800x500px, 3-5s loop, <2MB | Record `mcp-audit collect` with active session |
+| Demo GIF | `hero-demo.gif` | 800x500px, 3-5s loop, <2MB | Record `token-audit collect` with active session |
 | Demo MP4 (fallback) | `hero-demo.mp4` | 800x500px, 3-5s, H.264 | Convert from GIF or record directly |
 
 ### Demo GIF Content
@@ -22,8 +22,8 @@ Show the TUI tracking a live Claude Code session:
 
 **Recording command:**
 ```bash
-# Terminal 1: Start mcp-audit
-mcp-audit collect --platform claude-code
+# Terminal 1: Start token-audit
+token-audit collect --platform claude-code
 
 # Terminal 2: Use Claude Code normally
 # Record Terminal 1 with screen capture tool
@@ -38,7 +38,7 @@ mcp-audit collect --platform claude-code
 | Token breakdown | `feature-tokens.png` | 600x400px | TUI main view with session table |
 | Smell detection | `feature-smells.png` | 600x400px | TUI showing detected smells |
 | Multi-model view | `feature-models.png` | 600x400px | Session with model switching |
-| Report output | `feature-report.png` | 600x400px | `mcp-audit report` terminal output |
+| Report output | `feature-report.png` | 600x400px | `token-audit report` terminal output |
 
 ### Screenshot Guidelines
 - Use dark terminal theme (consistent with TUI)
@@ -82,9 +82,9 @@ mcp-audit collect --platform claude-code
 
 | Badge | Source | Display |
 |-------|--------|---------|
-| PyPI version | shields.io | `https://img.shields.io/pypi/v/mcp-audit` |
-| Python versions | shields.io | `https://img.shields.io/pypi/pyversions/mcp-audit` |
-| License | shields.io | `https://img.shields.io/github/license/littlebearapps/mcp-audit` |
+| PyPI version | shields.io | `https://img.shields.io/pypi/v/token-audit` |
+| Python versions | shields.io | `https://img.shields.io/pypi/pyversions/token-audit` |
+| License | shields.io | `https://img.shields.io/github/license/littlebearapps/token-audit` |
 | Socket.dev | socket.dev | Security badge (if available) |
 
 ---
@@ -97,7 +97,7 @@ mcp-audit collect --platform claude-code
 | Twitter Card | `twitter-card.png` | 1200x600px | Same as OG or variant |
 
 ### OG Image Content
-- MCP Audit logo (top left)
+- Token Audit logo (top left)
 - Tagline: "Real-time MCP token profiler"
 - TUI screenshot preview (right side)
 - Dark background matching brand

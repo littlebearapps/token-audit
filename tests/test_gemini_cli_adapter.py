@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-from mcp_audit.gemini_cli_adapter import (
+from token_audit.gemini_cli_adapter import (
     GeminiCLIAdapter,
     GeminiMessage,
     GeminiSession,
@@ -997,7 +997,7 @@ class TestGeminiMcpToolDetection:
 
     def test_is_gemini_mcp_tool_rejects_builtin_tools(self, adapter: GeminiCLIAdapter) -> None:
         """Test built-in tools are NOT detected as MCP tools."""
-        from mcp_audit.gemini_cli_adapter import GEMINI_BUILTIN_TOOLS
+        from token_audit.gemini_cli_adapter import GEMINI_BUILTIN_TOOLS
 
         # All built-in tools should return False
         for tool in GEMINI_BUILTIN_TOOLS:
@@ -1100,7 +1100,7 @@ class TestBuiltinToolTracking:
         Tool names from official source:
         https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/tools/tool-names.ts
         """
-        from mcp_audit.gemini_cli_adapter import GEMINI_BUILTIN_TOOLS
+        from token_audit.gemini_cli_adapter import GEMINI_BUILTIN_TOOLS
 
         # All these tools should be in the set (official names from Gemini CLI source)
         expected_tools = {

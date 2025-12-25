@@ -1,5 +1,5 @@
 """
-Pytest configuration for mcp-audit tests.
+Pytest configuration for token-audit tests.
 
 This conftest.py ensures the package can be imported during testing
 by installing it in editable mode or adding src to the path.

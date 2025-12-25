@@ -1,0 +1,53 @@
+title: "[Show & Tell] "
+labels:
+  - community
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share how you're using token-audit! We'd love to see your workflows, integrations, or insights.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What are you sharing?
+      description: Describe your use case, integration, or discovery
+      placeholder: Tell us about it...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What type of content is this?
+      options:
+        - Workflow / Process
+        - Integration / Automation
+        - Analysis / Insights
+        - Tips & Tricks
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Code snippets, screenshots, or detailed explanation
+      placeholder: |
+        Share your code, configuration, or screenshots...
+    validations:
+      required: false
+
+  - type: textarea
+    id: results
+    attributes:
+      label: Results / Impact
+      description: What did you learn or achieve?
+      placeholder: |
+        - Token savings:
+        - Time saved:
+        - Insights gained:
+    validations:
+      required: false

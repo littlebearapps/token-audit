@@ -6,14 +6,14 @@ We release patches for security vulnerabilities for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 1.0.x   | :white_check_mark: |
 | 0.9.x   | :white_check_mark: |
 | 0.8.x   | :white_check_mark: |
-| 0.7.x   | :white_check_mark: |
-| < 0.7   | :x:                |
+| < 0.8   | :x:                |
 
 ## Reporting a Vulnerability
 
-We take the security of MCP Audit seriously. If you believe you have found a security vulnerability, please report it to us as described below.
+We take the security of Token Audit seriously. If you believe you have found a security vulnerability, please report it to us as described below.
 
 ### Please Do Not
 
@@ -45,7 +45,7 @@ Please include the following information:
 
 ### Data Sensitivity
 
-MCP Audit processes session data that may contain:
+Token Audit processes session data that may contain:
 
 - **Token usage statistics** - Generally not sensitive
 - **Tool names and parameters** - May reveal implementation details
@@ -67,7 +67,7 @@ We provide built-in privacy utilities (`privacy.py`) for:
 **Best Practices**:
 
 1. **API Keys**: Never commit API keys or tokens to git
-2. **Pricing Data**: Keep `mcp-audit.toml` out of public repos if pricing is proprietary
+2. **Pricing Data**: Keep `token-audit.toml` out of public repos if pricing is proprietary
 3. **Session Logs**: Review session logs before sharing (may contain sensitive context)
 4. **File Permissions**: Ensure log files are only readable by your user
 
@@ -125,7 +125,7 @@ If you have Dependabot enabled, you'll receive automated PRs for security update
 1. Keep session logs private (don't commit to public repos)
 2. Review logs before sharing for debugging
 3. Use privacy filters when sharing data
-4. Keep MCP Audit updated to latest version
+4. Keep Token Audit updated to latest version
 
 ### For Teams
 
@@ -145,7 +145,7 @@ If you have Dependabot enabled, you'll receive automated PRs for security update
 
 ### In Scope
 
-- Vulnerabilities in MCP Audit code
+- Vulnerabilities in Token Audit code
 - Dependency vulnerabilities
 - Security issues in data processing
 - Privacy leaks in session logs
@@ -162,9 +162,9 @@ If you have Dependabot enabled, you'll receive automated PRs for security update
 ## Contact
 
 - **Security Issues**: security@littlebearapps.com
-- **General Issues**: https://github.com/littlebearapps/mcp-audit/issues
+- **General Issues**: https://github.com/littlebearapps/token-audit/issues
 - **General Contact**: https://littlebearapps.com
 
 ---
 
-**Last Updated**: 2025-12-13
+**Last Updated**: 2025-12-18

@@ -17,7 +17,7 @@ Your `.mcp.json` has 5+ MCP servers configured, but you suspect:
 
 ## Prerequisites
 
-- MCP Audit installed
+- Token Audit installed
 - Multiple MCP servers configured
 - A few tracked sessions (for accurate analysis)
 
@@ -27,10 +27,10 @@ Your `.mcp.json` has 5+ MCP servers configured, but you suspect:
 
 ### Step 1: Track a Typical Session
 
-Start MCP Audit and work normally for 15-30 minutes:
+Start Token Audit and work normally for 15-30 minutes:
 
 ```bash
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 ### Step 2: Review the Context Tax Panel
@@ -72,7 +72,7 @@ Three servers have zero calls this session.
 
 ### Step 4: Configure Zombie Tool Detection
 
-Create or edit `~/.mcp-audit/mcp-audit.toml`:
+Create or edit `~/.token-audit/token-audit.toml`:
 
 ```toml
 [zombie_tools.zen]
@@ -96,7 +96,7 @@ tools = [
 With zombie detection configured:
 
 ```bash
-mcp-audit collect --platform claude-code
+token-audit collect --platform claude-code
 ```
 
 Now you'll see zombie tools reported:
@@ -115,7 +115,7 @@ Now you'll see zombie tools reported:
 Generate an aggregate report:
 
 ```bash
-mcp-audit report ~/.mcp-audit/sessions/ --aggregate
+token-audit report ~/.token-audit/sessions/ --aggregate
 ```
 
 Look for patterns:
@@ -180,7 +180,7 @@ After removing underutilized servers:
 
 ## Zombie Tool Configuration Template
 
-Add this to `~/.mcp-audit/mcp-audit.toml` for common servers:
+Add this to `~/.token-audit/token-audit.toml` for common servers:
 
 ```toml
 [zombie_tools.zen]
@@ -219,4 +219,4 @@ tools = [
 
 ---
 
-*See [Feature Reference](../FEATURES.md#context-tax-tracking) for details on context tax.*
+*See [Feature Reference](../features.md#context-tax-tracking) for details on context tax.*

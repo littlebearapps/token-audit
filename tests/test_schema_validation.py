@@ -1,7 +1,7 @@
 """
 Tests for JSON Schema validation (task-107.6).
 
-Tests the mcp-audit validate command and schema correctness.
+Tests the token-audit validate command and schema correctness.
 """
 
 import json
@@ -28,9 +28,9 @@ def valid_minimal_session():
     return {
         "_file": {
             "name": "test-session.json",
-            "type": "mcp_audit_session",
+            "type": "token_audit_session",
             "schema_version": "1.7.0",
-            "generated_by": "mcp-audit test",
+            "generated_by": "token-audit test",
             "generated_at": "2025-12-14T00:00:00+11:00",
         },
         "session": {
@@ -54,20 +54,20 @@ def valid_full_session():
     return {
         "_file": {
             "name": "test-full-session.json",
-            "type": "mcp_audit_session",
+            "type": "token_audit_session",
             "purpose": "Test session with all fields",
             "schema_version": "1.7.0",
-            "schema_docs": "https://github.com/littlebearapps/mcp-audit/blob/main/docs/data-contract.md",
-            "generated_by": "mcp-audit v0.8.0",
+            "schema_docs": "https://github.com/littlebearapps/token-audit/blob/main/docs/data-contract.md",
+            "generated_by": "token-audit v0.8.0",
             "generated_at": "2025-12-14T10:00:00+11:00",
         },
         "session": {
             "id": "test-full-session-001",
-            "project": "mcp-audit",
+            "project": "token-audit",
             "platform": "claude-code",
             "model": "claude-sonnet-4-20250514",
             "models_used": ["claude-sonnet-4-20250514"],
-            "working_directory": "/Users/test/projects/mcp-audit/main",
+            "working_directory": "/Users/test/projects/token-audit/main",
             "started_at": "2025-12-14T10:00:00+11:00",
             "ended_at": "2025-12-14T10:30:00+11:00",
             "duration_seconds": 1800.0,
@@ -173,7 +173,7 @@ class TestSchemaFileExists:
 
     def test_schema_version(self, schema):
         """Schema has correct version info."""
-        assert schema.get("title") == "MCP Audit Session Schema v1.7.0"
+        assert schema.get("title") == "Token Audit Session Schema v1.7.0"
 
 
 class TestSchemaValidation:
@@ -222,7 +222,7 @@ class TestSchemaValidation:
         invalid_session = {
             "_file": {
                 "name": "x.json",
-                "type": "mcp_audit_session",
+                "type": "token_audit_session",
                 "schema_version": "1.7.0",
                 "generated_by": "test",
                 "generated_at": "2025-12-14T00:00:00Z",
@@ -283,12 +283,12 @@ class TestSchemaValidation:
 
 
 class TestValidateCLI:
-    """Test the mcp-audit validate CLI command."""
+    """Test the token-audit validate CLI command."""
 
     def test_validate_schema_only(self):
         """--schema-only prints schema path."""
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_audit.cli", "validate", "--schema-only"],
+            [sys.executable, "-m", "token_audit.cli", "validate", "--schema-only"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
@@ -300,7 +300,13 @@ class TestValidateCLI:
     def test_validate_missing_file(self, tmp_path):
         """Validate non-existent file returns error."""
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_audit.cli", "validate", str(tmp_path / "nonexistent.json")],
+            [
+                sys.executable,
+                "-m",
+                "token_audit.cli",
+                "validate",
+                str(tmp_path / "nonexistent.json"),
+            ],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
@@ -314,7 +320,7 @@ class TestValidateCLI:
         session_file.write_text(json.dumps(valid_minimal_session))
 
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_audit.cli", "validate", str(session_file)],
+            [sys.executable, "-m", "token_audit.cli", "validate", str(session_file)],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
@@ -329,7 +335,7 @@ class TestValidateCLI:
         session_file.write_text(json.dumps(invalid_session))
 
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_audit.cli", "validate", str(session_file)],
+            [sys.executable, "-m", "token_audit.cli", "validate", str(session_file)],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,

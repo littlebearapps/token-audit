@@ -9,7 +9,7 @@ import pytest
 import json
 import re
 from pathlib import Path
-from mcp_audit.privacy import (
+from token_audit.privacy import (
     PrivacyFilter,
     SessionPrivacyFilter,
     redact_string,

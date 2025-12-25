@@ -1,1 +1,1 @@
-"""Performance benchmarks for mcp-audit."""
+"""Performance benchmarks for token-audit."""

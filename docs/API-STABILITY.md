@@ -1,12 +1,12 @@
 # API Stability Policy
 
-This document defines the stability guarantees for mcp-audit's public API.
+This document defines the stability guarantees for token-audit's public API.
 
 ---
 
 ## Overview
 
-Starting with v0.9.0, mcp-audit provides explicit stability classifications for all public APIs. This enables users to make informed decisions about which APIs to depend on in their integrations.
+Starting with v0.9.0, token-audit provides explicit stability classifications for all public APIs. This enables users to make informed decisions about which APIs to depend on in their integrations.
 
 **Key Principle**: The CLI is always the most stable interface. For maximum stability, prefer CLI usage with `--format json` output over direct Python API usage.
 
@@ -53,7 +53,7 @@ APIs marked as **deprecated** are scheduled for removal:
 
 ### v1.0.0 Promise
 
-When mcp-audit reaches v1.0.0:
+When token-audit reaches v1.0.0:
 
 1. **All "stable" APIs** maintain backward compatibility through v1.x
 2. **Deprecations** follow a 2-minor-version warning period
@@ -62,7 +62,7 @@ When mcp-audit reaches v1.0.0:
 
 ### Semantic Versioning
 
-mcp-audit follows [Semantic Versioning 2.0.0](https://semver.org/):
+token-audit follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 - **MAJOR** (v2.0.0): Breaking changes to stable APIs
 - **MINOR** (v1.1.0): New features, deprecations, evolving API changes
@@ -76,13 +76,13 @@ The CLI is the primary stable interface:
 
 | Command | Stability | Notes |
 |---------|-----------|-------|
-| `mcp-audit collect` | Stable | Core collection command |
-| `mcp-audit report` | Stable | Report generation |
-| `mcp-audit export` | Stable | Data export |
-| `mcp-audit smells` | Stable | Smell analysis |
-| `mcp-audit ui` | Evolving | Interactive TUI |
-| `mcp-audit init` | Evolving | Setup wizard |
-| `mcp-audit tokenizer` | Evolving | Tokenizer management |
+| `token-audit collect` | Stable | Core collection command |
+| `token-audit report` | Stable | Report generation |
+| `token-audit export` | Stable | Data export |
+| `token-audit report --smells` | Stable | Smell analysis |
+| `token-audit ui` | Evolving | Interactive TUI |
+| `token-audit tokenizer setup` | Evolving | Tokenizer setup |
+| `token-audit tokenizer` | Evolving | Tokenizer management |
 
 **Output Formats**: `--format json` output is stable and machine-parseable.
 
@@ -93,7 +93,7 @@ The CLI is the primary stable interface:
 ### Programmatic Access
 
 ```python
-from mcp_audit import get_api_stability, API_STABILITY
+from token_audit import get_api_stability, API_STABILITY
 
 # Check a single API
 stability = get_api_stability("StorageManager")  # "stable"
@@ -115,7 +115,7 @@ Deprecated APIs emit `DeprecationWarning` when imported:
 import warnings
 warnings.filterwarnings("default", category=DeprecationWarning)
 
-from mcp_audit import estimate_tool_tokens
+from token_audit import estimate_tool_tokens
 # DeprecationWarning: estimate_tool_tokens is deprecated...
 ```
 
@@ -176,7 +176,7 @@ from mcp_audit import estimate_tool_tokens
 
 **Deprecated (v0.9.0)**:
 ```python
-from mcp_audit import estimate_tool_tokens
+from token_audit import estimate_tool_tokens
 
 input_tokens, output_tokens = estimate_tool_tokens(
     server="zen",
@@ -189,7 +189,7 @@ input_tokens, output_tokens = estimate_tool_tokens(
 
 **Replacement**:
 ```python
-from mcp_audit import TokenEstimator, get_estimator_for_platform
+from token_audit import TokenEstimator, get_estimator_for_platform
 
 # Get platform-specific estimator
 estimator = get_estimator_for_platform("claude_code")
@@ -206,8 +206,8 @@ output_tokens = estimator.count_tokens(str(output_data))
 If you encounter unexpected behavior in a stable API:
 
 1. Check the [CHANGELOG](../CHANGELOG.md) for recent changes
-2. Verify your mcp-audit version: `mcp-audit --version`
-3. Report issues on [GitHub](https://github.com/littlebearapps/mcp-audit/issues)
+2. Verify your token-audit version: `token-audit --version`
+3. Report issues on [GitHub](https://github.com/littlebearapps/token-audit/issues)
 
 ---
 

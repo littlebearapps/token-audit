@@ -1,0 +1,58 @@
+title: "[Q&A] "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask a question about token-audit! Check the [README](https://github.com/littlebearapps/token-audit#readme) first for common answers.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which CLI platform are you using?
+      options:
+        - Claude Code
+        - Codex CLI
+        - Gemini CLI
+        - Not platform specific
+    validations:
+      required: true
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      description: What area is your question about?
+      options:
+        - Installation / Setup
+        - Token tracking
+        - Cost estimation / Pricing
+        - MCP tool analysis
+        - TUI / Display
+        - Export / Reports
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: Ask your question here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any relevant details (version, OS, error messages)?
+      placeholder: |
+        - token-audit version:
+        - OS:
+        - Python version:
+    validations:
+      required: false

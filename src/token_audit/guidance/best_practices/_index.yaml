@@ -1,0 +1,42 @@
+version: "1.0.0"
+patterns:
+  - id: progressive_disclosure
+    file: progressive_disclosure.md
+    severity: high
+    category: efficiency
+  - id: security
+    file: security.md
+    severity: high
+    category: security
+  - id: tool_design
+    file: tool_design.md
+    severity: medium
+    category: design
+  - id: caching_strategy
+    file: caching_strategy.md
+    severity: medium
+    category: efficiency
+  - id: large_results
+    file: large_results.md
+    severity: high
+    category: efficiency
+  - id: schema_versioning
+    file: schema_versioning.md
+    severity: medium
+    category: operations
+  - id: error_handling
+    file: error_handling.md
+    severity: medium
+    category: operations
+  - id: async_operations
+    file: async_operations.md
+    severity: medium
+    category: operations
+  - id: statelessness
+    file: statelessness.md
+    severity: medium
+    category: design
+  - id: tool_count_limits
+    file: tool_count_limits.md
+    severity: high
+    category: efficiency
