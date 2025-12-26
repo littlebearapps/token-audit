@@ -4,12 +4,12 @@ This document outlines the planned development direction for Token Audit. For co
 
 ## Current Status
 
-**Version**: v1.0.0
+**Version**: v1.0.1
 **Stage**: Released — MCP Server Mode, Best Practices, Config Analyzer
 
 Token Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v1.0 adds MCP Server Mode with 8 tools for AI agent integration, best practices guidance system, multi-platform config analysis, and comprehensive integration documentation.
 
-**Next**: v1.1.0 "MCP Profiler" — Schema efficiency metrics, tool coverage analysis, and profiling infrastructure.
+**Next**: v1.1.0 "Billing & Statusline" — 5-hour billing block tracking, Claude Code statusline integration, weekly reports.
 
 ---
 
@@ -154,7 +154,62 @@ The v1.0 stable release with MCP Server Mode for AI agent integration.
 
 > **Note:** The following roadmap items represent our current thinking and are subject to change based on community feedback, ecosystem developments (particularly AAIF governance decisions), and technical discoveries during implementation. Features may be added, removed, reordered, or combined as we learn more.
 
-### v1.1.0 — MCP Profiler
+### v1.1.0 — Billing & Statusline
+
+**Theme:** "Know Your Limits"
+
+5-hour billing block tracking for Max subscribers, Claude Code statusline integration, and weekly report aggregation.
+
+**Billing Block Tracking (High Priority):**
+- **5-Hour Block Tracking** — Track usage within Anthropic's 5-hour billing windows
+- **Active Block Monitoring** — Show time remaining in current block
+- **Token Limit Warnings** — Configurable warnings as limits approach
+- **Historical Block Analysis** — View past blocks and usage patterns
+
+**Statusline Integration (Medium Priority):**
+- **Statusline Command** — `token-audit statusline` for Claude Code status bar hooks
+- **Compact Output** — Single-line format optimized for terminal status bars
+- **Fast Execution** — Sub-500ms response time for hook responsiveness
+- **Caching Layer** — Optional caching for improved performance
+
+**Weekly Reports:**
+- **Weekly Aggregation** — `--weekly` flag for report command
+- **Configurable Week Start** — Sunday or Monday week boundaries
+- **All Output Formats** — JSON, Markdown, CSV support
+
+**Success Metrics:**
+- Max subscribers can monitor billing block usage
+- Claude Code users can see usage in status bar
+- Weekly aggregation available alongside daily/monthly
+
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/7)
+
+### v1.2.0 — Burn Rate & MCP Server
+
+**Theme:** "Project Your Usage"
+
+Real-time burn rate calculations, cost projections, and MCP server mode for querying data from AI conversations.
+
+**Burn Rate & Projections (Medium Priority):**
+- **Token Burn Rate** — Real-time tokens/minute calculation
+- **Cost Projections** — Projected cost based on current session pace
+- **Progress Bars** — Visual progress toward configurable limits
+- **Time Estimates** — Estimated time to reach limits
+
+**MCP Server Mode (Low Priority):**
+- **Stdio Transport** — MCP server for Claude Desktop integration
+- **HTTP Transport** — Optional HTTP mode for network access
+- **MCP Tools** — Expose daily, weekly, monthly, session, blocks reports as tools
+- **Smell Detection Tools** — Query detected patterns via MCP
+
+**Success Metrics:**
+- Live burn rate visible during sessions
+- Cost projections help budget sessions
+- Usage data queryable from Claude Desktop via MCP
+
+➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/8)
+
+### v1.3.0 — MCP Profiler
 
 **Theme:** "See the Numbers"
 
@@ -199,7 +254,7 @@ Schema efficiency metrics, tool coverage analysis, variance/spike detection, and
 
 ➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/10)
 
-### v1.2.0 — Ollama CLI + Platform Expansion
+### v1.4.0 — Ollama CLI + Platform Expansion
 
 **Theme:** "More Platforms"
 
@@ -224,7 +279,7 @@ Ollama CLI via API proxy, goose adapter, Cursor adapter, AGENTS.md parsing.
 
 ➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/12)
 
-### v1.3.0 — Developer Insight
+### v1.5.0 — Developer Insight
 
 **Theme:** "Deeper Analysis"
 
@@ -232,7 +287,7 @@ Ollama CLI via API proxy, goose adapter, Cursor adapter, AGENTS.md parsing.
 - Platform capability warnings
 - TUI: Tool Detail mode
 
-### v1.4.0 — IDE Extensions
+### v1.6.0 — IDE Extensions
 
 **Theme:** "VS Code Ecosystem"
 
@@ -240,7 +295,7 @@ Ollama CLI via API proxy, goose adapter, Cursor adapter, AGENTS.md parsing.
 - **Aider Adapter** — Popular open source CLI
 - 8 platforms total
 
-### v1.5.0 — Security Research (P0)
+### v1.7.0 — Security Research (P0)
 
 **Theme:** "Security Foundation"
 
@@ -258,7 +313,7 @@ Ollama CLI via API proxy, goose adapter, Cursor adapter, AGENTS.md parsing.
 - **Tool Description Scanner** — Flag suspicious patterns in MCP tool definitions
 - **Security Posture Scoring Prototype** — Per-session security rating (0-100)
 
-### v1.6.0 — Payload Analysis
+### v1.8.0 — Payload Analysis
 
 **Theme:** "Schema Intelligence"
 
@@ -266,7 +321,7 @@ Ollama CLI via API proxy, goose adapter, Cursor adapter, AGENTS.md parsing.
 - Full schema tokenizer
 - Description density scoring
 
-### v1.7.0 — Cross-Platform Analysis
+### v1.9.0 — Cross-Platform Analysis
 
 **Theme:** "Compare Everything"
 
@@ -274,11 +329,11 @@ Ollama CLI via API proxy, goose adapter, Cursor adapter, AGENTS.md parsing.
 - Baseline session support
 - Model behavior differences
 
-### v1.8.0 — Security Implementation (P0)
+### v1.10.0 — Security Implementation (P0)
 
 **Theme:** "Security Layer"
 
-Full implementation of security features based on v1.5.0 research findings.
+Full implementation of security features based on v1.7.0 research findings.
 
 - **Toxic Flow Analysis** — Map data exfiltration risks across tool calls
 - **Security Posture Scoring** — Production-ready per-session security rating
@@ -286,7 +341,7 @@ Full implementation of security features based on v1.5.0 research findings.
 - **Security Panel in TUI** — Visual security indicators and alerts
 - **Security Recommendations** — AI-consumable security suggestions
 
-### v1.9.0 — Comparison Suite
+### v1.11.0 — Comparison Suite
 
 **Theme:** "Session Intelligence"
 
@@ -327,4 +382,4 @@ This roadmap represents our current development plans and is subject to change. 
 
 ---
 
-**Last Updated**: December 18, 2025
+**Last Updated**: December 26, 2025

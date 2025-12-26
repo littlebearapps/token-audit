@@ -211,4 +211,4 @@ If you encounter unexpected behavior in a stable API:
 
 ---
 
-*Last updated: v0.9.0*
+*Last updated: v1.0.0*
