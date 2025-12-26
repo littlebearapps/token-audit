@@ -4,10 +4,10 @@ This document outlines the planned development direction for Token Audit. For co
 
 ## Current Status
 
-**Version**: v1.0.1
-**Stage**: Released — MCP Server Mode, Best Practices, Config Analyzer
+**Version**: v1.0.2
+**Stage**: Released — MCP Server Enhancements
 
-Token Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. v1.0 adds MCP Server Mode with 8 tools for AI agent integration, best practices guidance system, multi-platform config analysis, and comprehensive integration documentation.
+Token Audit provides stable support for Claude Code, Codex CLI, and Gemini CLI. MCP Server Mode now includes 15 tools (7 new in v1.0.2) for AI agent integration: historical aggregation, session management, and pinned server operations. File locking ensures safe concurrent access from CLI, MCP, and TUI.
 
 **Next**: v1.1.0 "Billing & Statusline" — 5-hour billing block tracking, Claude Code statusline integration, weekly reports.
 

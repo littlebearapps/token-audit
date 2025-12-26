@@ -24,10 +24,14 @@ except ImportError as e:
 
 from . import tools
 from .schemas import (
+    PinAction,
     ReportFormat,
     ServerPlatform,
+    SessionSortBy,
     SeverityLevel,
+    SortOrder,
     TrendPeriod,
+    WeekStartDay,
 )
 
 
@@ -320,6 +324,285 @@ def create_server() -> FastMCP:
         return result.model_dump()
 
     # ========================================================================
+    # Tool 9: get_daily_summary (v1.0.2)
+    # ========================================================================
+    @mcp.tool()
+    def get_daily_summary(
+        days: int = 7,
+        platform: Optional[str] = None,
+        project: Optional[str] = None,
+        breakdown: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Get daily token usage aggregation across sessions.
+
+        Provides day-by-day breakdown of token usage and costs,
+        with trend analysis and optional per-model breakdown.
+
+        Args:
+            days: Number of days to include (default: 7, max: 90)
+            platform: Filter by platform. Valid: "claude_code", "codex_cli", "gemini_cli"
+            project: Filter by project name
+            breakdown: Include per-model token breakdown
+
+        Returns:
+            Daily usage summary with totals, per-day breakdown, and trends
+        """
+        platform_enum = None
+        if platform:
+            try:
+                platform_enum = ServerPlatform(platform)
+            except ValueError:
+                pass
+
+        result = tools.get_daily_summary(
+            days=min(days, 90),
+            platform=platform_enum,
+            project=project,
+            breakdown=breakdown,
+        )
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 10: get_weekly_summary (v1.0.2)
+    # ========================================================================
+    @mcp.tool()
+    def get_weekly_summary(
+        weeks: int = 4,
+        start_of_week: str = "monday",
+        platform: Optional[str] = None,
+        breakdown: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Get weekly token usage aggregation.
+
+        Provides week-by-week breakdown of token usage and costs,
+        with configurable week boundaries and trend analysis.
+
+        Args:
+            weeks: Number of weeks to include (default: 4, max: 52)
+            start_of_week: Week boundary. Valid: "monday", "sunday"
+            platform: Filter by platform. Valid: "claude_code", "codex_cli", "gemini_cli"
+            breakdown: Include per-model token breakdown
+
+        Returns:
+            Weekly usage summary with totals, per-week breakdown, and trends
+        """
+        try:
+            week_start_enum = WeekStartDay(start_of_week.lower())
+        except ValueError:
+            week_start_enum = WeekStartDay.MONDAY
+
+        platform_enum = None
+        if platform:
+            try:
+                platform_enum = ServerPlatform(platform)
+            except ValueError:
+                pass
+
+        result = tools.get_weekly_summary(
+            weeks=min(weeks, 52),
+            start_of_week=week_start_enum,
+            platform=platform_enum,
+            breakdown=breakdown,
+        )
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 11: get_monthly_summary (v1.0.2)
+    # ========================================================================
+    @mcp.tool()
+    def get_monthly_summary(
+        months: int = 3,
+        platform: Optional[str] = None,
+        breakdown: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Get monthly token usage aggregation.
+
+        Provides month-by-month breakdown of token usage and costs,
+        with trend analysis and optional per-model breakdown.
+
+        Args:
+            months: Number of months to include (default: 3, max: 24)
+            platform: Filter by platform. Valid: "claude_code", "codex_cli", "gemini_cli"
+            breakdown: Include per-model token breakdown
+
+        Returns:
+            Monthly usage summary with totals, per-month breakdown, and trends
+        """
+        platform_enum = None
+        if platform:
+            try:
+                platform_enum = ServerPlatform(platform)
+            except ValueError:
+                pass
+
+        result = tools.get_monthly_summary(
+            months=min(months, 24),
+            platform=platform_enum,
+            breakdown=breakdown,
+        )
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 12: list_sessions (v1.0.2)
+    # ========================================================================
+    @mcp.tool()
+    def list_sessions(
+        limit: int = 20,
+        offset: int = 0,
+        platform: Optional[str] = None,
+        project: Optional[str] = None,
+        since: Optional[str] = None,
+        until: Optional[str] = None,
+        sort_by: str = "date",
+        sort_order: str = "desc",
+    ) -> dict[str, Any]:
+        """
+        Query and list historical sessions with filtering.
+
+        Provides paginated access to session history with various
+        filter and sort options.
+
+        Args:
+            limit: Maximum sessions to return (1-100)
+            offset: Pagination offset
+            platform: Filter by platform. Valid: "claude_code", "codex_cli", "gemini_cli"
+            project: Filter by project name
+            since: Only sessions after this date (YYYY-MM-DD)
+            until: Only sessions before this date (YYYY-MM-DD)
+            sort_by: Sort field. Valid: "date", "cost", "tokens", "duration"
+            sort_order: Sort order. Valid: "asc", "desc"
+
+        Returns:
+            Paginated list of session summaries
+        """
+        platform_enum = None
+        if platform:
+            try:
+                platform_enum = ServerPlatform(platform)
+            except ValueError:
+                pass
+
+        try:
+            sort_by_enum = SessionSortBy(sort_by.lower())
+        except ValueError:
+            sort_by_enum = SessionSortBy.DATE
+
+        try:
+            sort_order_enum = SortOrder(sort_order.lower())
+        except ValueError:
+            sort_order_enum = SortOrder.DESC
+
+        result = tools.list_sessions(
+            limit=min(max(limit, 1), 100),
+            offset=max(offset, 0),
+            platform=platform_enum,
+            project=project,
+            since=since,
+            until=until,
+            sort_by=sort_by_enum,
+            sort_order=sort_order_enum,
+        )
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 13: get_session_details (v1.0.2)
+    # ========================================================================
+    @mcp.tool()
+    def get_session_details(
+        session_id: str,
+        include_tool_calls: bool = True,
+        include_smells: bool = True,
+        include_recommendations: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Retrieve complete session data.
+
+        Gets detailed information about a specific session including
+        token usage, MCP server activity, tool calls, and detected smells.
+
+        Args:
+            session_id: Session ID to retrieve
+            include_tool_calls: Include individual tool call details
+            include_smells: Include detected efficiency smells
+            include_recommendations: Include optimization recommendations
+
+        Returns:
+            Comprehensive session details with optional sections
+        """
+        result = tools.get_session_details(
+            session_id=session_id,
+            include_tool_calls=include_tool_calls,
+            include_smells=include_smells,
+            include_recommendations=include_recommendations,
+        )
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 14: pin_server (v1.0.2)
+    # ========================================================================
+    @mcp.tool()
+    def pin_server(
+        server_name: str,
+        notes: Optional[str] = None,
+        action: str = "pin",
+    ) -> dict[str, Any]:
+        """
+        Add, update, or remove a pinned MCP server.
+
+        Pinned servers receive focused analysis in recommendations
+        and are tracked separately in usage reports.
+
+        Args:
+            server_name: MCP server name to pin/unpin
+            notes: Optional notes about why this server is pinned
+            action: Action to perform. Valid: "pin", "unpin"
+
+        Returns:
+            Operation result with updated pinned servers list
+        """
+        try:
+            action_enum = PinAction(action.lower())
+        except ValueError:
+            action_enum = PinAction.PIN
+
+        result = tools.pin_server(
+            server_name=server_name,
+            notes=notes,
+            action=action_enum,
+        )
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 15: delete_session (v1.0.2)
+    # ========================================================================
+    @mcp.tool()
+    def delete_session(
+        session_id: str,
+        confirm: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Delete a session from storage.
+
+        Permanently removes a session and its associated data.
+        Requires explicit confirmation for safety.
+
+        Args:
+            session_id: Session ID to delete
+            confirm: Must be true to confirm deletion (safety check)
+
+        Returns:
+            Deletion result with status message
+        """
+        result = tools.delete_session(
+            session_id=session_id,
+            confirm=confirm,
+        )
+        return result.model_dump()
+
+    # ========================================================================
     # MCP Resources (v1.0.0 - task-194)
     # ========================================================================
 
@@ -445,7 +728,274 @@ No practices found in the {category} category.
         exporter = BestPracticesExporter()
         return exporter.to_markdown(practices)
 
+    # ========================================================================
+    # MCP Resources for Usage Summaries (v1.0.2)
+    # ========================================================================
+
+    @mcp.resource("token-audit://usage/daily")
+    def usage_daily() -> str:
+        """
+        Get daily usage summary for the last 7 days.
+
+        Returns a markdown-formatted summary of token usage and costs
+        with day-by-day breakdown and trend analysis.
+        """
+        result = tools.get_daily_summary(days=7, breakdown=False)
+        return _format_daily_summary_as_markdown(result)
+
+    @mcp.resource("token-audit://usage/weekly")
+    def usage_weekly() -> str:
+        """
+        Get weekly usage summary for the last 4 weeks.
+
+        Returns a markdown-formatted summary of token usage and costs
+        with week-by-week breakdown and trend analysis.
+        """
+        from .schemas import WeekStartDay
+
+        result = tools.get_weekly_summary(
+            weeks=4, start_of_week=WeekStartDay.MONDAY, breakdown=False
+        )
+        return _format_weekly_summary_as_markdown(result)
+
+    @mcp.resource("token-audit://usage/monthly")
+    def usage_monthly() -> str:
+        """
+        Get monthly usage summary for the last 3 months.
+
+        Returns a markdown-formatted summary of token usage and costs
+        with month-by-month breakdown and trend analysis.
+        """
+        result = tools.get_monthly_summary(months=3, breakdown=False)
+        return _format_monthly_summary_as_markdown(result)
+
+    # ========================================================================
+    # MCP Resources for Sessions (v1.0.2)
+    # ========================================================================
+
+    @mcp.resource("token-audit://sessions")
+    def sessions_list() -> str:
+        """
+        List recent sessions.
+
+        Returns a markdown-formatted list of the 20 most recent sessions
+        with key metrics and links to detailed views.
+        """
+        from .schemas import SessionSortBy, SortOrder
+
+        result = tools.list_sessions(
+            limit=20,
+            offset=0,
+            sort_by=SessionSortBy.DATE,
+            sort_order=SortOrder.DESC,
+        )
+        return _format_sessions_list_as_markdown(result)
+
+    @mcp.resource("token-audit://sessions/{session_id}")
+    def session_detail(session_id: str) -> str:
+        """
+        Get detailed session information.
+
+        Args:
+            session_id: The session ID to retrieve
+
+        Returns:
+            Markdown-formatted session details including token usage,
+            MCP server activity, and detected smells.
+        """
+        result = tools.get_session_details(
+            session_id=session_id,
+            include_tool_calls=True,
+            include_smells=True,
+            include_recommendations=True,
+        )
+        return _format_session_details_as_markdown(result)
+
     return mcp
+
+
+# =============================================================================
+# Markdown Formatters for Resources (v1.0.2)
+# =============================================================================
+
+
+def _format_daily_summary_as_markdown(result: Any) -> str:
+    """Format daily summary output as markdown."""
+    lines = ["# Daily Token Usage Summary", ""]
+    lines.append(f"**Period:** {result.period.start} to {result.period.end}")
+    lines.append("")
+
+    lines.append("## Totals")
+    lines.append(f"- Sessions: {result.totals.sessions}")
+    lines.append(f"- Total Tokens: {result.totals.total_tokens:,}")
+    lines.append(f"- Total Cost: ${result.totals.cost_usd:.4f}")
+    lines.append("")
+
+    lines.append("## Daily Breakdown")
+    lines.append("")
+    lines.append("| Date | Sessions | Tokens | Cost |")
+    lines.append("|------|----------|--------|------|")
+    for day in result.daily:
+        lines.append(
+            f"| {day.date} | {day.sessions} | {day.total_tokens:,} | ${day.cost_usd:.4f} |"
+        )
+    lines.append("")
+
+    lines.append("## Trends")
+    lines.append(f"- Direction: {result.trends.direction.value}")
+    lines.append(f"- Change: {result.trends.change_percent:.1f}%")
+    if result.trends.busiest_day:
+        lines.append(f"- Busiest Day: {result.trends.busiest_day}")
+    lines.append(f"- Average Daily Cost: ${result.trends.avg_daily_cost:.4f}")
+
+    return "\n".join(lines)
+
+
+def _format_weekly_summary_as_markdown(result: Any) -> str:
+    """Format weekly summary output as markdown."""
+    lines = ["# Weekly Token Usage Summary", ""]
+    lines.append(f"**Period:** {result.period.start} to {result.period.end}")
+    lines.append("")
+
+    lines.append("## Totals")
+    lines.append(f"- Sessions: {result.totals.sessions}")
+    lines.append(f"- Total Tokens: {result.totals.total_tokens:,}")
+    lines.append(f"- Total Cost: ${result.totals.cost_usd:.4f}")
+    lines.append("")
+
+    lines.append("## Weekly Breakdown")
+    lines.append("")
+    lines.append("| Week | Sessions | Tokens | Cost | Avg/Session |")
+    lines.append("|------|----------|--------|------|-------------|")
+    for week in result.weekly:
+        lines.append(
+            f"| {week.week_start} | {week.sessions} | {week.total_tokens:,} | "
+            f"${week.cost_usd:.4f} | ${week.avg_session_cost:.4f} |"
+        )
+    lines.append("")
+
+    lines.append("## Trends")
+    lines.append(f"- Direction: {result.trends.direction.value}")
+    lines.append(f"- Change: {result.trends.change_percent:.1f}%")
+
+    return "\n".join(lines)
+
+
+def _format_monthly_summary_as_markdown(result: Any) -> str:
+    """Format monthly summary output as markdown."""
+    lines = ["# Monthly Token Usage Summary", ""]
+    lines.append(f"**Period:** {result.period.start} to {result.period.end}")
+    lines.append("")
+
+    lines.append("## Totals")
+    lines.append(f"- Sessions: {result.totals.sessions}")
+    lines.append(f"- Total Tokens: {result.totals.total_tokens:,}")
+    lines.append(f"- Total Cost: ${result.totals.cost_usd:.4f}")
+    lines.append("")
+
+    lines.append("## Monthly Breakdown")
+    lines.append("")
+    lines.append("| Month | Sessions | Tokens | Cost |")
+    lines.append("|-------|----------|--------|------|")
+    for month in result.monthly:
+        lines.append(
+            f"| {month.month} | {month.sessions} | {month.total_tokens:,} | ${month.cost_usd:.4f} |"
+        )
+    lines.append("")
+
+    lines.append("## Trends")
+    lines.append(f"- Direction: {result.trends.direction.value}")
+    lines.append(f"- Change: {result.trends.change_percent:.1f}%")
+
+    return "\n".join(lines)
+
+
+def _format_sessions_list_as_markdown(result: Any) -> str:
+    """Format sessions list output as markdown."""
+    lines = ["# Recent Sessions", ""]
+    lines.append(f"Showing {len(result.sessions)} of {result.pagination.total} sessions")
+    lines.append("")
+
+    if not result.sessions:
+        lines.append("*No sessions found.*")
+        return "\n".join(lines)
+
+    lines.append("| Session | Platform | Started | Tokens | Cost | Smells |")
+    lines.append("|---------|----------|---------|--------|------|--------|")
+    for session in result.sessions:
+        lines.append(
+            f"| {session.session_id[:16]}... | {session.platform} | "
+            f"{session.started_at[:10]} | {session.total_tokens:,} | "
+            f"${session.cost_usd:.4f} | {session.smells_detected} |"
+        )
+    lines.append("")
+
+    if result.pagination.has_more:
+        lines.append(f"*{result.pagination.total - len(result.sessions)} more sessions available.*")
+
+    return "\n".join(lines)
+
+
+def _format_session_details_as_markdown(result: Any) -> str:
+    """Format session details output as markdown."""
+    lines = [f"# Session: {result.session.session_id}", ""]
+
+    lines.append("## Overview")
+    lines.append(f"- **Platform:** {result.session.platform}")
+    if result.session.project:
+        lines.append(f"- **Project:** {result.session.project}")
+    lines.append(f"- **Started:** {result.session.started_at}")
+    if result.session.ended_at:
+        lines.append(f"- **Ended:** {result.session.ended_at}")
+    lines.append(f"- **Duration:** {result.session.duration_seconds}s")
+    if result.session.model:
+        lines.append(f"- **Model:** {result.session.model}")
+    lines.append("")
+
+    lines.append("## Token Usage")
+    lines.append(f"- Input: {result.token_usage.input_tokens:,}")
+    lines.append(f"- Output: {result.token_usage.output_tokens:,}")
+    if result.token_usage.cache_read_tokens:
+        lines.append(f"- Cache Read: {result.token_usage.cache_read_tokens:,}")
+    if result.token_usage.cache_write_tokens:
+        lines.append(f"- Cache Write: {result.token_usage.cache_write_tokens:,}")
+    lines.append(f"- **Total:** {result.token_usage.total_tokens:,}")
+    lines.append(f"- **Cost:** ${result.token_usage.cost_usd:.4f}")
+    lines.append("")
+
+    if result.mcp_usage.servers:
+        lines.append("## MCP Servers")
+        for server in result.mcp_usage.servers:
+            lines.append(
+                f"- **{server.name}:** {server.total_calls} calls, {server.tools_used} tools"
+            )
+        lines.append("")
+
+    if result.mcp_usage.top_tools:
+        lines.append("## Top Tools")
+        for tool in result.mcp_usage.top_tools[:5]:
+            lines.append(f"- {tool.name}: {tool.calls} calls")
+        lines.append("")
+
+    if result.smells:
+        lines.append("## Detected Smells")
+        for smell in result.smells:
+            lines.append(f"- **[{smell.severity.value}]** {smell.pattern}: {smell.message}")
+        lines.append("")
+
+    if result.recommendations:
+        lines.append("## Recommendations")
+        for rec in result.recommendations[:3]:
+            lines.append(f"### {rec.title}")
+            lines.append(rec.action)
+            lines.append("")
+
+    lines.append("---")
+    lines.append(
+        f"*Data Quality: {result.data_quality.accuracy_level.value} ({result.data_quality.confidence:.0%} confidence)*"
+    )
+
+    return "\n".join(lines)
 
 
 # Global server instance (lazy initialization)

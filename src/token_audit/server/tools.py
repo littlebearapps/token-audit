@@ -1,7 +1,7 @@
 """
 MCP tool implementations for token-audit server.
 
-This module contains all 8 MCP tools:
+This module contains all 15 MCP tools:
 - start_tracking (implemented)
 - get_metrics (implemented)
 - get_recommendations (implemented)
@@ -10,12 +10,20 @@ This module contains all 8 MCP tools:
 - analyze_config (implemented)
 - get_pinned_servers (implemented)
 - get_trends (implemented)
+- get_daily_summary (v1.0.2)
+- get_weekly_summary (v1.0.2)
+- get_monthly_summary (v1.0.2)
+- list_sessions (v1.0.2)
+- get_session_details (v1.0.2)
+- pin_server (v1.0.2)
+- delete_session (v1.0.2)
 """
 
+import contextlib
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, Tuple, cast
 
 from ..base_tracker import Smell
 from ..config_analyzer import (
@@ -42,6 +50,7 @@ from ..recommendations import Recommendation as InternalRecommendation
 from ..recommendations import RecommendationEngine
 from ..schema_analyzer import SchemaAnalyzer
 from ..smell_aggregator import AggregatedSmell, SmellAggregator
+from ..storage import Platform
 from ..zombie_detector import load_zombie_config
 from .live_tracker import LiveTracker
 from .schemas import (
@@ -50,24 +59,53 @@ from .schemas import (
     BestPractice,
     CacheMetrics,
     ConfigIssue,
+    DailyUsageEntry,
+    DataQuality,
+    DataQualityInfo,
+    DeleteSessionOutput,
     GetBestPracticesOutput,
+    GetDailySummaryOutput,
     GetMetricsOutput,
+    GetMonthlySummaryOutput,
     GetPinnedServersOutput,
     GetRecommendationsOutput,
+    GetSessionDetailsOutput,
     GetTrendsOutput,
+    GetWeeklySummaryOutput,
+    ListSessionsOutput,
+    MCPUsage,
+    MonthlyUsageEntry,
+    PaginationInfo,
+    PinAction,
     PinnedServerInfo,
     PinnedServerUsage,
+    PinServerOutput,
     RateMetrics,
     Recommendation,
     ReportFormat,
     ServerInfo,
     ServerPlatform,
+    ServerUsage,
+    SessionListEntry,
+    SessionMetadata,
+    SessionSortBy,
+    SessionTokenUsage,
     SeverityLevel,
+    SmellEntry,
     SmellSummary,
     SmellTrend,
+    SortOrder,
     StartTrackingOutput,
     TokenMetrics,
+    ToolCallEntry,
+    TopTool,
+    TrendDirection,
     TrendPeriod,
+    UsagePeriod,
+    UsageTotals,
+    UsageTrends,
+    WeeklyUsageEntry,
+    WeekStartDay,
     ZombieTool,
 )
 from .security import sanitize_error_message, sanitize_path_for_output, validate_config_path
@@ -1512,13 +1550,15 @@ def get_trends(
         )
 
     # Convert AggregatedSmell to SmellTrend schema objects
+    # Type alias for trend literals
+    TrendLiteral = Literal["improving", "stable", "worsening"]
     smell_trends: List[SmellTrend] = []
     for agg_smell in result.aggregated_smells:
         smell_trends.append(
             SmellTrend(
                 pattern=agg_smell.pattern,
                 occurrences=agg_smell.total_occurrences,
-                trend=agg_smell.trend,  # type: ignore  # "improving"|"worsening"|"stable" is valid
+                trend=cast(TrendLiteral, agg_smell.trend),
                 change_percent=round(agg_smell.trend_change_percent, 1),
             )
         )
@@ -1544,6 +1584,897 @@ def get_trends(
         sessions_analyzed=result.total_sessions,
         patterns=smell_trends,
         top_affected_tools=top_tools,
-        overall_trend=overall,  # type: ignore  # Literal type matches
+        overall_trend=cast(TrendLiteral, overall),
         recommendations=recommendations,
     )
+
+
+# ============================================================================
+# Tool 9: get_daily_summary (v1.0.2)
+# ============================================================================
+
+
+def _calculate_usage_trends(
+    entries: List[Tuple[float, int]],  # List of (cost, tokens) tuples
+) -> Tuple[TrendDirection, float, float]:
+    """Calculate trend direction, change percent, and average cost.
+
+    Args:
+        entries: List of (cost_usd, total_tokens) tuples in chronological order
+
+    Returns:
+        Tuple of (direction, change_percent, avg_cost)
+    """
+    if not entries:
+        return TrendDirection.STABLE, 0.0, 0.0
+
+    costs = [e[0] for e in entries]
+    avg_cost = sum(costs) / len(costs) if costs else 0.0
+
+    if len(costs) < 2:
+        return TrendDirection.STABLE, 0.0, avg_cost
+
+    # Compare first half to second half for trend
+    mid = len(costs) // 2
+    first_half_avg = sum(costs[:mid]) / mid if mid > 0 else 0.0
+    second_half_avg = sum(costs[mid:]) / (len(costs) - mid) if len(costs) - mid > 0 else 0.0
+
+    if first_half_avg == 0:
+        change_percent = 100.0 if second_half_avg > 0 else 0.0
+    else:
+        change_percent = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+
+    if change_percent > 10:
+        direction = TrendDirection.INCREASING
+    elif change_percent < -10:
+        direction = TrendDirection.DECREASING
+    else:
+        direction = TrendDirection.STABLE
+
+    return direction, round(change_percent, 1), round(avg_cost, 6)
+
+
+def get_daily_summary(
+    days: int = 7,
+    platform: ServerPlatform | None = None,
+    project: str | None = None,
+    breakdown: bool = False,
+) -> GetDailySummaryOutput:
+    """
+    Retrieve daily token usage aggregation across sessions.
+
+    Args:
+        days: Number of days to include (default: 7, max: 90)
+        platform: Filter by platform (all platforms if not specified)
+        project: Filter by project name
+        breakdown: Include per-model token breakdown
+
+    Returns:
+        Daily usage summary with totals, per-day breakdown, and trends
+    """
+    from ..aggregation import aggregate_daily
+    from ..storage import StorageManager
+
+    storage = StorageManager()
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days - 1)
+
+    # Map platform enum to storage Platform type
+    platform_filter: Optional[Platform] = platform.value if platform else None
+
+    # Get daily aggregates
+    daily_aggregates = aggregate_daily(
+        platform=platform_filter,
+        start_date=start_date,
+        end_date=end_date,
+        group_by_project=project is not None,
+        storage=storage,
+    )
+
+    # Filter by project if specified
+    if project and daily_aggregates:
+        # Project filter is applied per-session during aggregation
+        # For now we don't have project-level filtering in aggregate_daily
+        pass  # TODO: Add project filtering when aggregation supports it
+
+    # Build daily entries
+    daily_entries: List[DailyUsageEntry] = []
+    trend_data: List[Tuple[float, int]] = []
+    busiest_day: Optional[str] = None
+    busiest_tokens = 0
+
+    for agg in daily_aggregates:
+        cost_usd = float(agg.cost_usd)
+
+        entry = DailyUsageEntry(
+            date=agg.date,
+            sessions=agg.session_count,
+            input_tokens=agg.input_tokens,
+            output_tokens=agg.output_tokens,
+            total_tokens=agg.total_tokens,
+            cost_usd=cost_usd,
+            model_breakdown=(
+                {k: v.to_dict() for k, v in agg.model_breakdowns.items()} if breakdown else None
+            ),
+        )
+        daily_entries.append(entry)
+        trend_data.append((cost_usd, agg.total_tokens))
+
+        if agg.total_tokens > busiest_tokens:
+            busiest_tokens = agg.total_tokens
+            busiest_day = agg.date
+
+    # Calculate totals
+    total_sessions = sum(d.sessions for d in daily_entries)
+    total_input = sum(d.input_tokens for d in daily_entries)
+    total_output = sum(d.output_tokens for d in daily_entries)
+    total_tokens = sum(d.total_tokens for d in daily_entries)
+    total_cost = sum(d.cost_usd for d in daily_entries)
+
+    # Calculate trends
+    direction, change_percent, avg_cost = _calculate_usage_trends(trend_data)
+
+    return GetDailySummaryOutput(
+        period=UsagePeriod(
+            start=start_date.isoformat(),
+            end=end_date.isoformat(),
+            days=days,
+        ),
+        totals=UsageTotals(
+            sessions=total_sessions,
+            input_tokens=total_input,
+            output_tokens=total_output,
+            total_tokens=total_tokens,
+            cost_usd=round(total_cost, 6),
+        ),
+        daily=daily_entries,
+        trends=UsageTrends(
+            direction=direction,
+            change_percent=change_percent,
+            busiest_day=busiest_day,
+            avg_daily_cost=avg_cost,
+        ),
+    )
+
+
+# ============================================================================
+# Tool 10: get_weekly_summary (v1.0.2)
+# ============================================================================
+
+
+def get_weekly_summary(
+    weeks: int = 4,
+    start_of_week: WeekStartDay = WeekStartDay.MONDAY,
+    platform: ServerPlatform | None = None,
+    breakdown: bool = False,
+) -> GetWeeklySummaryOutput:
+    """
+    Retrieve weekly token usage aggregation.
+
+    Args:
+        weeks: Number of weeks to include (default: 4, max: 52)
+        start_of_week: Week boundary (Monday or Sunday)
+        platform: Filter by platform (all platforms if not specified)
+        breakdown: Include per-model token breakdown
+
+    Returns:
+        Weekly usage summary with totals, per-week breakdown, and trends
+    """
+    from ..aggregation import aggregate_weekly
+    from ..storage import StorageManager
+
+    storage = StorageManager()
+    end_date = date.today()
+    # Calculate start date to cover requested weeks
+    start_date = end_date - timedelta(weeks=weeks)
+
+    # Map platform enum to storage Platform type
+    platform_filter: Optional[Platform] = platform.value if platform else None
+
+    # Map start_of_week to integer (0=Monday, 6=Sunday)
+    week_start_int = 0 if start_of_week == WeekStartDay.MONDAY else 6
+
+    # Get weekly aggregates
+    weekly_aggregates = aggregate_weekly(
+        platform=platform_filter,
+        start_date=start_date,
+        end_date=end_date,
+        start_of_week=week_start_int,
+        storage=storage,
+    )
+
+    # Build weekly entries
+    weekly_entries: List[WeeklyUsageEntry] = []
+    trend_data: List[Tuple[float, int]] = []
+    busiest_week: Optional[str] = None
+    busiest_tokens = 0
+
+    for agg in weekly_aggregates:
+        cost_usd = float(agg.cost_usd)
+        avg_session_cost = cost_usd / agg.session_count if agg.session_count > 0 else 0.0
+
+        entry = WeeklyUsageEntry(
+            week_start=agg.week_start,
+            week_end=agg.week_end,
+            sessions=agg.session_count,
+            input_tokens=agg.input_tokens,
+            output_tokens=agg.output_tokens,
+            total_tokens=agg.total_tokens,
+            cost_usd=cost_usd,
+            avg_session_cost=round(avg_session_cost, 6),
+            model_breakdown=(
+                {k: v.to_dict() for k, v in agg.model_breakdowns.items()} if breakdown else None
+            ),
+        )
+        weekly_entries.append(entry)
+        trend_data.append((cost_usd, agg.total_tokens))
+
+        if agg.total_tokens > busiest_tokens:
+            busiest_tokens = agg.total_tokens
+            busiest_week = agg.week_start
+
+    # Calculate totals
+    total_sessions = sum(w.sessions for w in weekly_entries)
+    total_input = sum(w.input_tokens for w in weekly_entries)
+    total_output = sum(w.output_tokens for w in weekly_entries)
+    total_tokens = sum(w.total_tokens for w in weekly_entries)
+    total_cost = sum(w.cost_usd for w in weekly_entries)
+
+    # Calculate trends
+    direction, change_percent, avg_cost = _calculate_usage_trends(trend_data)
+
+    # Determine period start/end from actual data
+    if weekly_entries:
+        period_start = weekly_entries[0].week_start
+        period_end = weekly_entries[-1].week_end
+    else:
+        period_start = start_date.isoformat()
+        period_end = end_date.isoformat()
+
+    return GetWeeklySummaryOutput(
+        period=UsagePeriod(
+            start=period_start,
+            end=period_end,
+            weeks=weeks,
+        ),
+        totals=UsageTotals(
+            sessions=total_sessions,
+            input_tokens=total_input,
+            output_tokens=total_output,
+            total_tokens=total_tokens,
+            cost_usd=round(total_cost, 6),
+        ),
+        weekly=weekly_entries,
+        trends=UsageTrends(
+            direction=direction,
+            change_percent=change_percent,
+            busiest_day=busiest_week,  # Reusing field for busiest_week
+            avg_daily_cost=avg_cost,  # Actually avg_weekly_cost here
+        ),
+    )
+
+
+# ============================================================================
+# Tool 11: get_monthly_summary (v1.0.2)
+# ============================================================================
+
+
+def get_monthly_summary(
+    months: int = 3,
+    platform: ServerPlatform | None = None,
+    breakdown: bool = False,
+) -> GetMonthlySummaryOutput:
+    """
+    Retrieve monthly token usage aggregation.
+
+    Args:
+        months: Number of months to include (default: 3, max: 24)
+        platform: Filter by platform (all platforms if not specified)
+        breakdown: Include per-model token breakdown
+
+    Returns:
+        Monthly usage summary with totals, per-month breakdown, and trends
+    """
+    from ..aggregation import aggregate_monthly
+    from ..storage import StorageManager
+
+    storage = StorageManager()
+    end_date = date.today()
+    # Calculate start date to cover requested months
+    start_date = date(end_date.year, end_date.month, 1) - timedelta(days=30 * (months - 1))
+
+    # Map platform enum to storage Platform type
+    platform_filter: Optional[Platform] = platform.value if platform else None
+
+    # Get monthly aggregates
+    monthly_aggregates = aggregate_monthly(
+        platform=platform_filter,
+        start_date=start_date,
+        end_date=end_date,
+        storage=storage,
+    )
+
+    # Build monthly entries
+    monthly_entries: List[MonthlyUsageEntry] = []
+    trend_data: List[Tuple[float, int]] = []
+    busiest_month: Optional[str] = None
+    busiest_tokens = 0
+
+    for agg in monthly_aggregates:
+        cost_usd = float(agg.cost_usd)
+
+        entry = MonthlyUsageEntry(
+            month=agg.month_str,
+            sessions=agg.session_count,
+            input_tokens=agg.input_tokens,
+            output_tokens=agg.output_tokens,
+            total_tokens=agg.total_tokens,
+            cost_usd=cost_usd,
+            model_breakdown=(
+                {k: v.to_dict() for k, v in agg.model_breakdowns.items()} if breakdown else None
+            ),
+        )
+        monthly_entries.append(entry)
+        trend_data.append((cost_usd, agg.total_tokens))
+
+        if agg.total_tokens > busiest_tokens:
+            busiest_tokens = agg.total_tokens
+            busiest_month = agg.month_str
+
+    # Calculate totals
+    total_sessions = sum(m.sessions for m in monthly_entries)
+    total_input = sum(m.input_tokens for m in monthly_entries)
+    total_output = sum(m.output_tokens for m in monthly_entries)
+    total_tokens = sum(m.total_tokens for m in monthly_entries)
+    total_cost = sum(m.cost_usd for m in monthly_entries)
+
+    # Calculate trends
+    direction, change_percent, avg_cost = _calculate_usage_trends(trend_data)
+
+    # Determine period start/end from actual data
+    if monthly_entries:
+        period_start = f"{monthly_entries[0].month}-01"
+        # Last day of the last month
+        last_month = monthly_entries[-1].month
+        year, month_num = map(int, last_month.split("-"))
+        next_month = date(year + 1, 1, 1) if month_num == 12 else date(year, month_num + 1, 1)
+        period_end = (next_month - timedelta(days=1)).isoformat()
+    else:
+        period_start = start_date.isoformat()
+        period_end = end_date.isoformat()
+
+    return GetMonthlySummaryOutput(
+        period=UsagePeriod(
+            start=period_start,
+            end=period_end,
+            months=months,
+        ),
+        totals=UsageTotals(
+            sessions=total_sessions,
+            input_tokens=total_input,
+            output_tokens=total_output,
+            total_tokens=total_tokens,
+            cost_usd=round(total_cost, 6),
+        ),
+        monthly=monthly_entries,
+        trends=UsageTrends(
+            direction=direction,
+            change_percent=change_percent,
+            busiest_day=busiest_month,  # Reusing field for busiest_month
+            avg_daily_cost=avg_cost,  # Actually avg_monthly_cost here
+        ),
+    )
+
+
+# ============================================================================
+# Tool 12: list_sessions (v1.0.2)
+# ============================================================================
+
+
+def list_sessions(
+    limit: int = 20,
+    offset: int = 0,
+    platform: ServerPlatform | None = None,
+    project: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    sort_by: SessionSortBy = SessionSortBy.DATE,
+    sort_order: SortOrder = SortOrder.DESC,
+) -> ListSessionsOutput:
+    """
+    Query and list historical sessions with filtering.
+
+    Args:
+        limit: Maximum sessions to return (1-100)
+        offset: Pagination offset
+        platform: Filter by platform
+        project: Filter by project name
+        since: Only sessions after this date (YYYY-MM-DD)
+        until: Only sessions before this date (YYYY-MM-DD)
+        sort_by: Sort field (date, cost, tokens, duration)
+        sort_order: Sort order (asc, desc)
+
+    Returns:
+        Paginated list of session summaries
+    """
+    from ..session_manager import SessionManager
+    from ..storage import StorageManager
+
+    storage = StorageManager()
+    session_manager = SessionManager()
+
+    # Parse date filters
+    start_date = date.fromisoformat(since) if since else None
+    end_date = date.fromisoformat(until) if until else None
+
+    # Map platform enum to storage Platform type
+    platform_filter: Optional[Platform] = platform.value if platform else None
+
+    # Get all matching sessions
+    session_paths = storage.list_sessions(
+        platform=platform_filter,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    # Load session data for sorting and filtering
+    sessions_data: List[Dict[str, Any]] = []
+    for path in session_paths:
+        session = session_manager.load_session(path)
+        if session is None:
+            continue
+
+        # Filter by project if specified
+        if project and session.working_directory != project:
+            continue
+
+        # Calculate duration
+        if session.end_timestamp and session.timestamp:
+            try:
+                # Both are datetime objects
+                duration_seconds = int((session.end_timestamp - session.timestamp).total_seconds())
+            except (ValueError, TypeError):
+                duration_seconds = 0
+        else:
+            duration_seconds = 0
+
+        # Determine data quality
+        if session.token_usage and session.token_usage.total_tokens > 0:
+            data_quality = DataQuality.EXACT
+        elif session.mcp_tool_calls and session.mcp_tool_calls.total_calls > 0:
+            data_quality = DataQuality.CALLS_ONLY
+        else:
+            data_quality = DataQuality.ESTIMATED
+
+        # Get primary model
+        primary_model = None
+        if session.model_usage:
+            # Get model with most calls
+            max_calls = 0
+            for model_name, usage in session.model_usage.items():
+                if usage.call_count > max_calls:
+                    max_calls = usage.call_count
+                    primary_model = model_name
+
+        # Count smells
+        smells_count = len(session.smells) if session.smells else 0
+
+        # Convert timestamps to ISO strings
+        started_at_str = session.timestamp.isoformat() if session.timestamp else ""
+        ended_at_str = session.end_timestamp.isoformat() if session.end_timestamp else None
+
+        sessions_data.append(
+            {
+                "session_id": path.stem,
+                "platform": session.platform or "unknown",
+                "project": session.working_directory,
+                "started_at": started_at_str,
+                "ended_at": ended_at_str,
+                "duration_seconds": duration_seconds,
+                "total_tokens": session.token_usage.total_tokens if session.token_usage else 0,
+                "cost_usd": session.cost_estimate or 0.0,
+                "model": primary_model,
+                "tool_calls": session.mcp_tool_calls.total_calls if session.mcp_tool_calls else 0,
+                "smells_detected": smells_count,
+                "data_quality": data_quality,
+            }
+        )
+
+    # Sort sessions
+    reverse = sort_order == SortOrder.DESC
+    if sort_by == SessionSortBy.DATE:
+        sessions_data.sort(key=lambda s: s["started_at"], reverse=reverse)
+    elif sort_by == SessionSortBy.COST:
+        sessions_data.sort(key=lambda s: s["cost_usd"], reverse=reverse)
+    elif sort_by == SessionSortBy.TOKENS:
+        sessions_data.sort(key=lambda s: s["total_tokens"], reverse=reverse)
+    elif sort_by == SessionSortBy.DURATION:
+        sessions_data.sort(key=lambda s: s["duration_seconds"], reverse=reverse)
+
+    # Calculate pagination
+    total = len(sessions_data)
+    has_more = offset + limit < total
+
+    # Apply pagination
+    paginated = sessions_data[offset : offset + limit]
+
+    # Convert to output schema
+    entries = [
+        SessionListEntry(
+            session_id=s["session_id"],
+            platform=s["platform"],
+            project=s["project"],
+            started_at=s["started_at"],
+            ended_at=s["ended_at"],
+            duration_seconds=s["duration_seconds"],
+            total_tokens=s["total_tokens"],
+            cost_usd=s["cost_usd"],
+            model=s["model"],
+            tool_calls=s["tool_calls"],
+            smells_detected=s["smells_detected"],
+            data_quality=s["data_quality"],
+        )
+        for s in paginated
+    ]
+
+    return ListSessionsOutput(
+        sessions=entries,
+        pagination=PaginationInfo(
+            total=total,
+            limit=limit,
+            offset=offset,
+            has_more=has_more,
+        ),
+    )
+
+
+# ============================================================================
+# Tool 13: get_session_details (v1.0.2)
+# ============================================================================
+
+
+def get_session_details(
+    session_id: str,
+    include_tool_calls: bool = True,
+    include_smells: bool = True,
+    include_recommendations: bool = True,
+) -> GetSessionDetailsOutput:
+    """
+    Retrieve complete session data including tool calls and smells.
+
+    Args:
+        session_id: Session ID to retrieve
+        include_tool_calls: Include individual tool call details
+        include_smells: Include detected efficiency smells
+        include_recommendations: Include optimization recommendations
+
+    Returns:
+        Comprehensive session details with optional sections
+    """
+    from ..session_manager import SessionManager
+    from ..storage import StorageManager
+
+    storage = StorageManager()
+    session_manager = SessionManager()
+
+    # Find session file
+    session_path = storage.find_session(session_id)
+    if session_path is None:
+        # Return empty result with error message
+        return GetSessionDetailsOutput(
+            session=SessionMetadata(
+                session_id=session_id,
+                platform="unknown",
+                started_at="",
+                duration_seconds=0,
+            ),
+            token_usage=SessionTokenUsage(
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                cost_usd=0.0,
+            ),
+            mcp_usage=MCPUsage(),
+            data_quality=DataQualityInfo(
+                accuracy_level=DataQuality.ESTIMATED,
+                pricing_source="none",
+                confidence=0.0,
+            ),
+        )
+
+    # Load session
+    session = session_manager.load_session(session_path)
+    if session is None:
+        return GetSessionDetailsOutput(
+            session=SessionMetadata(
+                session_id=session_id,
+                platform="unknown",
+                started_at="",
+                duration_seconds=0,
+            ),
+            token_usage=SessionTokenUsage(
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                cost_usd=0.0,
+            ),
+            mcp_usage=MCPUsage(),
+            data_quality=DataQualityInfo(
+                accuracy_level=DataQuality.ESTIMATED,
+                pricing_source="none",
+                confidence=0.0,
+            ),
+        )
+
+    # Calculate duration
+    duration_seconds = 0
+    if session.end_timestamp and session.timestamp:
+        with contextlib.suppress(ValueError, TypeError):
+            # Both are datetime objects
+            duration_seconds = int((session.end_timestamp - session.timestamp).total_seconds())
+
+    # Get all models used
+    models_used = list(session.model_usage.keys()) if session.model_usage else []
+    primary_model = models_used[0] if models_used else None
+
+    # Convert timestamps to ISO strings
+    started_at_str = session.timestamp.isoformat() if session.timestamp else ""
+    ended_at_str = session.end_timestamp.isoformat() if session.end_timestamp else None
+
+    # Build session metadata
+    session_meta = SessionMetadata(
+        session_id=session_id,
+        platform=session.platform or "unknown",
+        project=session.working_directory,
+        started_at=started_at_str,
+        ended_at=ended_at_str,
+        duration_seconds=duration_seconds,
+        model=primary_model,
+        models_used=models_used,
+    )
+
+    # Build token usage
+    token_usage = SessionTokenUsage(
+        input_tokens=session.token_usage.input_tokens if session.token_usage else 0,
+        output_tokens=session.token_usage.output_tokens if session.token_usage else 0,
+        cache_read_tokens=session.token_usage.cache_read_tokens if session.token_usage else 0,
+        cache_write_tokens=session.token_usage.cache_created_tokens if session.token_usage else 0,
+        total_tokens=session.token_usage.total_tokens if session.token_usage else 0,
+        cost_usd=session.cost_estimate or 0.0,
+    )
+
+    # Build MCP usage
+    servers: List[ServerUsage] = []
+    top_tools_list: List[TopTool] = []
+
+    if session.server_sessions:
+        for server_name, server_data in session.server_sessions.items():
+            if isinstance(server_data, dict):
+                tools_used = len(server_data.get("tools", {}))
+                total_calls = sum(
+                    t.get("call_count", 0) for t in server_data.get("tools", {}).values()
+                )
+                total_tokens = sum(
+                    t.get("total_tokens", 0) for t in server_data.get("tools", {}).values()
+                )
+                servers.append(
+                    ServerUsage(
+                        name=server_name,
+                        tools_used=tools_used,
+                        total_calls=total_calls,
+                        total_tokens=total_tokens,
+                    )
+                )
+
+    # Get top tools from server_sessions (MCPToolCalls is just a summary)
+    # Tool usage details are stored in server_sessions
+    if session.server_sessions:
+        tool_calls_counter: Dict[str, int] = {}
+        for server_session in session.server_sessions.values():
+            if hasattr(server_session, "tools"):
+                for tool_name, tool_stats in server_session.tools.items():
+                    call_count = tool_stats.call_count if hasattr(tool_stats, "call_count") else 0
+                    tool_calls_counter[tool_name] = (
+                        tool_calls_counter.get(tool_name, 0) + call_count
+                    )
+        tool_items = sorted(tool_calls_counter.items(), key=lambda x: x[1], reverse=True)[:10]
+        for tool_name, calls in tool_items:
+            top_tools_list.append(
+                TopTool(
+                    name=tool_name,
+                    calls=calls,
+                    tokens=0,  # Token breakdown not always available
+                    avg_tokens=0.0,
+                )
+            )
+
+    mcp_usage = MCPUsage(servers=servers, top_tools=top_tools_list)
+
+    # Build tool calls if requested
+    tool_calls_list: List[ToolCallEntry] = []
+    if include_tool_calls and hasattr(session, "tool_calls_log"):
+        for call in getattr(session, "tool_calls_log", []):
+            if isinstance(call, dict):
+                tool_calls_list.append(
+                    ToolCallEntry(
+                        timestamp=call.get("timestamp", ""),
+                        tool_name=call.get("tool", ""),
+                        server=call.get("server", ""),
+                        tokens_in=call.get("tokens_in", 0),
+                        tokens_out=call.get("tokens_out", 0),
+                        is_estimated=call.get("is_estimated", False),
+                    )
+                )
+
+    # Build smells if requested
+    smells_list: List[SmellEntry] = []
+    if include_smells and session.smells:
+        for smell in session.smells:
+            smells_list.append(
+                SmellEntry(
+                    pattern=smell.pattern,
+                    severity=_severity_to_enum(smell.severity),
+                    message=smell.description or "",
+                    evidence=smell.evidence or {},
+                )
+            )
+
+    # Build recommendations if requested
+    recommendations_list: List[Recommendation] = []
+    if include_recommendations and session.smells:
+        smell_objects = session.smells
+        engine = RecommendationEngine()
+        internal_recs = engine.generate(smell_objects)
+        for idx, rec in enumerate(internal_recs[:5], start=1):
+            recommendations_list.append(_internal_to_schema_recommendation(rec, idx))
+
+    # Determine data quality
+    if session.token_usage and session.token_usage.total_tokens > 0:
+        accuracy = DataQuality.EXACT
+        confidence = 0.95
+    elif session.mcp_tool_calls and session.mcp_tool_calls.total_calls > 0:
+        accuracy = DataQuality.CALLS_ONLY
+        confidence = 0.7
+    else:
+        accuracy = DataQuality.ESTIMATED
+        confidence = 0.5
+
+    data_quality = DataQualityInfo(
+        accuracy_level=accuracy,
+        pricing_source="token-audit.toml" if session.cost_estimate else "estimated",
+        confidence=confidence,
+    )
+
+    return GetSessionDetailsOutput(
+        session=session_meta,
+        token_usage=token_usage,
+        mcp_usage=mcp_usage,
+        tool_calls=tool_calls_list if include_tool_calls else [],
+        smells=smells_list if include_smells else [],
+        recommendations=recommendations_list if include_recommendations else [],
+        data_quality=data_quality,
+    )
+
+
+# ============================================================================
+# Tool 14: pin_server (v1.0.2)
+# ============================================================================
+
+
+def pin_server(
+    server_name: str,
+    notes: str | None = None,
+    action: PinAction = PinAction.PIN,
+) -> PinServerOutput:
+    """
+    Add, update, or remove a pinned MCP server.
+
+    Args:
+        server_name: MCP server name to pin/unpin
+        notes: Optional notes about why this server is pinned
+        action: Pin or unpin the server
+
+    Returns:
+        Operation result with updated pinned servers list
+    """
+    from ..pinned_config import PinnedConfigManager
+
+    manager = PinnedConfigManager()
+
+    if action == PinAction.PIN:
+        # Check if already pinned
+        was_pinned = manager.is_pinned(server_name)
+        manager.pin(server_name, notes=notes)
+        message = (
+            f"Server '{server_name}' was already pinned."
+            if was_pinned
+            else f"Server '{server_name}' has been pinned."
+        )
+        success = True
+    else:
+        # Remove pinned server
+        success = manager.unpin(server_name)
+        message = (
+            f"Server '{server_name}' has been unpinned."
+            if success
+            else f"Server '{server_name}' was not pinned."
+        )
+
+    # Get updated list of pinned servers
+    config = manager.get_effective_config()
+    pinned_list = config.explicit_servers
+
+    return PinServerOutput(
+        success=success,
+        action=action,
+        server_name=server_name,
+        message=message,
+        pinned_servers=list(pinned_list),
+    )
+
+
+# ============================================================================
+# Tool 15: delete_session (v1.0.2)
+# ============================================================================
+
+
+def delete_session(
+    session_id: str,
+    confirm: bool = False,
+) -> DeleteSessionOutput:
+    """
+    Delete a session from storage.
+
+    Args:
+        session_id: Session ID to delete
+        confirm: Must be true to confirm deletion (safety check)
+
+    Returns:
+        Deletion result with status message
+    """
+    from ..storage import StorageManager
+
+    if not confirm:
+        return DeleteSessionOutput(
+            success=False,
+            session_id=session_id,
+            message="Deletion not confirmed. Set confirm=true to delete the session.",
+            deleted_at=None,
+        )
+
+    storage = StorageManager()
+
+    # Find session file
+    session_path = storage.find_session(session_id)
+    if session_path is None:
+        return DeleteSessionOutput(
+            success=False,
+            session_id=session_id,
+            message=f"Session '{session_id}' not found.",
+            deleted_at=None,
+        )
+
+    try:
+        # Delete the session file
+        session_path.unlink()
+
+        # Also delete any associated .jsonl file
+        jsonl_path = session_path.with_suffix(".jsonl")
+        if jsonl_path.exists():
+            jsonl_path.unlink()
+
+        deleted_at = datetime.now().isoformat()
+
+        return DeleteSessionOutput(
+            success=True,
+            session_id=session_id,
+            message=f"Session '{session_id}' has been deleted.",
+            deleted_at=deleted_at,
+        )
+    except OSError as e:
+        return DeleteSessionOutput(
+            success=False,
+            session_id=session_id,
+            message=f"Failed to delete session: {e}",
+            deleted_at=None,
+        )

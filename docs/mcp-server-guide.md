@@ -6,7 +6,7 @@ Token Audit v1.0+ can run as an MCP server, enabling your AI assistant to direct
 
 ## Overview
 
-**MCP Server Mode** provides 8 tools for real-time monitoring and optimization:
+**MCP Server Mode** provides 15 tools for real-time monitoring, historical analysis, and optimization:
 
 | Tool | Purpose |
 |------|---------|
@@ -18,6 +18,13 @@ Token Audit v1.0+ can run as an MCP server, enabling your AI assistant to direct
 | `analyze_config` | Analyze MCP configuration files for issues |
 | `get_pinned_servers` | Get user's pinned/frequently-used MCP servers |
 | `get_trends` | Cross-session pattern analysis over time |
+| `get_daily_summary` | Daily token/cost aggregation with trends *(v1.0.2)* |
+| `get_weekly_summary` | Weekly usage aggregation *(v1.0.2)* |
+| `get_monthly_summary` | Monthly usage aggregation *(v1.0.2)* |
+| `list_sessions` | Query historical sessions with filtering *(v1.0.2)* |
+| `get_session_details` | Retrieve full session data *(v1.0.2)* |
+| `pin_server` | Add/remove pinned MCP servers *(v1.0.2)* |
+| `delete_session` | Remove session from storage *(v1.0.2)* |
 
 ### MCP Server Mode vs CLI Mode
 
@@ -88,7 +95,7 @@ args = []
 
 ### 3. Verify Connection
 
-Start your AI CLI and run the MCP status command (e.g., `/mcp` in Claude Code). You should see `token-audit` listed with 8 tools.
+Start your AI CLI and run the MCP status command (e.g., `/mcp` in Claude Code). You should see `token-audit` listed with 15 tools.
 
 ---
 
@@ -373,6 +380,121 @@ Each pattern includes:
 **Example:**
 
 > "Show me my token usage trends over the last 30 days"
+
+---
+
+### get_daily_summary *(v1.0.2)*
+
+Daily token usage aggregation with trends.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `days` | int | 7 | Number of days (1-90) |
+| `platform` | enum | all | Filter by platform |
+| `breakdown` | bool | false | Include per-model breakdown |
+
+Returns: Period totals, per-day entries, trend direction, busiest day, average cost.
+
+> "What was my token usage this week?"
+
+---
+
+### get_weekly_summary *(v1.0.2)*
+
+Weekly token usage aggregation.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `weeks` | int | 4 | Number of weeks (1-52) |
+| `start_of_week` | enum | `monday` | `monday` or `sunday` |
+| `platform` | enum | all | Filter by platform |
+
+Returns: Period totals, per-week entries with average session cost, trends.
+
+> "Show my weekly usage for the past month"
+
+---
+
+### get_monthly_summary *(v1.0.2)*
+
+Monthly token usage aggregation.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `months` | int | 3 | Number of months (1-24) |
+| `platform` | enum | all | Filter by platform |
+
+Returns: Period totals, per-month entries, trend analysis.
+
+> "What's my monthly token spend?"
+
+---
+
+### list_sessions *(v1.0.2)*
+
+Query historical sessions with filtering and pagination.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 20 | Max sessions (1-100) |
+| `offset` | int | 0 | Pagination offset |
+| `platform` | enum | all | Filter by platform |
+| `since` | date | - | Only after this date |
+| `until` | date | - | Only before this date |
+| `sort_by` | enum | `date` | `date`, `cost`, `tokens`, `duration` |
+| `sort_order` | enum | `desc` | `asc` or `desc` |
+
+Returns: Paginated session list with metadata, token counts, costs.
+
+> "Show my 10 most expensive sessions"
+
+---
+
+### get_session_details *(v1.0.2)*
+
+Retrieve complete session data.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `session_id` | string | required | Session ID to retrieve |
+| `include_tool_calls` | bool | true | Include tool call details |
+| `include_smells` | bool | true | Include detected smells |
+| `include_recommendations` | bool | true | Include optimization tips |
+
+Returns: Full session metadata, token usage, MCP usage, tool calls, smells, recommendations.
+
+> "Show details for session abc123"
+
+---
+
+### pin_server *(v1.0.2)*
+
+Add or remove pinned MCP servers.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `server_name` | string | required | Server name |
+| `notes` | string | - | Optional notes |
+| `action` | enum | `pin` | `pin` or `unpin` |
+
+Returns: Success status, updated pinned servers list.
+
+> "Pin the github-mcp server"
+
+---
+
+### delete_session *(v1.0.2)*
+
+Delete a session from storage.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `session_id` | string | required | Session to delete |
+| `confirm` | bool | false | Safety check - must be true |
+
+Returns: Success/failure with message.
+
+> "Delete session abc123" (will prompt for confirm=true)
 
 ---
 

@@ -15,12 +15,23 @@ This module provides:
 
 import fcntl
 import json
+import os
+import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Literal, Optional
+from typing import Any, Dict, Generator, Iterator, List, Literal, Optional
+
+try:
+    from filelock import FileLock
+
+    _HAS_FILELOCK = True
+except ImportError:
+    FileLock = None  # type: ignore[misc, assignment]
+    _HAS_FILELOCK = False
 
 # Schema version for storage format
 STORAGE_SCHEMA_VERSION = "1.0.0"
@@ -37,6 +48,73 @@ SUPPORTED_PLATFORMS: List[Platform] = [
 
 # Active session directory for live streaming
 ACTIVE_SESSION_DIR = "active"
+
+# Lock timeout in seconds for file operations
+FILE_LOCK_TIMEOUT = 10.0
+
+
+def _atomic_write_json(target_path: Path, data: Dict[str, Any]) -> None:
+    """
+    Write JSON data atomically using temp file + rename pattern.
+
+    This ensures readers never see partial/corrupt files.
+
+    Args:
+        target_path: Path to write the JSON data to
+        data: Dictionary data to write as JSON
+
+    Raises:
+        OSError: If file operations fail
+    """
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write to temp file in same directory (for atomic rename on same filesystem)
+    fd, temp_path_str = tempfile.mkstemp(
+        dir=target_path.parent,
+        prefix=f".{target_path.stem}.",
+        suffix=".tmp",
+    )
+    temp_path = Path(temp_path_str)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        # Atomic rename (POSIX guarantees atomicity for same filesystem)
+        temp_path.rename(target_path)
+    except Exception:
+        # Clean up temp file on error
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
+
+
+@contextmanager
+def _index_file_lock(index_path: Path) -> Generator[None, None, None]:
+    """
+    Context manager for cross-process file locking on index files.
+
+    Uses filelock for cross-process safety. Holds the lock for the
+    duration of the context, allowing safe read-modify-write cycles.
+
+    Args:
+        index_path: Path to the index file to lock
+
+    Yields:
+        None
+
+    Raises:
+        Timeout: If lock cannot be acquired within FILE_LOCK_TIMEOUT
+    """
+    lock_path = index_path.with_suffix(index_path.suffix + ".lock")
+
+    if _HAS_FILELOCK and FileLock is not None:
+        # Use filelock for cross-process safety
+        lock = FileLock(str(lock_path), timeout=FILE_LOCK_TIMEOUT)
+        with lock:
+            yield
+    else:
+        # Fallback: no locking (safe for single-process use)
+        # Note: fcntl is Unix-only and doesn't work well for this pattern
+        yield
 
 
 def _migrate_legacy_storage() -> None:
@@ -444,7 +522,10 @@ class StorageManager:
 
     def save_daily_index(self, index: DailyIndex) -> Path:
         """
-        Save daily index to disk.
+        Save daily index to disk with atomic write.
+
+        Uses temp file + rename pattern to ensure readers never see
+        partial/corrupt index files.
 
         Args:
             index: DailyIndex to save
@@ -455,11 +536,8 @@ class StorageManager:
         session_date = datetime.strptime(index.date, "%Y-%m-%d").date()
         index_path = self.get_daily_index_path(index.platform, session_date)
 
-        # Ensure directory exists
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(index_path, "w") as f:
-            json.dump(index.to_dict(), f, indent=2)
+        # Atomic write with temp file + rename
+        _atomic_write_json(index_path, index.to_dict())
 
         return index_path
 
@@ -487,7 +565,10 @@ class StorageManager:
 
     def save_platform_index(self, index: PlatformIndex) -> Path:
         """
-        Save platform index to disk.
+        Save platform index to disk with atomic write.
+
+        Uses temp file + rename pattern to ensure readers never see
+        partial/corrupt index files.
 
         Args:
             index: PlatformIndex to save
@@ -497,11 +578,8 @@ class StorageManager:
         """
         index_path = self.get_platform_index_path(index.platform)
 
-        # Ensure directory exists
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(index_path, "w") as f:
-            json.dump(index.to_dict(), f, indent=2)
+        # Atomic write with temp file + rename
+        _atomic_write_json(index_path, index.to_dict())
 
         return index_path
 
@@ -511,6 +589,10 @@ class StorageManager:
         """
         Update both daily and platform indexes after adding/updating a session.
 
+        Uses file locking to ensure safe concurrent access from MCP server,
+        CLI, and TUI. Holds locks during read-modify-write cycles to prevent
+        data loss from simultaneous updates.
+
         Args:
             platform: Platform identifier
             session_date: Date of the session
@@ -518,64 +600,70 @@ class StorageManager:
         """
         date_str = session_date.strftime("%Y-%m-%d")
 
-        # Update daily index
-        daily_index = self.load_daily_index(platform, session_date)
-        if daily_index is None:
-            daily_index = DailyIndex(
-                schema_version=STORAGE_SCHEMA_VERSION,
-                platform=platform,
-                date=date_str,
+        # Get paths for locking
+        daily_index_path = self.get_daily_index_path(platform, session_date)
+        platform_index_path = self.get_platform_index_path(platform)
+
+        # Update daily index under lock
+        with _index_file_lock(daily_index_path):
+            daily_index = self.load_daily_index(platform, session_date)
+            if daily_index is None:
+                daily_index = DailyIndex(
+                    schema_version=STORAGE_SCHEMA_VERSION,
+                    platform=platform,
+                    date=date_str,
+                )
+
+            # Check if session already exists (update) or is new (add)
+            existing_idx = next(
+                (
+                    i
+                    for i, s in enumerate(daily_index.sessions)
+                    if s.session_id == session_index.session_id
+                ),
+                None,
             )
+            if existing_idx is not None:
+                daily_index.sessions[existing_idx] = session_index
+                daily_index.recalculate_totals()
+            else:
+                daily_index.add_session(session_index)
 
-        # Check if session already exists (update) or is new (add)
-        existing_idx = next(
-            (
-                i
-                for i, s in enumerate(daily_index.sessions)
-                if s.session_id == session_index.session_id
-            ),
-            None,
-        )
-        if existing_idx is not None:
-            daily_index.sessions[existing_idx] = session_index
-            daily_index.recalculate_totals()
-        else:
-            daily_index.add_session(session_index)
+            self.save_daily_index(daily_index)
 
-        self.save_daily_index(daily_index)
+        # Update platform index under lock
+        with _index_file_lock(platform_index_path):
+            platform_index = self.load_platform_index(platform)
+            if platform_index is None:
+                platform_index = PlatformIndex(
+                    schema_version=STORAGE_SCHEMA_VERSION,
+                    platform=platform,
+                )
 
-        # Update platform index
-        platform_index = self.load_platform_index(platform)
-        if platform_index is None:
-            platform_index = PlatformIndex(
-                schema_version=STORAGE_SCHEMA_VERSION,
-                platform=platform,
+            if date_str not in platform_index.dates:
+                platform_index.dates.append(date_str)
+                platform_index.dates.sort()
+
+            platform_index.first_session_date = (
+                platform_index.dates[0] if platform_index.dates else None
             )
+            platform_index.last_session_date = (
+                platform_index.dates[-1] if platform_index.dates else None
+            )
+            platform_index.last_updated = datetime.now().isoformat()
 
-        if date_str not in platform_index.dates:
-            platform_index.dates.append(date_str)
-            platform_index.dates.sort()
+            # Recalculate totals
+            platform_index.total_tokens = 0
+            platform_index.total_cost = 0.0
+            platform_index.total_sessions = 0
+            for d_str in platform_index.dates:
+                daily = self.load_daily_index(platform, datetime.strptime(d_str, "%Y-%m-%d").date())
+                if daily:
+                    platform_index.total_tokens += daily.total_tokens
+                    platform_index.total_cost += daily.total_cost
+                    platform_index.total_sessions += daily.session_count
 
-        platform_index.first_session_date = (
-            platform_index.dates[0] if platform_index.dates else None
-        )
-        platform_index.last_session_date = (
-            platform_index.dates[-1] if platform_index.dates else None
-        )
-        platform_index.last_updated = datetime.now().isoformat()
-
-        # Recalculate totals
-        platform_index.total_tokens = 0
-        platform_index.total_cost = 0.0
-        platform_index.total_sessions = 0
-        for date_str in platform_index.dates:
-            daily = self.load_daily_index(platform, datetime.strptime(date_str, "%Y-%m-%d").date())
-            if daily:
-                platform_index.total_tokens += daily.total_tokens
-                platform_index.total_cost += daily.total_cost
-                platform_index.total_sessions += daily.session_count
-
-        self.save_platform_index(platform_index)
+            self.save_platform_index(platform_index)
 
     # =========================================================================
     # Session Discovery

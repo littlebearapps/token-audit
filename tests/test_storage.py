@@ -6,27 +6,31 @@ Tests the standardized JSONL directory structure:
     ~/.token-audit/sessions/<platform>/<YYYY-MM-DD>/<session-id>.jsonl
 """
 
-import pytest
 import json
 import tempfile
+from datetime import date, datetime
 from pathlib import Path
-from datetime import datetime, date, timedelta
 from typing import Generator
 
+import pytest
+
 from token_audit.storage import (
-    StorageManager,
-    StreamingStorage,
-    SessionIndex,
-    DailyIndex,
-    PlatformIndex,
+    ACTIVE_SESSION_DIR,
+    FILE_LOCK_TIMEOUT,
     STORAGE_SCHEMA_VERSION,
     SUPPORTED_PLATFORMS,
-    ACTIVE_SESSION_DIR,
+    DailyIndex,
+    PlatformIndex,
+    SessionIndex,
+    StorageManager,
+    StreamingStorage,
+    _atomic_write_json,
+    _HAS_FILELOCK,
+    _index_file_lock,
     get_default_base_dir,
-    migrate_v0_session,
     migrate_all_v0_sessions,
+    migrate_v0_session,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -246,7 +250,7 @@ class TestSessionWriting:
         for event in sample_events:
             storage.append_event(session_path, event)
 
-        with open(session_path, "r") as f:
+        with open(session_path) as f:
             lines = f.readlines()
         assert len(lines) == len(sample_events)
 
@@ -255,7 +259,7 @@ class TestSessionWriting:
         session_path = storage.create_session_file("claude_code", "test-session")
         storage.write_session_events(session_path, sample_events)
 
-        with open(session_path, "r") as f:
+        with open(session_path) as f:
             lines = f.readlines()
         assert len(lines) == len(sample_events)
 
@@ -271,7 +275,7 @@ class TestSessionWriting:
         # Write single event (should overwrite)
         storage.write_session_events(session_path, [sample_events[0]])
 
-        with open(session_path, "r") as f:
+        with open(session_path) as f:
             lines = f.readlines()
         assert len(lines) == 1
 
@@ -826,7 +830,6 @@ class TestEdgeCases:
 
     def test_concurrent_session_ids(self, storage: StorageManager) -> None:
         """Session IDs generated at same second should differ."""
-        import time
 
         ts = datetime.now()
         ids = [storage.generate_session_id("claude_code", ts) for _ in range(10)]
@@ -1094,3 +1097,150 @@ class TestActiveSessionDirConstant:
     def test_active_session_dir_value(self) -> None:
         """Active session dir should be 'active'."""
         assert ACTIVE_SESSION_DIR == "active"
+
+
+class TestAtomicWriteJson:
+    """Test _atomic_write_json function for crash-safe writes."""
+
+    def test_creates_file(self, temp_storage_dir: Path) -> None:
+        """Should create file with JSON content."""
+        target = temp_storage_dir / "test.json"
+        data = {"key": "value", "number": 42}
+
+        _atomic_write_json(target, data)
+
+        assert target.exists()
+        with open(target) as f:
+            loaded = json.load(f)
+        assert loaded == data
+
+    def test_creates_parent_directories(self, temp_storage_dir: Path) -> None:
+        """Should create parent directories if they don't exist."""
+        target = temp_storage_dir / "nested" / "deep" / "test.json"
+        data = {"nested": True}
+
+        _atomic_write_json(target, data)
+
+        assert target.exists()
+
+    def test_overwrites_existing_file(self, temp_storage_dir: Path) -> None:
+        """Should overwrite existing file atomically."""
+        target = temp_storage_dir / "test.json"
+        old_data = {"version": 1}
+        new_data = {"version": 2}
+
+        _atomic_write_json(target, old_data)
+        _atomic_write_json(target, new_data)
+
+        with open(target) as f:
+            loaded = json.load(f)
+        assert loaded == new_data
+
+    def test_no_temp_files_left_on_success(self, temp_storage_dir: Path) -> None:
+        """Should not leave temp files after successful write."""
+        target = temp_storage_dir / "test.json"
+        _atomic_write_json(target, {"clean": True})
+
+        # Check no temp files remain
+        files = list(temp_storage_dir.iterdir())
+        assert len(files) == 1
+        assert files[0].name == "test.json"
+
+    def test_writes_formatted_json(self, temp_storage_dir: Path) -> None:
+        """Should write indented JSON for readability."""
+        target = temp_storage_dir / "test.json"
+        _atomic_write_json(target, {"key": "value"})
+
+        content = target.read_text()
+        # Check it's indented (has newlines and spaces)
+        assert "\n" in content
+        assert "  " in content
+
+
+class TestIndexFileLock:
+    """Test _index_file_lock context manager."""
+
+    def test_lock_context_executes(self, temp_storage_dir: Path) -> None:
+        """Should execute code inside context."""
+        index_path = temp_storage_dir / "test.json"
+        executed = False
+
+        with _index_file_lock(index_path):
+            executed = True
+
+        assert executed
+
+    def test_lock_creates_lock_file(self, temp_storage_dir: Path) -> None:
+        """Lock should create a .lock file while held."""
+        import importlib.util
+
+        index_path = temp_storage_dir / "test.json"
+        lock_path = index_path.with_suffix(".json.lock")
+
+        if importlib.util.find_spec("filelock") is not None:
+            # Lock file should be created when lock is acquired
+            with _index_file_lock(index_path):
+                assert lock_path.exists()
+        else:
+            # Without filelock, no lock file is created (fallback is no-op)
+            with _index_file_lock(index_path):
+                pass  # Just verify no error
+
+
+class TestIndexFileLockingConcurrency:
+    """Test concurrent access to index files with locking."""
+
+    @pytest.mark.skipif(
+        not _HAS_FILELOCK, reason="filelock package required for concurrent access safety"
+    )
+    def test_concurrent_update_indexes(self, storage: StorageManager) -> None:
+        """Concurrent index updates should not lose data."""
+        import threading
+
+        platform = "claude_code"
+        session_date = date.today()
+        date_str = session_date.strftime("%Y-%m-%d")
+        num_threads = 5
+        errors: list = []
+
+        def update_index(thread_id: int) -> None:
+            try:
+                session_index = SessionIndex(
+                    schema_version=STORAGE_SCHEMA_VERSION,
+                    session_id=f"session-{thread_id}",
+                    platform=platform,
+                    date=date_str,
+                    started_at=datetime.now().isoformat(),
+                    ended_at=datetime.now().isoformat(),
+                    project="test-project",
+                    total_tokens=100 * thread_id,
+                    total_cost=0.001 * thread_id,
+                    tool_count=1,
+                    server_count=1,
+                    is_complete=True,
+                    file_path=f"claude_code/{date_str}/session-{thread_id}.jsonl",
+                    file_size_bytes=1024,
+                )
+                storage.update_indexes_for_session(platform, session_date, session_index)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=update_index, args=(i,)) for i in range(num_threads)]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Check no errors
+        assert len(errors) == 0, f"Errors occurred: {errors}"
+
+        # Check all sessions were indexed
+        daily_index = storage.load_daily_index(platform, session_date)
+        assert daily_index is not None
+        assert daily_index.session_count == num_threads
+
+    def test_file_lock_timeout_constant(self) -> None:
+        """FILE_LOCK_TIMEOUT should be a reasonable value."""
+        assert FILE_LOCK_TIMEOUT > 0
+        assert FILE_LOCK_TIMEOUT <= 60  # Not too long

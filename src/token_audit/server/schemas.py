@@ -515,3 +515,522 @@ class GetTrendsOutput(BaseModel):
         default_factory=list,
         description="High-level recommendations based on trends",
     )
+
+
+# ============================================================================
+# Tool 9: get_daily_summary (v1.0.2)
+# ============================================================================
+
+
+class TrendDirection(str, Enum):
+    """Trend direction for usage summaries."""
+
+    INCREASING = "increasing"
+    DECREASING = "decreasing"
+    STABLE = "stable"
+
+
+class DailyUsageEntry(BaseModel):
+    """Single day's usage data."""
+
+    date: str = Field(description="Date in YYYY-MM-DD format")
+    sessions: int = Field(description="Number of sessions")
+    input_tokens: int = Field(description="Input tokens consumed")
+    output_tokens: int = Field(description="Output tokens generated")
+    total_tokens: int = Field(description="Total tokens")
+    cost_usd: float = Field(description="Cost in USD")
+    model_breakdown: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Per-model breakdown (if requested)",
+    )
+
+
+class UsageTrends(BaseModel):
+    """Trend analysis for usage data."""
+
+    direction: TrendDirection = Field(description="Overall trend direction")
+    change_percent: float = Field(description="Percentage change")
+    busiest_day: Optional[str] = Field(
+        default=None,
+        description="Date with highest usage (YYYY-MM-DD)",
+    )
+    avg_daily_cost: float = Field(description="Average daily cost in USD")
+
+
+class GetDailySummaryInput(BaseModel):
+    """Input schema for get_daily_summary tool."""
+
+    days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description="Number of days to include (default: 7)",
+    )
+    platform: Optional[ServerPlatform] = Field(
+        default=None,
+        description="Filter by platform (all platforms if not specified)",
+    )
+    project: Optional[str] = Field(
+        default=None,
+        description="Filter by project name",
+    )
+    breakdown: bool = Field(
+        default=False,
+        description="Include per-model token breakdown",
+    )
+
+
+class UsagePeriod(BaseModel):
+    """Period information for usage summaries."""
+
+    start: str = Field(description="Start date (YYYY-MM-DD)")
+    end: str = Field(description="End date (YYYY-MM-DD)")
+    days: Optional[int] = Field(default=None, description="Number of days")
+    weeks: Optional[int] = Field(default=None, description="Number of weeks")
+    months: Optional[int] = Field(default=None, description="Number of months")
+
+
+class UsageTotals(BaseModel):
+    """Aggregated totals for usage summaries."""
+
+    sessions: int = Field(description="Total sessions")
+    input_tokens: int = Field(description="Total input tokens")
+    output_tokens: int = Field(description="Total output tokens")
+    total_tokens: int = Field(description="Total tokens")
+    cost_usd: float = Field(description="Total cost in USD")
+
+
+class GetDailySummaryOutput(BaseModel):
+    """Output schema for get_daily_summary tool."""
+
+    period: UsagePeriod = Field(description="Period covered")
+    totals: UsageTotals = Field(description="Aggregated totals")
+    daily: List[DailyUsageEntry] = Field(
+        default_factory=list,
+        description="Per-day breakdown",
+    )
+    trends: UsageTrends = Field(description="Trend analysis")
+
+
+# ============================================================================
+# Tool 10: get_weekly_summary (v1.0.2)
+# ============================================================================
+
+
+class WeeklyUsageEntry(BaseModel):
+    """Single week's usage data."""
+
+    week_start: str = Field(description="Week start date (YYYY-MM-DD)")
+    week_end: str = Field(description="Week end date (YYYY-MM-DD)")
+    sessions: int = Field(description="Number of sessions")
+    input_tokens: int = Field(description="Input tokens consumed")
+    output_tokens: int = Field(description="Output tokens generated")
+    total_tokens: int = Field(description="Total tokens")
+    cost_usd: float = Field(description="Cost in USD")
+    avg_session_cost: float = Field(description="Average cost per session")
+    model_breakdown: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Per-model breakdown (if requested)",
+    )
+
+
+class WeekStartDay(str, Enum):
+    """Day of week for week boundary."""
+
+    MONDAY = "monday"
+    SUNDAY = "sunday"
+
+
+class GetWeeklySummaryInput(BaseModel):
+    """Input schema for get_weekly_summary tool."""
+
+    weeks: int = Field(
+        default=4,
+        ge=1,
+        le=52,
+        description="Number of weeks to include (default: 4)",
+    )
+    start_of_week: WeekStartDay = Field(
+        default=WeekStartDay.MONDAY,
+        description="Week boundary (Monday or Sunday)",
+    )
+    platform: Optional[ServerPlatform] = Field(
+        default=None,
+        description="Filter by platform (all platforms if not specified)",
+    )
+    breakdown: bool = Field(
+        default=False,
+        description="Include per-model token breakdown",
+    )
+
+
+class GetWeeklySummaryOutput(BaseModel):
+    """Output schema for get_weekly_summary tool."""
+
+    period: UsagePeriod = Field(description="Period covered")
+    totals: UsageTotals = Field(description="Aggregated totals")
+    weekly: List[WeeklyUsageEntry] = Field(
+        default_factory=list,
+        description="Per-week breakdown",
+    )
+    trends: UsageTrends = Field(description="Trend analysis")
+
+
+# ============================================================================
+# Tool 11: get_monthly_summary (v1.0.2)
+# ============================================================================
+
+
+class MonthlyUsageEntry(BaseModel):
+    """Single month's usage data."""
+
+    month: str = Field(description="Month in YYYY-MM format")
+    sessions: int = Field(description="Number of sessions")
+    input_tokens: int = Field(description="Input tokens consumed")
+    output_tokens: int = Field(description="Output tokens generated")
+    total_tokens: int = Field(description="Total tokens")
+    cost_usd: float = Field(description="Cost in USD")
+    model_breakdown: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Per-model breakdown (if requested)",
+    )
+
+
+class GetMonthlySummaryInput(BaseModel):
+    """Input schema for get_monthly_summary tool."""
+
+    months: int = Field(
+        default=3,
+        ge=1,
+        le=24,
+        description="Number of months to include (default: 3)",
+    )
+    platform: Optional[ServerPlatform] = Field(
+        default=None,
+        description="Filter by platform (all platforms if not specified)",
+    )
+    breakdown: bool = Field(
+        default=False,
+        description="Include per-model token breakdown",
+    )
+
+
+class GetMonthlySummaryOutput(BaseModel):
+    """Output schema for get_monthly_summary tool."""
+
+    period: UsagePeriod = Field(description="Period covered")
+    totals: UsageTotals = Field(description="Aggregated totals")
+    monthly: List[MonthlyUsageEntry] = Field(
+        default_factory=list,
+        description="Per-month breakdown",
+    )
+    trends: UsageTrends = Field(description="Trend analysis")
+
+
+# ============================================================================
+# Tool 12: list_sessions (v1.0.2)
+# ============================================================================
+
+
+class SessionSortBy(str, Enum):
+    """Sort options for session listing."""
+
+    DATE = "date"
+    COST = "cost"
+    TOKENS = "tokens"
+    DURATION = "duration"
+
+
+class SortOrder(str, Enum):
+    """Sort order."""
+
+    ASC = "asc"
+    DESC = "desc"
+
+
+class DataQuality(str, Enum):
+    """Data quality level."""
+
+    EXACT = "exact"
+    ESTIMATED = "estimated"
+    CALLS_ONLY = "calls-only"
+
+
+class ListSessionsInput(BaseModel):
+    """Input schema for list_sessions tool."""
+
+    limit: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum sessions to return",
+    )
+    offset: int = Field(
+        default=0,
+        ge=0,
+        description="Pagination offset",
+    )
+    platform: Optional[ServerPlatform] = Field(
+        default=None,
+        description="Filter by platform",
+    )
+    project: Optional[str] = Field(
+        default=None,
+        description="Filter by project name",
+    )
+    since: Optional[str] = Field(
+        default=None,
+        description="Only sessions after this date (YYYY-MM-DD)",
+    )
+    until: Optional[str] = Field(
+        default=None,
+        description="Only sessions before this date (YYYY-MM-DD)",
+    )
+    sort_by: SessionSortBy = Field(
+        default=SessionSortBy.DATE,
+        description="Sort field",
+    )
+    sort_order: SortOrder = Field(
+        default=SortOrder.DESC,
+        description="Sort order",
+    )
+
+
+class SessionListEntry(BaseModel):
+    """Summary entry for a session in list view."""
+
+    session_id: str = Field(description="Unique session identifier")
+    platform: str = Field(description="Platform (claude_code, codex_cli, gemini_cli)")
+    project: Optional[str] = Field(default=None, description="Project name")
+    started_at: str = Field(description="Start timestamp (ISO 8601)")
+    ended_at: Optional[str] = Field(default=None, description="End timestamp (ISO 8601)")
+    duration_seconds: int = Field(description="Session duration in seconds")
+    total_tokens: int = Field(description="Total tokens used")
+    cost_usd: float = Field(description="Session cost in USD")
+    model: Optional[str] = Field(default=None, description="Primary model used")
+    tool_calls: int = Field(description="Number of tool calls")
+    smells_detected: int = Field(description="Number of efficiency smells detected")
+    data_quality: DataQuality = Field(description="Data accuracy level")
+
+
+class PaginationInfo(BaseModel):
+    """Pagination metadata."""
+
+    total: int = Field(description="Total matching sessions")
+    limit: int = Field(description="Requested limit")
+    offset: int = Field(description="Current offset")
+    has_more: bool = Field(description="Whether more results exist")
+
+
+class ListSessionsOutput(BaseModel):
+    """Output schema for list_sessions tool."""
+
+    sessions: List[SessionListEntry] = Field(
+        default_factory=list,
+        description="Session summaries",
+    )
+    pagination: PaginationInfo = Field(description="Pagination info")
+
+
+# ============================================================================
+# Tool 13: get_session_details (v1.0.2)
+# ============================================================================
+
+
+class GetSessionDetailsInput(BaseModel):
+    """Input schema for get_session_details tool."""
+
+    session_id: str = Field(description="Session ID to retrieve")
+    include_tool_calls: bool = Field(
+        default=True,
+        description="Include individual tool call details",
+    )
+    include_smells: bool = Field(
+        default=True,
+        description="Include detected efficiency smells",
+    )
+    include_recommendations: bool = Field(
+        default=True,
+        description="Include optimization recommendations",
+    )
+
+
+class SessionMetadata(BaseModel):
+    """Session metadata."""
+
+    session_id: str = Field(description="Unique session identifier")
+    platform: str = Field(description="Platform")
+    project: Optional[str] = Field(default=None, description="Project name")
+    started_at: str = Field(description="Start timestamp (ISO 8601)")
+    ended_at: Optional[str] = Field(default=None, description="End timestamp (ISO 8601)")
+    duration_seconds: int = Field(description="Duration in seconds")
+    model: Optional[str] = Field(default=None, description="Primary model")
+    models_used: List[str] = Field(
+        default_factory=list,
+        description="All models used in session",
+    )
+
+
+class SessionTokenUsage(BaseModel):
+    """Detailed token usage for a session."""
+
+    input_tokens: int = Field(description="Input tokens")
+    output_tokens: int = Field(description="Output tokens")
+    cache_read_tokens: int = Field(default=0, description="Cache read tokens")
+    cache_write_tokens: int = Field(default=0, description="Cache write tokens")
+    reasoning_tokens: int = Field(default=0, description="Reasoning tokens")
+    total_tokens: int = Field(description="Total tokens")
+    cost_usd: float = Field(description="Total cost in USD")
+
+
+class ServerUsage(BaseModel):
+    """MCP server usage within a session."""
+
+    name: str = Field(description="Server name")
+    tools_used: int = Field(description="Number of unique tools used")
+    total_calls: int = Field(description="Total tool calls")
+    total_tokens: int = Field(description="Estimated tokens for this server")
+
+
+class TopTool(BaseModel):
+    """Top tool usage."""
+
+    name: str = Field(description="Tool name")
+    calls: int = Field(description="Number of calls")
+    tokens: int = Field(description="Total tokens")
+    avg_tokens: float = Field(description="Average tokens per call")
+
+
+class MCPUsage(BaseModel):
+    """MCP usage breakdown."""
+
+    servers: List[ServerUsage] = Field(
+        default_factory=list,
+        description="Per-server usage",
+    )
+    top_tools: List[TopTool] = Field(
+        default_factory=list,
+        description="Most used tools",
+    )
+
+
+class ToolCallEntry(BaseModel):
+    """Individual tool call record."""
+
+    timestamp: str = Field(description="Call timestamp (ISO 8601)")
+    tool_name: str = Field(description="Tool name")
+    server: str = Field(description="MCP server name")
+    tokens_in: int = Field(description="Input tokens for this call")
+    tokens_out: int = Field(description="Output tokens for this call")
+    is_estimated: bool = Field(default=False, description="Whether tokens are estimated")
+
+
+class SmellEntry(BaseModel):
+    """Detected efficiency smell."""
+
+    pattern: str = Field(description="Smell pattern identifier")
+    severity: SeverityLevel = Field(description="Severity level")
+    message: str = Field(description="Human-readable message")
+    evidence: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Supporting evidence",
+    )
+
+
+class DataQualityInfo(BaseModel):
+    """Data quality information."""
+
+    accuracy_level: DataQuality = Field(description="Data accuracy level")
+    pricing_source: str = Field(description="Source of pricing data")
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence score (0.0 to 1.0)",
+    )
+
+
+class GetSessionDetailsOutput(BaseModel):
+    """Output schema for get_session_details tool."""
+
+    session: SessionMetadata = Field(description="Session metadata")
+    token_usage: SessionTokenUsage = Field(description="Token usage details")
+    mcp_usage: MCPUsage = Field(description="MCP server and tool usage")
+    tool_calls: List[ToolCallEntry] = Field(
+        default_factory=list,
+        description="Individual tool calls (if requested)",
+    )
+    smells: List[SmellEntry] = Field(
+        default_factory=list,
+        description="Detected smells (if requested)",
+    )
+    recommendations: List[Recommendation] = Field(
+        default_factory=list,
+        description="Optimization recommendations (if requested)",
+    )
+    data_quality: DataQualityInfo = Field(description="Data quality metadata")
+
+
+# ============================================================================
+# Tool 14: pin_server (v1.0.2)
+# ============================================================================
+
+
+class PinAction(str, Enum):
+    """Pin action."""
+
+    PIN = "pin"
+    UNPIN = "unpin"
+
+
+class PinServerInput(BaseModel):
+    """Input schema for pin_server tool."""
+
+    server_name: str = Field(description="MCP server name to pin/unpin")
+    notes: Optional[str] = Field(
+        default=None,
+        description="Optional notes about why this server is pinned",
+    )
+    action: PinAction = Field(
+        default=PinAction.PIN,
+        description="Pin or unpin the server",
+    )
+
+
+class PinServerOutput(BaseModel):
+    """Output schema for pin_server tool."""
+
+    success: bool = Field(description="Whether operation succeeded")
+    action: PinAction = Field(description="Action performed")
+    server_name: str = Field(description="Server name")
+    message: str = Field(description="Human-readable result message")
+    pinned_servers: List[str] = Field(
+        default_factory=list,
+        description="Updated list of all pinned server names",
+    )
+
+
+# ============================================================================
+# Tool 15: delete_session (v1.0.2)
+# ============================================================================
+
+
+class DeleteSessionInput(BaseModel):
+    """Input schema for delete_session tool."""
+
+    session_id: str = Field(description="Session ID to delete")
+    confirm: bool = Field(
+        default=False,
+        description="Must be true to confirm deletion (safety check)",
+    )
+
+
+class DeleteSessionOutput(BaseModel):
+    """Output schema for delete_session tool."""
+
+    success: bool = Field(description="Whether deletion succeeded")
+    session_id: str = Field(description="Session ID")
+    message: str = Field(description="Human-readable result message")
+    deleted_at: Optional[str] = Field(
+        default=None,
+        description="Deletion timestamp (ISO 8601)",
+    )

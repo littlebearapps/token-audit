@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "token-audit"
-version = "1.0.1"
+version = "1.0.2"
 description = "Token usage auditor for AI coding tools. Investigate context bloat across Claude Code, Codex CLI & Gemini CLI."
 readme = "README.md"
 license = "MIT"
@@ -57,6 +57,7 @@ gemma = [
 server = [
     "mcp>=1.0.0",               # MCP Python SDK for server mode
     "pydantic>=2.0.0",          # Schema validation for tool inputs/outputs
+    "filelock>=3.12.0",         # Cross-process file locking for concurrent access
 ]
 
 [project.scripts]

@@ -33,9 +33,16 @@ uv pip install token-audit
 
 ---
 
-## What's New (v1.0.1)
+## What's New (v1.0.2)
 
-Documentation-only patch: updated roadmap version numbering for post-v1.0 milestones. See [CHANGELOG](CHANGELOG.md) for details.
+**MCP Server Enhancements** — 7 new MCP tools for historical aggregation and session management:
+
+- `get_daily_summary`, `get_weekly_summary`, `get_monthly_summary` — Query usage trends
+- `list_sessions`, `get_session_details` — Browse and inspect historical sessions
+- `pin_server`, `delete_session` — Manage pinned servers and cleanup old sessions
+- 5 new MCP resources for quick usage data access
+
+Plus: concurrent access safety with file locking for CLI + MCP + TUI.
 
 ---
 
@@ -225,7 +232,7 @@ After restarting your AI CLI, ask:
 - *"Get current token usage metrics"*
 - *"Show breakdown by tool"*
 
-### Available Tools
+### Available Tools (15)
 
 | Tool | Purpose |
 |------|---------|
@@ -237,6 +244,13 @@ After restarting your AI CLI, ask:
 | `analyze_config` | Analyze MCP config for issues |
 | `get_pinned_servers` | Get frequently-used MCP servers |
 | `get_trends` | Cross-session pattern analysis (7/30/90 days) |
+| `get_daily_summary` | Daily token/cost aggregation with trends |
+| `get_weekly_summary` | Weekly usage aggregation |
+| `get_monthly_summary` | Monthly usage aggregation |
+| `list_sessions` | Query historical sessions with filtering |
+| `get_session_details` | Retrieve full session data |
+| `pin_server` | Add/remove pinned MCP servers |
+| `delete_session` | Remove session from storage |
 
 Tool names and outputs are stable in v1.x. New tools may be added without breaking changes.
 
@@ -459,7 +473,7 @@ Token Audit focuses on **real-time tool profiling**. Where billing tools answer 
 
 ## Roadmap
 
-**Current:** v1.0.1 — MCP Server Mode, Best Practices, Config Analyzer
+**Current:** v1.0.2 — MCP Server Enhancements (15 tools, 8 resources, file locking)
 
 **Upcoming:**
 - **v1.1.0** — Billing & Statusline: 5-hour billing block tracking, Claude Code statusline hook
