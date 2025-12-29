@@ -54,11 +54,19 @@ API_STABILITY: dict[str, StabilityTier] = {
     "SmellAggregator": "evolving",
     "AggregatedSmell": "evolving",
     "SmellAggregationResult": "evolving",
+    # === EVOLVING (bucket and task classification - v1.0.4) ===
+    "BucketClassifier": "evolving",
+    "BucketResult": "evolving",
+    "BucketName": "evolving",
+    "BucketThresholds": "evolving",
+    "TaskMarker": "evolving",
+    "TaskSummary": "evolving",
+    "TaskManager": "evolving",
     # === EVOLVING (server mode - requires [server] extra) ===
     "create_server": "evolving",
     "get_server": "evolving",
     "run_server": "evolving",
-    # === DEPRECATED (remove in v1.1.0) ===
+    # === DEPRECATED (remove in v1.0.5) ===
     "estimate_tool_tokens": "deprecated",
 }
 
@@ -141,6 +149,23 @@ def __getattr__(name: str) -> Any:
 
         return locals()[name]
 
+    # Bucket classification (v1.0.4)
+    if name in ("BucketClassifier", "BucketResult", "BucketName", "BucketThresholds"):
+        from .buckets import (  # noqa: F401
+            BucketClassifier,
+            BucketName,
+            BucketResult,
+            BucketThresholds,
+        )
+
+        return locals()[name]
+
+    # Task management (v1.0.4)
+    if name in ("TaskMarker", "TaskSummary", "TaskManager"):
+        from .tasks import TaskManager, TaskMarker, TaskSummary  # noqa: F401
+
+        return locals()[name]
+
     if name in ("ClaudeCodeAdapter",):
         from .claude_code_adapter import ClaudeCodeAdapter
 
@@ -175,7 +200,7 @@ def __getattr__(name: str) -> Any:
     # Deprecated: estimate_tool_tokens (use TokenEstimator.estimate_tool_call instead)
     if name == "estimate_tool_tokens":
         warnings.warn(
-            "estimate_tool_tokens is deprecated and will be removed in v1.1.0. "
+            "estimate_tool_tokens is deprecated and will be removed in v1.0.5."
             "Use TokenEstimator.estimate_tool_call() instead. "
             "See docs/API-STABILITY.md for migration guide.",
             DeprecationWarning,
@@ -259,10 +284,19 @@ __all__ = [
     "SmellAggregator",
     "AggregatedSmell",
     "SmellAggregationResult",
+    # Bucket classification (v1.0.4)
+    "BucketClassifier",
+    "BucketResult",
+    "BucketName",
+    "BucketThresholds",
+    # Task management (v1.0.4)
+    "TaskMarker",
+    "TaskSummary",
+    "TaskManager",
     # === EVOLVING APIs (server mode - requires [server] extra) ===
     "create_server",
     "get_server",
     "run_server",
-    # === DEPRECATED (remove in v1.1.0) ===
+    # === DEPRECATED (remove in v1.0.5) ===
     "estimate_tool_tokens",  # Use TokenEstimator.estimate_tool_call()
 ]

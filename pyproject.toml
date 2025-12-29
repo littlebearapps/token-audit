@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "token-audit"
-version = "1.0.3"
+version = "1.0.4"
 description = "Token usage auditor for AI coding tools. Investigate context bloat across Claude Code, Codex CLI & Gemini CLI."
 readme = "README.md"
 license = "MIT"
@@ -35,6 +35,7 @@ dependencies = [
     "sentencepiece>=0.2.0",  # Token estimation for Gemini CLI (100% accurate with Gemma)
     "jsonschema>=4.0.0",     # Schema validation for token-audit validate command
     "pyyaml>=6.0.0",         # YAML frontmatter parsing for best practices guidance
+    "toml>=0.10.2",          # TOML writing for bucket config persistence
 ]
 
 [project.optional-dependencies]

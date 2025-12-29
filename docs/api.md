@@ -306,7 +306,7 @@ from token_audit import ClaudeCodeAdapter, CodexCLIAdapter, GeminiCLIAdapter
 # Smell analysis
 from token_audit import SmellAggregator
 
-# === DEPRECATED (remove in v1.1.0) ===
+# === DEPRECATED (remove in v1.0.5) ===
 # from token_audit import estimate_tool_tokens  # Use TokenEstimator instead
 ```
 

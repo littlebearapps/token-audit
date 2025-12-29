@@ -603,6 +603,137 @@ def create_server() -> FastMCP:
         return result.model_dump()
 
     # ========================================================================
+    # Tool 16: config_list_patterns (v1.0.4 - bucket configuration)
+    # ========================================================================
+    @mcp.tool()
+    def config_list_patterns(
+        bucket: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        List bucket classification patterns and thresholds.
+
+        Returns the current bucket configuration for token classification.
+        Patterns determine how tool calls are categorized into 4 buckets:
+        - state_serialization: Data retrieval patterns (.*_get_.*, .*_list_.*)
+        - tool_discovery: Introspection patterns (.*_introspect.*, .*_describe.*)
+        - redundant: Detected via content_hash (no patterns)
+        - drift: Everything else
+
+        Args:
+            bucket: Optional filter by bucket name (state_serialization or tool_discovery)
+
+        Returns:
+            Current patterns and threshold settings
+        """
+        result = tools.config_list_patterns(bucket=bucket)
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 17: config_add_pattern (v1.0.4 - bucket configuration)
+    # ========================================================================
+    @mcp.tool()
+    def config_add_pattern(
+        bucket: str,
+        pattern: str,
+    ) -> dict[str, Any]:
+        """
+        Add a regex pattern to a bucket classification.
+
+        Extends the pattern list for a bucket. Useful for adding project-specific
+        patterns (e.g., 'wpnav_get_.*' for WordPress Navigator tools).
+
+        Args:
+            bucket: Bucket name (state_serialization or tool_discovery)
+            pattern: Regex pattern to add (e.g., '.*_get_.*')
+
+        Returns:
+            Success status and updated pattern list
+        """
+        result = tools.config_add_pattern(bucket=bucket, pattern=pattern)
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 18: config_remove_pattern (v1.0.4 - bucket configuration)
+    # ========================================================================
+    @mcp.tool()
+    def config_remove_pattern(
+        bucket: str,
+        pattern: str,
+    ) -> dict[str, Any]:
+        """
+        Remove a regex pattern from a bucket classification.
+
+        Removes an exact pattern from the bucket's pattern list.
+
+        Args:
+            bucket: Bucket name (state_serialization or tool_discovery)
+            pattern: Exact pattern string to remove
+
+        Returns:
+            Success status and updated pattern list
+        """
+        result = tools.config_remove_pattern(bucket=bucket, pattern=pattern)
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 19: config_set_threshold (v1.0.4 - bucket configuration)
+    # ========================================================================
+    @mcp.tool()
+    def config_set_threshold(
+        name: str,
+        value: int,
+    ) -> dict[str, Any]:
+        """
+        Set a bucket threshold value.
+
+        Thresholds control classification behavior:
+        - large_payload_threshold: Token count above which calls are state_serialization
+        - redundant_min_occurrences: Minimum content_hash occurrences to mark as redundant
+
+        Args:
+            name: Threshold name (large_payload_threshold or redundant_min_occurrences)
+            value: New threshold value (positive integer)
+
+        Returns:
+            Success status and updated thresholds
+        """
+        result = tools.config_set_threshold(name=name, value=value)
+        return result.model_dump()
+
+    # ========================================================================
+    # Tool 20: bucket_analyze (v1.0.4 - bucket classification)
+    # ========================================================================
+    @mcp.tool()
+    def bucket_analyze(
+        session_id: str | None = None,
+        include_tools: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Analyze a session's bucket classification.
+
+        Classifies all tool calls in a session into 4 buckets and provides
+        token distribution statistics. Essential for diagnosing token bloat.
+
+        Buckets:
+        - state_serialization: Large payloads and data retrieval
+        - tool_discovery: Introspection and schema calls
+        - redundant: Duplicate calls (same content_hash)
+        - drift: Everything else (reasoning, retries, errors)
+
+        Args:
+            session_id: Session ID to analyze (uses latest if not specified)
+            include_tools: Include top 10 tools per bucket
+
+        Returns:
+            Bucket breakdown with token percentages and summary
+        """
+        result = tools.bucket_analyze(
+            session_id=session_id,
+            include_tools=include_tools,
+        )
+        return result.model_dump()
+
+    # ========================================================================
     # MCP Resources (v1.0.0 - task-194)
     # ========================================================================
 

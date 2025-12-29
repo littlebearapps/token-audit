@@ -1,7 +1,7 @@
 """
 MCP tool implementations for token-audit server.
 
-This module contains all 15 MCP tools:
+This module contains all 20 MCP tools:
 - start_tracking (implemented)
 - get_metrics (implemented)
 - get_recommendations (implemented)
@@ -17,6 +17,11 @@ This module contains all 15 MCP tools:
 - get_session_details (v1.0.2)
 - pin_server (v1.0.2)
 - delete_session (v1.0.2)
+- config_list_patterns (v1.0.4)
+- config_add_pattern (v1.0.4)
+- config_remove_pattern (v1.0.4)
+- config_set_threshold (v1.0.4)
+- bucket_analyze (v1.0.4)
 """
 
 import contextlib
@@ -57,8 +62,14 @@ from .schemas import (
     AnalyzeConfigOutput,
     AnalyzeSessionOutput,
     BestPractice,
+    BucketAnalyzeOutput,
+    BucketStats,
     CacheMetrics,
+    ConfigAddPatternOutput,
     ConfigIssue,
+    ConfigListPatternsOutput,
+    ConfigRemovePatternOutput,
+    ConfigSetThresholdOutput,
     DailyUsageEntry,
     DataQuality,
     DataQualityInfo,
@@ -2478,3 +2489,356 @@ def delete_session(
             message=f"Failed to delete session: {e}",
             deleted_at=None,
         )
+
+
+# ============================================================================
+# Tool 16: config_list_patterns (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+def config_list_patterns(
+    bucket: Optional[str] = None,
+) -> ConfigListPatternsOutput:
+    """
+    List bucket classification patterns and thresholds.
+
+    Returns the current bucket configuration, optionally filtered by bucket name.
+    Useful for AI agents to understand how tool calls are classified.
+
+    Args:
+        bucket: Optional bucket name to filter (state_serialization or tool_discovery).
+            If None, returns patterns for all buckets.
+
+    Returns:
+        Configuration with patterns and thresholds.
+    """
+    from ..bucket_config import load_config
+
+    config = load_config()
+
+    # Filter by bucket if specified
+    patterns = config.patterns
+    if bucket is not None:
+        patterns = {bucket: patterns[bucket]} if bucket in patterns else {}
+
+    thresholds = {
+        "large_payload_threshold": config.large_payload_threshold,
+        "redundant_min_occurrences": config.redundant_min_occurrences,
+    }
+
+    return ConfigListPatternsOutput(
+        patterns=patterns,
+        thresholds=thresholds,
+        config_path=str(config.config_path) if config.config_path else None,
+    )
+
+
+# ============================================================================
+# Tool 17: config_add_pattern (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+def config_add_pattern(
+    bucket: str,
+    pattern: str,
+) -> ConfigAddPatternOutput:
+    """
+    Add a regex pattern to a bucket classification.
+
+    Patterns are used to classify tool calls into buckets for analysis.
+    The pattern is validated as a valid regex before being added.
+
+    Args:
+        bucket: Bucket name (state_serialization or tool_discovery).
+        pattern: Regex pattern to add (e.g., '.*_get_.*').
+
+    Returns:
+        Result with updated pattern list for the bucket.
+    """
+    from ..bucket_config import add_pattern, load_config, save_config
+
+    try:
+        config = load_config()
+        add_pattern(config, bucket, pattern)
+        save_config(config)
+
+        return ConfigAddPatternOutput(
+            success=True,
+            message=f"Added pattern '{pattern}' to bucket '{bucket}'",
+            bucket=bucket,
+            patterns=config.patterns.get(bucket, []),
+        )
+    except ValueError as e:
+        return ConfigAddPatternOutput(
+            success=False,
+            message=str(e),
+            bucket=bucket,
+            patterns=[],
+        )
+    except RuntimeError as e:
+        return ConfigAddPatternOutput(
+            success=False,
+            message=f"Failed to save config: {e}",
+            bucket=bucket,
+            patterns=[],
+        )
+
+
+# ============================================================================
+# Tool 18: config_remove_pattern (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+def config_remove_pattern(
+    bucket: str,
+    pattern: str,
+) -> ConfigRemovePatternOutput:
+    """
+    Remove a regex pattern from a bucket classification.
+
+    Args:
+        bucket: Bucket name (state_serialization or tool_discovery).
+        pattern: Exact pattern string to remove.
+
+    Returns:
+        Result with updated pattern list for the bucket.
+    """
+    from ..bucket_config import load_config, remove_pattern, save_config
+
+    try:
+        config = load_config()
+
+        # Check if bucket exists
+        if bucket not in config.patterns:
+            return ConfigRemovePatternOutput(
+                success=False,
+                message=f"Unknown bucket '{bucket}'",
+                bucket=bucket,
+                patterns=[],
+            )
+
+        # Check if pattern exists
+        if pattern not in config.patterns[bucket]:
+            return ConfigRemovePatternOutput(
+                success=False,
+                message=f"Pattern '{pattern}' not found in bucket '{bucket}'",
+                bucket=bucket,
+                patterns=config.patterns.get(bucket, []),
+            )
+
+        remove_pattern(config, bucket, pattern)
+        save_config(config)
+
+        return ConfigRemovePatternOutput(
+            success=True,
+            message=f"Removed pattern '{pattern}' from bucket '{bucket}'",
+            bucket=bucket,
+            patterns=config.patterns.get(bucket, []),
+        )
+    except RuntimeError as e:
+        return ConfigRemovePatternOutput(
+            success=False,
+            message=f"Failed to save config: {e}",
+            bucket=bucket,
+            patterns=[],
+        )
+
+
+# ============================================================================
+# Tool 19: config_set_threshold (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+def config_set_threshold(
+    name: str,
+    value: int,
+) -> ConfigSetThresholdOutput:
+    """
+    Set a bucket threshold value.
+
+    Thresholds control how tool calls are classified:
+    - large_payload_threshold: Token count above which calls are classified as state_serialization
+    - redundant_min_occurrences: Minimum content_hash occurrences to classify as redundant
+
+    Args:
+        name: Threshold name (large_payload_threshold or redundant_min_occurrences).
+        value: New threshold value (must be positive integer).
+
+    Returns:
+        Result with updated threshold settings.
+    """
+    from ..bucket_config import load_config, save_config, set_threshold
+
+    try:
+        config = load_config()
+        set_threshold(config, name, value)
+        save_config(config)
+
+        thresholds = {
+            "large_payload_threshold": config.large_payload_threshold,
+            "redundant_min_occurrences": config.redundant_min_occurrences,
+        }
+
+        return ConfigSetThresholdOutput(
+            success=True,
+            message=f"Set {name} to {value}",
+            thresholds=thresholds,
+        )
+    except ValueError as e:
+        return ConfigSetThresholdOutput(
+            success=False,
+            message=str(e),
+            thresholds={},
+        )
+    except RuntimeError as e:
+        return ConfigSetThresholdOutput(
+            success=False,
+            message=f"Failed to save config: {e}",
+            thresholds={},
+        )
+
+
+# ============================================================================
+# Tool 20: bucket_analyze (v1.0.4 - bucket classification)
+# ============================================================================
+
+
+def bucket_analyze(
+    session_id: Optional[str] = None,
+    include_tools: bool = True,
+) -> BucketAnalyzeOutput:
+    """
+    Analyze a session's bucket classification.
+
+    Classifies all tool calls in a session into 4 buckets:
+    - state_serialization: Large payloads and data retrieval calls
+    - tool_discovery: Introspection and schema calls
+    - redundant: Duplicate calls (same content_hash)
+    - drift: Everything else (reasoning, retries, errors)
+
+    Args:
+        session_id: Session ID to analyze (uses latest if not specified).
+        include_tools: Include list of top tools per bucket.
+
+    Returns:
+        Bucket breakdown with token distribution and summary.
+    """
+    from ..bucket_config import load_config
+    from ..buckets import BucketClassifier
+    from ..storage import StorageManager
+
+    storage = StorageManager()
+
+    # Find session
+    if session_id is None:
+        # Get latest session
+        sessions = list(storage.list_sessions())
+        if not sessions:
+            return BucketAnalyzeOutput(
+                success=False,
+                session_id="",
+                buckets={},
+                total_tokens=0,
+                total_calls=0,
+                summary="No sessions found",
+                message="No sessions available for analysis",
+            )
+        # Sort by timestamp descending and get the first
+        sessions.sort(key=lambda s: s.get("timestamp", ""), reverse=True)
+        session_path = storage.find_session(sessions[0]["id"])
+        actual_session_id = sessions[0]["id"]
+    else:
+        session_path = storage.find_session(session_id)
+        actual_session_id = session_id
+
+    if session_path is None:
+        return BucketAnalyzeOutput(
+            success=False,
+            session_id=session_id or "",
+            buckets={},
+            total_tokens=0,
+            total_calls=0,
+            summary=f"Session not found: {session_id}",
+            message=f"Session '{session_id}' not found in storage",
+        )
+
+    # Load session
+    try:
+        session = storage.load_session(session_path)
+    except Exception as e:
+        return BucketAnalyzeOutput(
+            success=False,
+            session_id=actual_session_id,
+            buckets={},
+            total_tokens=0,
+            total_calls=0,
+            summary=f"Failed to load session: {e}",
+            message=str(e),
+        )
+
+    # Load config and create classifier
+    config = load_config()
+    classifier = BucketClassifier(
+        patterns=config.patterns,
+        thresholds={
+            "large_payload_threshold": config.large_payload_threshold,
+            "redundant_min_occurrences": config.redundant_min_occurrences,
+        },
+    )
+
+    # Classify all calls
+    results = classifier.classify_session(session)
+
+    # Aggregate by bucket
+    bucket_data: Dict[str, Dict[str, Any]] = {
+        "state_serialization": {"count": 0, "tokens": 0, "tools": Counter()},
+        "tool_discovery": {"count": 0, "tokens": 0, "tools": Counter()},
+        "redundant": {"count": 0, "tokens": 0, "tools": Counter()},
+        "drift": {"count": 0, "tokens": 0, "tools": Counter()},
+    }
+
+    total_tokens = 0
+    total_calls = 0
+
+    for result in results:
+        bucket = result.bucket
+        tokens = result.tokens
+        tool = result.tool_name
+
+        bucket_data[bucket]["count"] += 1
+        bucket_data[bucket]["tokens"] += tokens
+        bucket_data[bucket]["tools"][tool] += 1
+        total_tokens += tokens
+        total_calls += 1
+
+    # Build output
+    buckets: Dict[str, BucketStats] = {}
+    for bucket_name, data in bucket_data.items():
+        percentage = (data["tokens"] / total_tokens * 100) if total_tokens > 0 else 0.0
+        top_tools = [tool for tool, _ in data["tools"].most_common(10)] if include_tools else []
+
+        buckets[bucket_name] = BucketStats(
+            count=data["count"],
+            tokens=data["tokens"],
+            percentage=round(percentage, 2),
+            tools=top_tools,
+        )
+
+    # Build summary
+    summary_parts = []
+    for bucket_name in ["state_serialization", "redundant", "tool_discovery", "drift"]:
+        stats = buckets[bucket_name]
+        if stats.count > 0:
+            summary_parts.append(f"{bucket_name}: {stats.percentage:.1f}%")
+
+    summary = " | ".join(summary_parts) if summary_parts else "No tool calls found"
+
+    return BucketAnalyzeOutput(
+        success=True,
+        session_id=actual_session_id,
+        buckets=buckets,
+        total_tokens=total_tokens,
+        total_calls=total_calls,
+        summary=summary,
+        message=None,
+    )

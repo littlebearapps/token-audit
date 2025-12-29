@@ -521,7 +521,7 @@ class TestMultiServerTracking:
         assert "context7" in session.server_sessions
 
     def test_server_session_files_created(self, tmp_path) -> None:
-        """Test session file created with server data (v1.1.0: single file)"""
+        """Test session file created with server data (v1.0.4: single file)"""
         adapter = ClaudeCodeAdapter(project="test", claude_dir=tmp_path)
 
         # Record calls to multiple servers
@@ -533,7 +533,7 @@ class TestMultiServerTracking:
         adapter.finalize_session()
         adapter.save_session(tmp_path)
 
-        # Verify single session file created (v1.1.0 format)
+        # Verify single session file created (v1.0.4 format)
         assert adapter.session_dir is not None
         session_files = list(adapter.session_dir.glob("*.json"))
         assert len(session_files) == 1

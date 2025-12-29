@@ -45,7 +45,7 @@ APIs marked as **deprecated** are scheduled for removal:
 - Removed in the version specified (usually 2 minor versions after deprecation)
 - Documented alternatives are provided
 
-**Examples**: `estimate_tool_tokens` (deprecated in v0.9.0, remove in v1.1.0)
+**Examples**: `estimate_tool_tokens` (deprecated in v0.9.0, remove in v1.0.5)
 
 ---
 
@@ -166,7 +166,7 @@ from token_audit import estimate_tool_tokens
 
 | API | Deprecated | Remove | Replacement |
 |-----|------------|--------|-------------|
-| `estimate_tool_tokens` | v0.9.0 | v1.1.0 | `TokenEstimator.estimate_tool_call()` |
+| `estimate_tool_tokens` | v0.9.0 | v1.0.5 | `TokenEstimator.estimate_tool_call()` |
 
 ---
 

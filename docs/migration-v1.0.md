@@ -132,7 +132,7 @@ Your existing workflows, scripts, and configurations will continue to work witho
 
 ### From v0.9.x
 
-The following was deprecated in v0.9.0 and will be removed in v1.1.0:
+The following was deprecated in v0.9.0 and will be removed in v1.0.5:
 
 - **`estimate_tool_tokens`** function
   - Use `TokenEstimator.estimate_tool_call()` instead

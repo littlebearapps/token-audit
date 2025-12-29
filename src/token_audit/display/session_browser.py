@@ -85,6 +85,10 @@ class BrowserMode(Enum):
     DATE_FILTER_MODAL = auto()  # Date range filter input
     ADD_SERVER_MODAL = auto()  # Add pinned server selection - task-233.8
 
+    # v1.0.4 - Bucket configuration (task-247.13)
+    BUCKET_CONFIG = auto()  # Bucket classification configuration view (key 8)
+    ADD_PATTERN_MODAL = auto()  # Add pattern to bucket modal
+
 
 # Sort options: (display_label, sort_key, reverse)
 SORT_OPTIONS: List[tuple[str, str, bool]] = [
@@ -369,6 +373,13 @@ class BrowserState:
     file_mtimes: Dict[str, float] = field(default_factory=dict)  # path -> mtime
     external_change_detected: bool = False
     last_mtime_check: Optional[float] = None  # time.time() value
+    # v1.0.4 - Bucket configuration view state (task-247.13)
+    bucket_config: Optional[Any] = None  # BucketConfig instance
+    bucket_config_section: int = 0  # 0=state_serialization, 1=tool_discovery, 2=thresholds
+    bucket_config_item_index: int = 0  # Selected item within section
+    bucket_config_modified: bool = False  # Track unsaved changes
+    bucket_add_pattern_input: str = ""  # Pattern input for add modal
+    bucket_add_pattern_bucket: str = "state_serialization"  # Target bucket for add
 
 
 @dataclass
@@ -1170,6 +1181,17 @@ class SessionBrowser:
             self.state.pinned_servers_selected_index = 0  # Reset selection
             self._load_pinned_servers()  # Load pinned server data
             return False
+        # v1.0.4 - task-247.13: Bucket Configuration view (key 8)
+        elif key == "8" and self.state.mode not in (
+            BrowserMode.BUCKET_CONFIG,
+            BrowserMode.SEARCH,
+            BrowserMode.COMMAND_PALETTE,
+        ):
+            self.state.mode = BrowserMode.BUCKET_CONFIG
+            self.state.bucket_config_section = 0  # Reset to first section
+            self.state.bucket_config_item_index = 0  # Reset selection
+            self._load_bucket_config()  # Load bucket configuration
+            return False
         # v1.0.3 - task-233.2: Start Tracking modal (key n)
         elif key == "n" and self.state.mode not in (
             BrowserMode.START_TRACKING_MODAL,
@@ -1238,6 +1260,10 @@ class SessionBrowser:
             return self._handle_pinned_servers_key(key)  # v1.0.3 - task-233.8
         elif self.state.mode == BrowserMode.ADD_SERVER_MODAL:
             return self._handle_add_server_modal_key(key)  # v1.0.3 - task-233.8
+        elif self.state.mode == BrowserMode.BUCKET_CONFIG:
+            return self._handle_bucket_config_key(key)  # v1.0.4 - task-247.13
+        elif self.state.mode == BrowserMode.ADD_PATTERN_MODAL:
+            return self._handle_add_pattern_modal_key(key)  # v1.0.4 - task-247.13
         elif self.state.mode == BrowserMode.START_TRACKING_MODAL:
             return self._handle_start_tracking_modal_key(key)  # v1.0.3 - task-233.2
         elif self.state.mode == BrowserMode.DELETE_CONFIRM_MODAL:
@@ -2279,6 +2305,19 @@ class SessionBrowser:
         elif self.state.mode == BrowserMode.ADD_SERVER_MODAL:
             panels = [
                 Layout(self._build_add_server_modal(), name="modal"),
+            ]
+        # v1.0.4 - task-247.13: Bucket Configuration view
+        elif self.state.mode == BrowserMode.BUCKET_CONFIG:
+            panels.extend(
+                [
+                    Layout(self._build_bucket_config_view(), name="bucket_config"),
+                    Layout(self._build_bucket_config_footer(), name="footer", size=1),
+                ]
+            )
+        # v1.0.4 - task-247.13: Add Pattern modal
+        elif self.state.mode == BrowserMode.ADD_PATTERN_MODAL:
+            panels = [
+                Layout(self._build_add_pattern_modal(), name="modal"),
             ]
         # v1.0.3 - task-233.2: Start Tracking modal
         elif self.state.mode == BrowserMode.START_TRACKING_MODAL:
@@ -6029,3 +6068,326 @@ Please review these automated recommendations and provide:
             return f"{hours}h {minutes}m"
         else:
             return f"{minutes}m {secs}s"
+
+    # ========================================================================
+    # Bucket Configuration View (v1.0.4 - task-247.13)
+    # ========================================================================
+
+    def _load_bucket_config(self) -> None:
+        """Load bucket configuration from file."""
+        try:
+            from ..bucket_config import load_config
+
+            self.state.bucket_config = load_config()
+            self.state.bucket_config_modified = False
+        except Exception as e:
+            self.show_notification(f"Failed to load bucket config: {e}", "error")
+            self.state.bucket_config = None
+
+    def _build_bucket_config_view(self) -> Panel:
+        """Build the Bucket Configuration view (v1.0.4 - task-247.13)."""
+        content = Text()
+
+        # Header
+        title_icon = ascii_emoji("gear")
+        content.append(f"{title_icon} Bucket Configuration\n", style=f"bold {self.theme.title}")
+        content.append("Configure token classification patterns\n", style=self.theme.dim_text)
+        if self.state.bucket_config_modified:
+            content.append("[unsaved changes]", style=f"bold {self.theme.warning}")
+        content.append("\n\n")
+
+        config = self.state.bucket_config
+
+        if config is None:
+            content.append("Loading configuration...\n", style=self.theme.dim_text)
+            return Panel(
+                content,
+                title="[8] Bucket Configuration",
+                border_style=self.theme.mcp_border,
+                padding=(1, 2),
+            )
+
+        divider_width = min(self._get_terminal_width() - 4, 80)
+        section_idx = self.state.bucket_config_section
+        item_idx = self.state.bucket_config_item_index
+
+        # Section 0: State Serialization Patterns
+        patterns_ss = config.patterns.get("state_serialization", [])
+        section_style = f"bold {self.theme.info}" if section_idx == 0 else self.theme.primary_text
+        content.append("State Serialization Patterns", style=section_style)
+        content.append(f" ({len(patterns_ss)})\n", style=self.theme.dim_text)
+
+        if section_idx == 0:
+            for i, pattern in enumerate(patterns_ss):
+                is_selected = i == item_idx
+                if is_selected:
+                    content.append("  ▶ ", style=f"bold {self.theme.info}")
+                else:
+                    content.append("    ", style=self.theme.dim_text)
+                style = f"bold {self.theme.info}" if is_selected else self.theme.primary_text
+                content.append(f"{pattern}\n", style=style)
+            if not patterns_ss:
+                content.append("    (no patterns)\n", style=self.theme.dim_text)
+        else:
+            for pattern in patterns_ss[:3]:
+                content.append(f"    {pattern}\n", style=self.theme.dim_text)
+            if len(patterns_ss) > 3:
+                content.append(
+                    f"    ...and {len(patterns_ss) - 3} more\n", style=self.theme.dim_text
+                )
+
+        content.append("\n")
+
+        # Section 1: Tool Discovery Patterns
+        patterns_td = config.patterns.get("tool_discovery", [])
+        section_style = f"bold {self.theme.info}" if section_idx == 1 else self.theme.primary_text
+        content.append("Tool Discovery Patterns", style=section_style)
+        content.append(f" ({len(patterns_td)})\n", style=self.theme.dim_text)
+
+        if section_idx == 1:
+            for i, pattern in enumerate(patterns_td):
+                is_selected = i == item_idx
+                if is_selected:
+                    content.append("  ▶ ", style=f"bold {self.theme.info}")
+                else:
+                    content.append("    ", style=self.theme.dim_text)
+                style = f"bold {self.theme.info}" if is_selected else self.theme.primary_text
+                content.append(f"{pattern}\n", style=style)
+            if not patterns_td:
+                content.append("    (no patterns)\n", style=self.theme.dim_text)
+        else:
+            for pattern in patterns_td[:3]:
+                content.append(f"    {pattern}\n", style=self.theme.dim_text)
+            if len(patterns_td) > 3:
+                content.append(
+                    f"    ...and {len(patterns_td) - 3} more\n", style=self.theme.dim_text
+                )
+
+        content.append("\n")
+
+        # Section 2: Thresholds
+        section_style = f"bold {self.theme.info}" if section_idx == 2 else self.theme.primary_text
+        content.append("Thresholds\n", style=section_style)
+
+        thresholds = [
+            ("large_payload_threshold", config.large_payload_threshold, "tokens"),
+            ("redundant_min_occurrences", config.redundant_min_occurrences, "occurrences"),
+        ]
+
+        if section_idx == 2:
+            for i, (name, value, unit) in enumerate(thresholds):
+                is_selected = i == item_idx
+                if is_selected:
+                    content.append("  ▶ ", style=f"bold {self.theme.info}")
+                else:
+                    content.append("    ", style=self.theme.dim_text)
+                style = f"bold {self.theme.info}" if is_selected else self.theme.primary_text
+                content.append(f"{name}: ", style=style)
+                content.append(f"{value:,} {unit}\n", style=self.theme.success)
+        else:
+            for name, value, unit in thresholds:
+                content.append(f"    {name}: ", style=self.theme.dim_text)
+                content.append(f"{value:,} {unit}\n", style=self.theme.dim_text)
+
+        content.append("\n")
+        content.append("─" * divider_width + "\n", style=self.theme.dim_text)
+
+        # Config path info
+        if config.config_path:
+            content.append(f"Config: {config.config_path}", style=self.theme.dim_text)
+        else:
+            content.append("Config: (using defaults)", style=self.theme.dim_text)
+
+        return Panel(
+            content,
+            title="[8] Bucket Configuration",
+            border_style=self.theme.mcp_border,
+            padding=(1, 2),
+        )
+
+    def _build_bucket_config_footer(self) -> Panel:
+        """Build footer for Bucket Configuration view (v1.0.4 - task-247.13)."""
+        section = self.state.bucket_config_section
+
+        if section in (0, 1):  # Pattern sections
+            footer_text = (
+                "[j/k]Navigate  [Tab]Section  [a]Add  [d]Delete  [s]Save  [r]Reset  [Esc]Back"
+            )
+        else:  # Thresholds section
+            footer_text = "[j/k]Navigate  [Tab]Section  [e]Edit  [s]Save  [r]Reset  [Esc]Back"
+
+        return Panel(
+            Text(footer_text, style=self.theme.dim_text, justify="center"),
+            border_style=self.theme.mcp_border,
+            padding=(0, 0),
+        )
+
+    def _handle_bucket_config_key(self, key: str) -> bool:
+        """Handle key input for Bucket Configuration view (v1.0.4 - task-247.13)."""
+        config = self.state.bucket_config
+        if config is None:
+            if key == "escape":
+                self.state.mode = BrowserMode.DASHBOARD
+            return False
+
+        section = self.state.bucket_config_section
+
+        # Get current section's item count
+        if section == 0:
+            items = config.patterns.get("state_serialization", [])
+        elif section == 1:
+            items = config.patterns.get("tool_discovery", [])
+        else:  # section == 2
+            items = ["large_payload_threshold", "redundant_min_occurrences"]
+
+        if key == "escape":
+            if self.state.bucket_config_modified:
+                self.show_notification("Unsaved changes discarded", "warning")
+            self.state.mode = BrowserMode.DASHBOARD
+            return False
+
+        if key in ("j", "down"):
+            if items and self.state.bucket_config_item_index < len(items) - 1:
+                self.state.bucket_config_item_index += 1
+            return False
+
+        if key in ("k", "up"):
+            if items and self.state.bucket_config_item_index > 0:
+                self.state.bucket_config_item_index -= 1
+            return False
+
+        if key == "tab":
+            # Cycle through sections
+            self.state.bucket_config_section = (section + 1) % 3
+            self.state.bucket_config_item_index = 0
+            return False
+
+        if key == "a" and section in (0, 1):
+            # Add pattern - open modal
+            bucket = "state_serialization" if section == 0 else "tool_discovery"
+            self.state.bucket_add_pattern_bucket = bucket
+            self.state.bucket_add_pattern_input = ""
+            self.state.mode = BrowserMode.ADD_PATTERN_MODAL
+            return False
+
+        if key == "d" and section in (0, 1):
+            # Delete selected pattern
+            if items and self.state.bucket_config_item_index < len(items):
+                pattern = items[self.state.bucket_config_item_index]
+                bucket = "state_serialization" if section == 0 else "tool_discovery"
+                try:
+                    from ..bucket_config import remove_pattern
+
+                    remove_pattern(config, bucket, pattern)
+                    self.state.bucket_config_modified = True
+                    # Adjust selection if needed
+                    if self.state.bucket_config_item_index >= len(items) - 1:
+                        self.state.bucket_config_item_index = max(0, len(items) - 2)
+                    self.show_notification(f"Removed pattern: {pattern}", "success")
+                except Exception as e:
+                    self.show_notification(f"Failed to remove: {e}", "error")
+            return False
+
+        if key == "e" and section == 2:
+            # Edit threshold - for now just show a notification
+            # Full implementation would use InputModal
+            threshold_name = items[self.state.bucket_config_item_index]
+            self.show_notification(
+                f"Edit threshold '{threshold_name}' via: token-audit config set {threshold_name} <value>",
+                "info",
+            )
+            return False
+
+        if key == "s":
+            # Save configuration
+            try:
+                from ..bucket_config import save_config
+
+                save_config(config)
+                self.state.bucket_config_modified = False
+                self.show_notification("Configuration saved to token-audit.toml", "success")
+            except Exception as e:
+                self.show_notification(f"Failed to save: {e}", "error")
+            return False
+
+        if key == "r":
+            # Reset to defaults
+            try:
+                from ..bucket_config import reset_to_defaults
+
+                reset_to_defaults(config)
+                self.state.bucket_config_modified = True
+                self.state.bucket_config_item_index = 0
+                self.show_notification("Reset to default patterns", "success")
+            except Exception as e:
+                self.show_notification(f"Failed to reset: {e}", "error")
+            return False
+
+        return False
+
+    def _build_add_pattern_modal(self) -> Panel:
+        """Build the Add Pattern modal (v1.0.4 - task-247.13)."""
+        content = Text()
+
+        bucket = self.state.bucket_add_pattern_bucket
+        bucket_display = bucket.replace("_", " ").title()
+
+        content.append(f"Add Pattern to {bucket_display}\n\n", style=f"bold {self.theme.title}")
+        content.append("Enter a regex pattern:\n", style=self.theme.dim_text)
+        content.append(
+            f"> {self.state.bucket_add_pattern_input}_\n\n", style=self.theme.primary_text
+        )
+        content.append("Examples:\n", style=self.theme.dim_text)
+        content.append(
+            "  .*_get_.*      Match tool names containing '_get_'\n", style=self.theme.dim_text
+        )
+        content.append("  wpnav_list_.*  Match wpnav list tools\n", style=self.theme.dim_text)
+        content.append("  ^mcp__.*       Match MCP server tools\n\n", style=self.theme.dim_text)
+        content.append("[Enter] Add  [Esc] Cancel", style=self.theme.dim_text)
+
+        return Panel(
+            Align.center(content, vertical="middle"),
+            title="Add Pattern",
+            border_style=self.theme.info,
+            padding=(2, 4),
+        )
+
+    def _handle_add_pattern_modal_key(self, key: str) -> bool:
+        """Handle key input for Add Pattern modal (v1.0.4 - task-247.13)."""
+        if key == "escape":
+            self.state.mode = BrowserMode.BUCKET_CONFIG
+            return False
+
+        if key == "enter":
+            pattern = self.state.bucket_add_pattern_input.strip()
+            if pattern:
+                try:
+                    from ..bucket_config import add_pattern, validate_pattern
+
+                    # Validate pattern first
+                    is_valid, error = validate_pattern(pattern)
+                    if not is_valid:
+                        self.show_notification(f"Invalid regex: {error}", "error")
+                        return False
+
+                    config = self.state.bucket_config
+                    if config:
+                        add_pattern(config, self.state.bucket_add_pattern_bucket, pattern)
+                        self.state.bucket_config_modified = True
+                        self.show_notification(f"Added pattern: {pattern}", "success")
+                except Exception as e:
+                    self.show_notification(f"Failed to add: {e}", "error")
+            self.state.mode = BrowserMode.BUCKET_CONFIG
+            return False
+
+        if key == "backspace":
+            if self.state.bucket_add_pattern_input:
+                self.state.bucket_add_pattern_input = self.state.bucket_add_pattern_input[:-1]
+            return False
+
+        # Regular character input
+        if len(key) == 1 and key.isprintable():
+            self.state.bucket_add_pattern_input += key
+            return False
+
+        return False

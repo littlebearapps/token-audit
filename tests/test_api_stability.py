@@ -98,7 +98,7 @@ class TestDeprecationWarnings:
             warning_msg = str(deprecation_warnings[0].message)
             assert "estimate_tool_tokens" in warning_msg
             assert "deprecated" in warning_msg.lower()
-            assert "v1.1.0" in warning_msg
+            assert "v1.0.5" in warning_msg
 
     def test_stable_apis_no_warning(self) -> None:
         """Stable APIs should not emit deprecation warnings."""
@@ -194,11 +194,11 @@ class TestStabilityDocumentation:
         assert stable_count == 16, f"Expected 16 stable APIs, got {stable_count}"
 
     def test_evolving_count(self) -> None:
-        """There should be exactly 16 evolving APIs (13 core + 3 server)."""
+        """There should be exactly 23 evolving APIs (13 core + 3 server + 4 bucket + 3 task)."""
         from token_audit import API_STABILITY
 
         evolving_count = sum(1 for tier in API_STABILITY.values() if tier == "evolving")
-        assert evolving_count == 16, f"Expected 16 evolving APIs, got {evolving_count}"
+        assert evolving_count == 23, f"Expected 23 evolving APIs, got {evolving_count}"
 
     def test_deprecated_count(self) -> None:
         """There should be exactly 1 deprecated API."""

@@ -1,6 +1,0 @@
-platform,tool_name,total_calls,total_tokens,avg_tokens
-claude-code,mcp__brave-search__brave_web_search,3,255735,85245
-claude-code,mcp__brave-search__brave_news_search,1,66770,66770
-claude-code,mcp__jina__search_web,1,63772,63772
-claude-code,mcp__zen__chat,1,63369,63369
-claude-code,mcp__jina__primer,1,58551,58551

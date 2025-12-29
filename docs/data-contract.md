@@ -816,7 +816,7 @@ Accuracy indicators for all metrics in the session:
 |-------|-------------|-----------|
 | `exact` | Native platform tokens | Claude Code |
 | `estimated` | Tokenizer-based estimation | Codex CLI, Gemini CLI |
-| `calls-only` | Only call counts, no tokens | Ollama CLI (v1.1.0) |
+| `calls-only` | Only call counts, no tokens | Ollama CLI (v1.4.0) |
 
 **Note on "estimated" vs "exact":** Codex CLI and Gemini CLI are marked "estimated" because while they provide native session-level token totals, token-audit estimates the per-MCP-tool breakdown using tiktoken/sentencepiece. Claude Code is "exact" because it provides per-message token attribution directly.
 

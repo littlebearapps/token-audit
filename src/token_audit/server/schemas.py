@@ -1034,3 +1034,148 @@ class DeleteSessionOutput(BaseModel):
         default=None,
         description="Deletion timestamp (ISO 8601)",
     )
+
+
+# ============================================================================
+# Tool 16: config_list_patterns (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+class ConfigListPatternsOutput(BaseModel):
+    """Output schema for config_list_patterns tool."""
+
+    patterns: Dict[str, List[str]] = Field(description="Mapping of bucket names to regex patterns")
+    thresholds: Dict[str, int] = Field(
+        description="Threshold settings (large_payload_threshold, redundant_min_occurrences)"
+    )
+    config_path: Optional[str] = Field(
+        default=None,
+        description="Path to loaded config file (None if using defaults)",
+    )
+
+
+# ============================================================================
+# Tool 17: config_add_pattern (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+class ConfigAddPatternInput(BaseModel):
+    """Input schema for config_add_pattern tool."""
+
+    bucket: str = Field(description="Bucket name: 'state_serialization' or 'tool_discovery'")
+    pattern: str = Field(description="Regex pattern to add (e.g., '.*_get_.*')")
+
+
+class ConfigAddPatternOutput(BaseModel):
+    """Output schema for config_add_pattern tool."""
+
+    success: bool = Field(description="Whether pattern was added successfully")
+    message: str = Field(description="Human-readable result message")
+    bucket: str = Field(description="Bucket the pattern was added to")
+    patterns: List[str] = Field(
+        default_factory=list,
+        description="Updated list of patterns for this bucket",
+    )
+
+
+# ============================================================================
+# Tool 18: config_remove_pattern (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+class ConfigRemovePatternInput(BaseModel):
+    """Input schema for config_remove_pattern tool."""
+
+    bucket: str = Field(description="Bucket name: 'state_serialization' or 'tool_discovery'")
+    pattern: str = Field(description="Exact regex pattern to remove")
+
+
+class ConfigRemovePatternOutput(BaseModel):
+    """Output schema for config_remove_pattern tool."""
+
+    success: bool = Field(description="Whether pattern was removed successfully")
+    message: str = Field(description="Human-readable result message")
+    bucket: str = Field(description="Bucket the pattern was removed from")
+    patterns: List[str] = Field(
+        default_factory=list,
+        description="Updated list of patterns for this bucket",
+    )
+
+
+# ============================================================================
+# Tool 19: config_set_threshold (v1.0.4 - bucket configuration)
+# ============================================================================
+
+
+class ThresholdName(str, Enum):
+    """Valid threshold names for configuration."""
+
+    LARGE_PAYLOAD = "large_payload_threshold"
+    REDUNDANT_MIN = "redundant_min_occurrences"
+
+
+class ConfigSetThresholdInput(BaseModel):
+    """Input schema for config_set_threshold tool."""
+
+    name: ThresholdName = Field(
+        description="Threshold name: 'large_payload_threshold' or 'redundant_min_occurrences'"
+    )
+    value: int = Field(
+        ge=1,
+        description="New threshold value (must be positive integer)",
+    )
+
+
+class ConfigSetThresholdOutput(BaseModel):
+    """Output schema for config_set_threshold tool."""
+
+    success: bool = Field(description="Whether threshold was set successfully")
+    message: str = Field(description="Human-readable result message")
+    thresholds: Dict[str, int] = Field(description="Updated threshold settings")
+
+
+# ============================================================================
+# Tool 20: bucket_analyze (v1.0.4 - bucket classification)
+# ============================================================================
+
+
+class BucketStats(BaseModel):
+    """Statistics for a single bucket."""
+
+    count: int = Field(description="Number of tool calls in this bucket")
+    tokens: int = Field(description="Total tokens in this bucket")
+    percentage: float = Field(description="Percentage of total tokens")
+    tools: List[str] = Field(
+        default_factory=list,
+        description="List of tool names in this bucket (top 10)",
+    )
+
+
+class BucketAnalyzeInput(BaseModel):
+    """Input schema for bucket_analyze tool."""
+
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Session ID to analyze (uses latest if not specified)",
+    )
+    include_tools: bool = Field(
+        default=True,
+        description="Include list of tools per bucket",
+    )
+
+
+class BucketAnalyzeOutput(BaseModel):
+    """Output schema for bucket_analyze tool."""
+
+    success: bool = Field(description="Whether analysis succeeded")
+    session_id: str = Field(description="Session ID that was analyzed")
+    buckets: Dict[str, BucketStats] = Field(
+        description="Stats for each bucket (state_serialization, tool_discovery, redundant, drift)"
+    )
+    total_tokens: int = Field(description="Total tokens across all buckets")
+    total_calls: int = Field(description="Total tool calls analyzed")
+    summary: str = Field(description="Human-readable summary of bucket distribution")
+    message: Optional[str] = Field(
+        default=None,
+        description="Additional message (e.g., error details)",
+    )

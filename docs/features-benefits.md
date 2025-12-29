@@ -392,7 +392,7 @@ Every session now includes accuracy metadata:
 |----------------|-------------|-----------|
 | `exact` | Native platform tokens | Claude Code |
 | `estimated` | Tokenizer-based estimation | Codex CLI, Gemini CLI |
-| `calls-only` | Only call counts, no tokens | Ollama CLI (v1.1.0) |
+| `calls-only` | Only call counts, no tokens | Ollama CLI (v1.4.0) |
 
 ---
 

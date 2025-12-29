@@ -33,15 +33,17 @@ uv pip install token-audit
 
 ---
 
-## What's New (v1.0.3)
+## What's New (v1.0.4)
 
-**Rich TUI Enhancements** — A self-contained interface with 7 views, modals, and advanced navigation:
+**Bucket Classification** — Diagnose WHERE token bloat comes from with 4-bucket analysis:
 
-- **7 integrated views**: Dashboard, Sessions, Recommendations, Live, Analytics, Smell Trends, Pinned Servers
-- **Modal system**: Select, Confirm, and Input modals for contextual actions (delete, filter, export)
-- **Date range filtering**: Quick presets (Today, Last 7d, Last 30d) and custom date ranges
-- **Export formats**: CSV, JSON, and AI-ready markdown for any view
-- **Concurrent access safety**: File locking ensures safe TUI + MCP + CLI access
+- **4 efficiency buckets**: State serialization, Redundant outputs, Tool discovery, Conversation drift
+- **`token-audit bucket` command**: Analyze token distribution across buckets
+- **Task markers**: `token-audit task start/end` for per-task analysis
+- **Per-task breakdown**: `--by-task` flag shows bucket percentages per logical task
+- **Configurable patterns**: TOML config, TUI screen, or MCP tools
+
+See [Bucket Classification Guide](docs/bucket-classification.md) for full documentation.
 
 ---
 
@@ -142,6 +144,7 @@ Want your AI agent to query usage directly? See [MCP Server Mode](#mcp-server-mo
 
 Token Audit detects "smells" — patterns that signal inefficiency, not errors. These are opportunities to optimize, not problems to fix immediately.
 
+- **4-bucket classification** — Diagnose WHERE tokens go: state serialization (large payloads), redundant outputs (duplicate calls), tool discovery (schema introspection), or conversation drift (reasoning/retries). See [Bucket Classification Guide](docs/bucket-classification.md).
 - **12 efficiency smells** — HIGH_VARIANCE, CHATTY, REDUNDANT_CALLS, BURST_PATTERN, and more. For example, CHATTY flags tools that send many small payloads instead of batching, and REDUNDANT_CALLS highlights repeated identical calls that could be cached — both common causes of early compaction.
 - **Zombie tool detection** — Find MCP tools defined but never called (wasting schema tokens)
 - **Context tax analysis** — See how much schema overhead each MCP server adds per turn
@@ -328,6 +331,7 @@ The `token-audit ui` command opens an interactive browser with seven views:
 ```bash
 token-audit collect    # Live tracking (auto-detects platform)
 token-audit ui         # Interactive dashboard
+token-audit bucket     # Analyze token distribution by bucket (v1.0.4)
 token-audit daily      # Usage summary
 token-audit report     # Generate report (markdown/json/csv/ai)
 token-audit --help     # Full command list
@@ -345,6 +349,18 @@ token-audit report PATH          # Generate report (markdown/json/csv/ai)
 token-audit daily                # Daily usage summary
 token-audit weekly               # Weekly usage summary
 token-audit monthly              # Monthly usage summary
+```
+
+### Bucket Classification (v1.0.4)
+
+```bash
+token-audit bucket                         # Analyze token distribution by bucket
+token-audit bucket --by-task               # Per-task bucket breakdown
+token-audit bucket --format json           # JSON output for programmatic use
+token-audit task start "Task name"         # Start tracking a logical task
+token-audit task end                       # End current task
+token-audit task list                      # List completed tasks with breakdown
+token-audit task show "Task name"          # Detailed view of specific task
 ```
 
 ### Analysis
@@ -498,7 +514,7 @@ Token Audit focuses on **real-time tool profiling**. Where billing tools answer 
 
 ## Roadmap
 
-**Current:** v1.0.3 — Rich TUI Enhancements (7 views, modals, exports)
+**Current:** v1.0.4 — Bucket Classification (4-bucket analysis, task markers, per-task breakdown)
 
 **Upcoming:**
 - **v1.1.0** — Billing & Statusline: 5-hour billing block tracking, Claude Code statusline hook

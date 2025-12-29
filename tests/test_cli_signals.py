@@ -340,7 +340,7 @@ class TestIntegrationWithMockTracker:
 
             assert session.mcp_tool_calls.total_calls == 1
             assert tracker.session_dir is not None
-            # v1.1.0: Single file per session in date subdirectory
+            # v1.0.4: Single file per session in date subdirectory
             session_files = list(tracker.session_dir.glob("*.json"))
             assert len(session_files) == 1
             assert session_files[0].name.startswith("test-project-")

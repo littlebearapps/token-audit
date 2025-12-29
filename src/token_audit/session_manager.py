@@ -4,18 +4,19 @@ Session Manager Module - Session lifecycle and persistence
 
 Handles session creation, lifecycle management, and persistence to disk.
 
-Supports both v1.0.0 and v1.1.0 file formats:
+Supports both v1.0.0 and v1.0.4 file formats:
 - v1.0.0: summary.json + mcp-{server}.json (deprecated)
-- v1.1.0: Single <project>-<timestamp>.json file with _file header
+- v1.0.4: Single <project>-<timestamp>.json file with _file header
 """
 
+import contextlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import __version__
-from .base_tracker import SCHEMA_VERSION, FileHeader, ServerSession, Session
+from .base_tracker import SCHEMA_VERSION, Call, FileHeader, ServerSession, Session
 
 
 def _now_with_timezone() -> datetime:
@@ -68,7 +69,7 @@ class SessionManager:
 
     def save_session(self, session: Session, session_dir: Path) -> Dict[str, Path]:
         """
-        Save complete session data to disk using v1.1.0 format.
+        Save complete session data to disk using v1.0.4 format.
 
         Creates a single JSON file with:
         - _file: Self-describing header block
@@ -86,7 +87,7 @@ class SessionManager:
         """
         saved_files = {}
 
-        # Create date subdirectory (v1.1.0)
+        # Create date subdirectory (v1.0.4)
         date_str = session.timestamp.strftime("%Y-%m-%d")
         date_dir = session_dir / date_str
         date_dir.mkdir(parents=True, exist_ok=True)
@@ -125,24 +126,24 @@ class SessionManager:
         """
         Load session from disk.
 
-        Supports both v1.0.0 and v1.1.0 formats:
+        Supports both v1.0.0 and v1.0.4 formats:
         - v1.0.0: Directory containing summary.json + mcp-{server}.json files
-        - v1.1.0: Single <project>-<timestamp>.json file (or directory containing it)
+        - v1.0.4: Single <project>-<timestamp>.json file (or directory containing it)
 
         Args:
-            session_path: Path to session file (v1.1.0) or directory (v1.0.0/v1.1.0)
+            session_path: Path to session file (v1.0.4) or directory (v1.0.0/v1.0.4)
 
         Returns:
             Session object if successful, None otherwise
         """
-        # Handle file path (v1.1.0 direct file reference)
+        # Handle file path (v1.0.4 direct file reference)
         if session_path.is_file():
             return self._load_session_from_file(session_path)
 
         # Handle directory path
         session_dir = session_path
 
-        # Try v1.1.0 format first (single JSON file in directory)
+        # Try v1.0.4 format first (single JSON file in directory)
         v1_1_session = self._load_session_v1_1(session_dir)
         if v1_1_session:
             return v1_1_session
@@ -152,7 +153,7 @@ class SessionManager:
 
     def _load_session_from_file(self, session_file: Path) -> Optional[Session]:
         """
-        Load session directly from a v1.1.0 session file.
+        Load session directly from a v1.0.4 session file.
 
         Args:
             session_file: Path to session JSON file
@@ -164,7 +165,7 @@ class SessionManager:
             with open(session_file) as f:
                 data = json.load(f)
 
-            # Check for _file header (v1.1.0 indicator)
+            # Check for _file header (v1.0.4 indicator)
             if "_file" not in data:
                 return None
 
@@ -186,7 +187,7 @@ class SessionManager:
         Check if filename looks like a v1.0.0 server file (mcp-{server}.json).
 
         v1.0.0 server files: mcp-zen.json, mcp-backlog.json (short names, no timestamp)
-        v1.1.0 session files: project-2025-12-01T15-25-58.json (has ISO timestamp)
+        v1.0.4 session files: project-2025-12-01T15-25-58.json (has ISO timestamp)
 
         Args:
             filename: The filename to check
@@ -201,16 +202,16 @@ class SessionManager:
         if not filename.startswith("mcp-"):
             return False
 
-        # v1.1.0 files have ISO timestamp pattern in the name
+        # v1.0.4 files have ISO timestamp pattern in the name
         # e.g., token-audit-2025-12-01T15-25-58.json
         has_timestamp = bool(re.search(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}", filename))
 
-        # If it has a timestamp, it's v1.1.0; if not, it's v1.0.0 server file
+        # If it has a timestamp, it's v1.0.4; if not, it's v1.0.0 server file
         return not has_timestamp
 
     def _load_session_v1_1(self, session_dir: Path) -> Optional[Session]:
         """
-        Load session from v1.1.0 format (single JSON file).
+        Load session from v1.0.4 format (single JSON file).
 
         Args:
             session_dir: Directory containing session file
@@ -220,7 +221,7 @@ class SessionManager:
         """
         # Look for single session file (not summary.json or v1.0.0 server files)
         # v1.0.0 server files: mcp-{server}.json (short names like mcp-zen.json)
-        # v1.1.0 session files: {project}-{timestamp}.json (has ISO timestamp)
+        # v1.0.4 session files: {project}-{timestamp}.json (has ISO timestamp)
         session_files = [
             f
             for f in session_dir.glob("*.json")
@@ -238,7 +239,7 @@ class SessionManager:
             with open(session_file) as f:
                 data = json.load(f)
 
-            # Check for _file header (v1.1.0 indicator)
+            # Check for _file header (v1.0.4 indicator)
             if "_file" not in data:
                 return None
 
@@ -411,7 +412,7 @@ class SessionManager:
         mcp_calls_data = data.get("mcp_tool_calls", {})
         mcp_tool_calls = MCPToolCalls(**mcp_calls_data) if mcp_calls_data else MCPToolCalls()
 
-        # Create Session object (with default values for new v1.1.0 fields)
+        # Create Session object (with default values for new v1.0.4 fields)
         session = Session(
             schema_version=data.get("schema_version", SCHEMA_VERSION),
             mcp_audit_version=data.get("mcp_audit_version", ""),
@@ -436,7 +437,7 @@ class SessionManager:
 
     def _reconstruct_session_v1_1(self, data: Dict[str, Any]) -> Session:
         """
-        Reconstruct Session object from v1.1.0 format.
+        Reconstruct Session object from v1.0.4 format.
 
         Args:
             data: Session data dictionary with _file header
@@ -457,15 +458,21 @@ class SessionManager:
         file_header = data.get("_file", {})
         schema_version = file_header.get("schema_version", SCHEMA_VERSION)
 
-        # Extract session block (v1.1.0 has nested session)
+        # Extract session block (v1.0.4 has nested session)
         session_data = data.get("session", data)
 
         # Reconstruct timestamp
-        timestamp_str = session_data.get("start_time", session_data.get("timestamp", ""))
+        # v1.0.4 uses "started_at", v1.0.0 uses "start_time" or "timestamp"
+        timestamp_str = session_data.get(
+            "started_at", session_data.get("start_time", session_data.get("timestamp", ""))
+        )
         timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str else _now_with_timezone()
 
         end_timestamp = None
-        end_time_str = session_data.get("end_time", data.get("end_timestamp"))
+        # v1.0.4 uses "ended_at", v1.0.0 uses "end_time" or "end_timestamp"
+        end_time_str = session_data.get(
+            "ended_at", session_data.get("end_time", data.get("end_timestamp"))
+        )
         if end_time_str:
             end_timestamp = datetime.fromisoformat(end_time_str)
 
@@ -476,10 +483,10 @@ class SessionManager:
             token_data["cache_created_tokens"] = token_data.pop("cache_write_tokens")
         token_usage = TokenUsage(**token_data) if token_data else TokenUsage()
 
-        # Reconstruct MCPToolCalls from mcp_summary (v1.1.0 format)
+        # Reconstruct MCPToolCalls from mcp_summary (v1.0.4 format)
         mcp_summary = data.get("mcp_summary", {})
         if mcp_summary:
-            # v1.1.0: MCPSummary has total_calls, unique_tools, top_by_calls
+            # v1.0.4: MCPSummary has total_calls, unique_tools, top_by_calls
             top_by_calls = mcp_summary.get("top_by_calls", [])
             most_called = ""
             if top_by_calls:
@@ -515,6 +522,32 @@ class SessionManager:
             stats.total_tokens += call_data.get("total_tokens", 0)
             if stats.calls > 0:
                 stats.avg_tokens = stats.total_tokens // stats.calls
+
+            # Create Call object and add to call_history (task-247.4: bucket classification)
+            call_timestamp_str = call_data.get("timestamp", "")
+            call_timestamp = timestamp  # Fallback to session timestamp
+            if call_timestamp_str:
+                with contextlib.suppress(ValueError, TypeError):
+                    call_timestamp = datetime.fromisoformat(call_timestamp_str)
+
+            call = Call(
+                timestamp=call_timestamp,
+                tool_name=tool_name,
+                server=server,
+                index=call_data.get("index", len(stats.call_history)),
+                input_tokens=call_data.get("input_tokens", 0),
+                output_tokens=call_data.get("output_tokens", 0),
+                cache_created_tokens=call_data.get("cache_created_tokens", 0),
+                cache_read_tokens=call_data.get("cache_read_tokens", 0),
+                total_tokens=call_data.get("total_tokens", 0),
+                duration_ms=call_data.get("duration_ms", 0) or 0,
+                content_hash=call_data.get("content_hash"),
+                is_estimated=call_data.get("is_estimated", False),
+                estimation_method=call_data.get("estimation_method"),
+                estimation_encoding=call_data.get("estimation_encoding"),
+                model=call_data.get("model"),
+            )
+            stats.call_history.append(call)
 
         # Build server_sessions
         server_sessions = {}
@@ -593,7 +626,7 @@ class SessionManager:
         """
         Load ServerSession from v1.0.0 format file.
 
-        Note: v1.1.0 removed schema_version from Call and ToolStats, so we
+        Note: v1.0.4 removed schema_version from Call and ToolStats, so we
         skip those fields when reconstructing.
 
         Args:
@@ -612,7 +645,7 @@ class SessionManager:
             # Reconstruct ToolStats for each tool
             tools = {}
             for tool_name, tool_data in data.get("tools", {}).items():
-                # Reconstruct Call objects (skip schema_version - removed in v1.1.0)
+                # Reconstruct Call objects (skip schema_version - removed in v1.0.4)
                 call_history = []
                 for call_data in tool_data.get("call_history", []):
                     call = Call(
@@ -631,7 +664,7 @@ class SessionManager:
                     )
                     call_history.append(call)
 
-                # Create ToolStats object (skip schema_version - removed in v1.1.0)
+                # Create ToolStats object (skip schema_version - removed in v1.0.4)
                 tool_stats = ToolStats(
                     calls=tool_data.get("calls", 0),
                     total_tokens=tool_data.get("total_tokens", 0),
@@ -644,7 +677,7 @@ class SessionManager:
                 )
                 tools[tool_name] = tool_stats
 
-            # Create ServerSession object (skip schema_version - removed in v1.1.0)
+            # Create ServerSession object (skip schema_version - removed in v1.0.4)
             server_session = ServerSession(
                 server=data.get("server", "unknown"),
                 tools=tools,
@@ -663,9 +696,9 @@ class SessionManager:
         """
         List all session paths.
 
-        Supports both v1.0.0 and v1.1.0 formats:
+        Supports both v1.0.0 and v1.0.4 formats:
         - v1.0.0: Returns directories containing summary.json
-        - v1.1.0: Returns parent directories of individual session files
+        - v1.0.4: Returns parent directories of individual session files
 
         Args:
             limit: Maximum number of sessions to return (most recent first)
@@ -673,7 +706,7 @@ class SessionManager:
         Returns:
             List of session paths, sorted by timestamp (newest first).
             For v1.0.0, returns session directories.
-            For v1.1.0, returns parent directories of session files (may have duplicates).
+            For v1.0.4, returns parent directories of session files (may have duplicates).
         """
         if not self.base_dir.exists():
             return []
@@ -700,7 +733,7 @@ class SessionManager:
                     sessions.append((item, datetime.fromtimestamp(item.stat().st_mtime)))
                 continue
 
-            # Check for v1.1.0 format (date directory with session files)
+            # Check for v1.0.4 format (date directory with session files)
             # Date directories look like: YYYY-MM-DD
             try:
                 datetime.strptime(item.name, "%Y-%m-%d")
@@ -712,7 +745,7 @@ class SessionManager:
                 if session_file.name == "summary.json" or session_file.name.startswith("mcp-"):
                     continue  # Skip v1.0.0 files in date directories (shouldn't happen)
 
-                # Check if it's a v1.1.0 file (has _file header)
+                # Check if it's a v1.0.4 file (has _file header)
                 try:
                     with open(session_file) as f:
                         data = json.load(f)
@@ -725,7 +758,7 @@ class SessionManager:
                         else:
                             ts = datetime.fromtimestamp(session_file.stat().st_mtime)
                         # Return the session file's parent (date directory) with file as marker
-                        # Store file path directly for v1.1.0
+                        # Store file path directly for v1.0.4
                         sessions.append((session_file, ts))
                 except (json.JSONDecodeError, KeyError, ValueError):
                     continue
@@ -745,7 +778,7 @@ class SessionManager:
         Find sessions that are missing required files.
 
         For v1.0.0: Directories without summary.json
-        For v1.1.0: Not applicable (single file = complete session)
+        For v1.0.4: Not applicable (single file = complete session)
 
         Returns:
             List of incomplete session directory paths (v1.0.0 only)
@@ -760,10 +793,10 @@ class SessionManager:
             if not item.is_dir():
                 continue
 
-            # Skip date directories (v1.1.0 format)
+            # Skip date directories (v1.0.4 format)
             try:
                 datetime.strptime(item.name, "%Y-%m-%d")
-                continue  # Skip v1.1.0 date directories
+                continue  # Skip v1.0.4 date directories
             except ValueError:
                 pass
 

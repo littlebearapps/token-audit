@@ -4,12 +4,12 @@ This document outlines the planned development direction for Token Audit. For co
 
 ## Current Status
 
-**Version**: v1.0.3
-**Stage**: Released — Rich TUI Enhancements
+**Version**: v1.0.4
+**Stage**: Released — Bucket Classification
 
-Token Audit provides a fully self-contained TUI with 7 integrated views, modals, date filtering, and export functionality. Users can start tracking, analyze trends, manage sessions, and export data without leaving the TUI. File locking ensures safe concurrent access from CLI, MCP, and TUI.
+Token Audit now provides 4-bucket token classification to diagnose WHERE token bloat comes from. Classify tool calls into state serialization (large payloads), redundant outputs (duplicate calls), tool discovery (schema introspection), or conversation drift (reasoning/retries). Use task markers for per-task analysis.
 
-**Next**: v1.1.0 "Billing & Statusline" — 5-hour billing block tracking, Claude Code statusline integration, weekly reports.
+**Next**: v1.1.0 "Billing & Statusline" — 5-hour billing block tracking, Claude Code statusline integration.
 
 ---
 
@@ -45,7 +45,7 @@ Multi-model tracking and dynamic pricing infrastructure.
 - ✅ **Static Cost Foundation** — Infrastructure for MCP schema "context tax" (full impl deferred)
 - ✅ **Schema v1.6.0** — `models_used`, `model_usage`, `pricing_source` blocks
 
-**Note:** Ollama CLI Adapter moved to v1.1.0 post-1.0 (requires API proxy approach).
+**Note:** Ollama CLI Adapter moved to v1.4.0 post-1.0 (requires API proxy approach).
 
 **Success Metrics:**
 - ✅ Sessions with model switches show per-model breakdown
@@ -154,6 +154,33 @@ The v1.0 stable release with MCP Server Mode for AI agent integration.
 
 > **Note:** The following roadmap items represent our current thinking and are subject to change based on community feedback, ecosystem developments (particularly AAIF governance decisions), and technical discoveries during implementation. Features may be added, removed, reordered, or combined as we learn more.
 
+## ✅ v1.0.4 — Bucket Classification (Released)
+
+**Theme:** "Know Where Tokens Go"
+
+4-bucket token classification to diagnose WHERE token bloat comes from in AI agent workflows.
+
+- ✅ **4-Bucket Classification** — Categorize every tool call into efficiency buckets
+  - State serialization: Large data payloads (>5K tokens, `*_get_*`, `*_list_*`)
+  - Redundant outputs: Duplicate calls (same content_hash)
+  - Tool discovery: Introspection calls (`*_introspect*`, `*_schema*`)
+  - Conversation drift: Reasoning, retries, errors (default bucket)
+- ✅ **`token-audit bucket` command** — Analyze token distribution across buckets
+  - Table, JSON, and CSV output formats
+  - `--by-task` flag for per-task breakdown
+- ✅ **Task markers** — Group tool calls into logical tasks
+  - `task start/end` commands for marking boundaries
+  - `task list` and `task show` for viewing results
+- ✅ **Configurable patterns** — Via TOML, TUI, or MCP tools
+- ✅ **Bucket Classification Guide** — Comprehensive documentation
+
+**Success Metrics:**
+- ✅ Users can diagnose token bloat sources at a glance
+- ✅ Per-task analysis shows which tasks are most expensive
+- ✅ WP Navigator team can run 5-task diagnostic tests
+
+---
+
 ### v1.1.0 — Billing & Statusline
 
 **Theme:** "Know Your Limits"
@@ -184,28 +211,21 @@ The v1.0 stable release with MCP Server Mode for AI agent integration.
 
 ➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/7)
 
-### v1.2.0 — Burn Rate & MCP Server
+### v1.2.0 — Burn Rate
 
 **Theme:** "Project Your Usage"
 
-Real-time burn rate calculations, cost projections, and MCP server mode for querying data from AI conversations.
+Real-time burn rate calculations and cost projections.
 
-**Burn Rate & Projections (Medium Priority):**
+**Burn Rate & Projections:**
 - **Token Burn Rate** — Real-time tokens/minute calculation
 - **Cost Projections** — Projected cost based on current session pace
 - **Progress Bars** — Visual progress toward configurable limits
 - **Time Estimates** — Estimated time to reach limits
 
-**MCP Server Mode (Low Priority):**
-- **Stdio Transport** — MCP server for Claude Desktop integration
-- **HTTP Transport** — Optional HTTP mode for network access
-- **MCP Tools** — Expose daily, weekly, monthly, session, blocks reports as tools
-- **Smell Detection Tools** — Query detected patterns via MCP
-
 **Success Metrics:**
 - Live burn rate visible during sessions
 - Cost projections help budget sessions
-- Usage data queryable from Claude Desktop via MCP
 
 ➡️ [View Milestone](https://github.com/littlebearapps/token-audit/milestone/8)
 
@@ -382,4 +402,4 @@ This roadmap represents our current development plans and is subject to change. 
 
 ---
 
-**Last Updated**: December 27, 2025
+**Last Updated**: December 29, 2025

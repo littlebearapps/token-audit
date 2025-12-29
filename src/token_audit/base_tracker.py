@@ -40,13 +40,13 @@ def _format_timestamp(dt: datetime) -> str:
 
 
 # ============================================================================
-# Core Data Structures (Schema v1.1.0)
+# Core Data Structures (Schema v1.0.4)
 # ============================================================================
 
 
 @dataclass
 class FileHeader:
-    """Self-describing file header for AI-Agent readability (v1.1.0)"""
+    """Self-describing file header for AI-Agent readability (v1.0.4)"""
 
     name: str  # File name (e.g., "token-audit-2025-12-01T14-19-38.json")
     type: str = "token_audit_session"  # File type identifier
@@ -71,8 +71,8 @@ class Call:
 
     timestamp: datetime = field(default_factory=_now_with_timezone)
     tool_name: str = ""
-    server: str = ""  # Server name extracted from tool_name (v1.1.0)
-    index: int = 0  # Sequential call number within session (v1.1.0)
+    server: str = ""  # Server name extracted from tool_name (v1.0.4)
+    index: int = 0  # Sequential call number within session (v1.0.4)
     input_tokens: int = 0
     output_tokens: int = 0
     cache_created_tokens: int = 0
@@ -139,7 +139,7 @@ class ToolStats:
     cache_read_tokens: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to JSON-serializable dict (v1.1.0 - no schema_version)"""
+        """Convert to JSON-serializable dict (v1.0.4 - no schema_version)"""
         return {
             "calls": self.calls,
             "total_tokens": self.total_tokens,
@@ -172,7 +172,7 @@ class ServerSession:
     metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to JSON-serializable dict (v1.1.0 - no schema_version)"""
+        """Convert to JSON-serializable dict (v1.0.4 - no schema_version)"""
         return {
             "server": self.server,
             "tools": {name: stats.to_dict() for name, stats in self.tools.items()},
@@ -224,7 +224,7 @@ class MCPToolCalls:
 
 @dataclass
 class MCPSummary:
-    """Pre-computed MCP summary for quick AI access (v1.1.0)"""
+    """Pre-computed MCP summary for quick AI access (v1.0.4)"""
 
     total_calls: int = 0
     unique_tools: int = 0
@@ -447,8 +447,8 @@ class Session:
     mcp_audit_version: str = ""  # Version of token-audit that tracked this session
     project: str = ""
     platform: str = ""  # "claude-code", "codex-cli", "gemini-cli"
-    model: str = ""  # Model used (e.g., "claude-opus-4-5-20251101") (v1.1.0)
-    working_directory: str = ""  # Directory where token-audit was run (v1.1.0)
+    model: str = ""  # Model used (e.g., "claude-opus-4-5-20251101") (v1.0.4)
+    working_directory: str = ""  # Directory where token-audit was run (v1.0.4)
     timestamp: datetime = field(default_factory=_now_with_timezone)
     session_id: str = ""
     token_usage: TokenUsage = field(default_factory=TokenUsage)
@@ -461,7 +461,7 @@ class Session:
     anomalies: List[Dict[str, Any]] = field(default_factory=list)
     end_timestamp: Optional[datetime] = None
     duration_seconds: Optional[float] = None
-    source_files: List[str] = field(default_factory=list)  # Files monitored (v1.1.0)
+    source_files: List[str] = field(default_factory=list)  # Files monitored (v1.0.4)
     message_count: int = 0  # Number of assistant messages (task-49.1)
     # Built-in tool tracking (v1.2.0)
     builtin_tool_stats: Dict[str, Dict[str, int]] = field(
@@ -1132,8 +1132,8 @@ class BaseTracker(ABC):
         call = Call(
             timestamp=_now_with_timezone(),
             tool_name=normalized_tool,
-            server=server_name,  # v1.1.0: include server name in call
-            index=call_index,  # v1.1.0: sequential call number
+            server=server_name,  # v1.0.4: include server name in call
+            index=call_index,  # v1.0.4: sequential call number
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cache_created_tokens=cache_created_tokens,
@@ -1217,7 +1217,7 @@ class BaseTracker(ABC):
         Returns:
             Complete Session object
         """
-        # Update session end time (use timezone-aware datetime for v1.1.0)
+        # Update session end time (use timezone-aware datetime for v1.0.4)
         self.session.end_timestamp = _now_with_timezone()
         self.session.duration_seconds = (
             self.session.end_timestamp - self.session.timestamp
@@ -1501,9 +1501,9 @@ class BaseTracker(ABC):
 
     def save_session(self, output_dir: Path) -> None:
         """
-        Save session data to disk using v1.1.0 format.
+        Save session data to disk using v1.0.4 format.
 
-        v1.1.0 Changes:
+        v1.0.4 Changes:
         - Date subdirectories: ~/.token-audit/sessions/YYYY-MM-DD/
         - Single file per session: <project>-<timestamp>.json
         - Self-describing _file header block
@@ -1551,7 +1551,7 @@ class BaseTracker(ABC):
         with open(session_path, "w") as f:
             json.dump(session_data, f, indent=2, default=str)
 
-        # Note: v1.1.0 removes separate mcp-*.json files - all data in single file
+        # Note: v1.0.4 removes separate mcp-*.json files - all data in single file
 
     # ========================================================================
     # Unrecognized Line Handler (Shared implementation)

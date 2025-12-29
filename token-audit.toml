@@ -169,6 +169,53 @@
 # ]
 
 # ============================================================================
+# Bucket Classification (v1.0.4)
+# ============================================================================
+#
+# Configure pattern matching for 4-bucket token classification.
+# Patterns are case-insensitive regex matched against tool names.
+#
+# Buckets (in priority order):
+#   1. redundant    - Duplicate tool calls (same content_hash, 2nd+ occurrence)
+#   2. tool_discovery - Introspection calls (*_introspect*, *_describe*, *_schema*)
+#   3. state_serialization - Large payloads (>threshold) or data retrieval patterns
+#   4. drift        - Default bucket (reasoning, retries, errors)
+
+[buckets]
+# Token threshold for "large payload" classification (state_serialization)
+large_payload_threshold = 5000
+
+# Minimum duplicate occurrences to classify as redundant
+# First occurrence is NOT redundant (2 = original + 1 duplicate)
+redundant_min_occurrences = 2
+
+[buckets.patterns]
+# State serialization: data retrieval patterns
+state_serialization = [
+    ".*_get_.*",
+    ".*_get$",
+    ".*_list_.*",
+    ".*_list$",
+    ".*_snapshot.*",
+    ".*_export.*",
+    ".*_read.*",
+    ".*_view.*",
+    ".*_view$",
+    ".*_fetch.*",
+]
+
+# Tool discovery: introspection/schema patterns
+tool_discovery = [
+    ".*_introspect.*",
+    ".*_search_tools.*",
+    ".*_describe.*",
+    ".*_list_tools.*",
+    ".*_schema.*",
+    ".*_capabilities.*",
+]
+# Note: redundant detected via content_hash, drift is default bucket
+
+# ============================================================================
 # Dynamic Pricing API (v0.6.0)
 # ============================================================================
 #

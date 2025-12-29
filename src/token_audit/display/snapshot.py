@@ -43,16 +43,16 @@ class DisplaySnapshot:
     # token-audit version that tracked this session
     version: str = ""
 
-    # Model tracking (v1.1.0 enhancement)
+    # Model tracking (v1.0.4 enhancement)
     model_id: str = ""  # Raw model ID (e.g., "claude-opus-4-5-20251101")
     model_name: str = ""  # Human-readable name (e.g., "Claude Opus 4.5")
 
-    # Enhanced cost tracking (v1.1.0 enhancement)
+    # Enhanced cost tracking (v1.0.4 enhancement)
     cost_no_cache: float = 0.0  # Cost if no cache was used
     cache_savings: float = 0.0  # USD saved by caching
     savings_percent: float = 0.0  # Percentage saved (0.0 to 100.0)
 
-    # MCP Server hierarchy (v1.1.0 enhancement)
+    # MCP Server hierarchy (v1.0.4 enhancement)
     # Dict[server_name, Dict] where inner dict has: calls, tokens, avg, tools (list)
     # tools is list of (tool_short_name, calls, tokens, pct_of_server)
     server_hierarchy: Tuple[

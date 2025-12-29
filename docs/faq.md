@@ -257,7 +257,7 @@ Not directly. Cursor uses its own session format. If Cursor's internals change t
 
 ### Will Token Audit support Ollama CLI?
 
-Yes, planned for v1.1.0. Ollama CLI uses a different session format that requires a dedicated adapter.
+Yes, planned for v1.4.0. Ollama CLI uses a different session format that requires a dedicated adapter.
 
 See [Roadmap](../ROADMAP.md) for timeline.
 

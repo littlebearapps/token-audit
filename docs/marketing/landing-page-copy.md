@@ -90,7 +90,7 @@ Works with the AI coding agents you already use:
 - **Claude Code** - Native support, 100% token accuracy
 - **Codex CLI** - Estimated tokens, 99%+ accuracy
 - **Gemini CLI** - 100% accuracy with optional tokenizer download
-- **Ollama** - Coming in v1.1.0
+- **Ollama** - Coming in v1.4.0
 
 ---
 
@@ -104,7 +104,7 @@ Works with the AI coding agents you already use:
 | Claude Code (Anthropic) | 100% | Native token tracking |
 | Codex CLI (OpenAI) | 99%+ | Estimated tokens |
 | Gemini CLI (Google) | 100%* | *With optional tokenizer |
-| Ollama | Coming Soon | Planned for v1.1.0 |
+| Ollama | Coming Soon | Planned for v1.4.0 |
 
 **Compatibility:** Python 3.8-3.13 | macOS, Linux, Windows (WSL)
 

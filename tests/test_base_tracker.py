@@ -54,10 +54,10 @@ class ConcreteTestTracker(BaseTracker):
 
 
 class TestDataStructures:
-    """Tests for core data structures (v1.1.0 schema)"""
+    """Tests for core data structures (v1.0.4 schema)"""
 
     def test_call_creation(self) -> None:
-        """Test Call dataclass creation (v1.1.0 - no schema_version on Call)"""
+        """Test Call dataclass creation (v1.0.4 - no schema_version on Call)"""
         call = Call(
             tool_name="mcp__zen__chat",
             server="zen",
@@ -68,15 +68,15 @@ class TestDataStructures:
         )
 
         assert call.tool_name == "mcp__zen__chat"
-        assert call.server == "zen"  # v1.1.0: server name on Call
-        assert call.index == 1  # v1.1.0: sequential index
+        assert call.server == "zen"  # v1.0.4: server name on Call
+        assert call.index == 1  # v1.0.4: sequential index
         assert call.input_tokens == 100
         assert call.output_tokens == 50
         assert call.total_tokens == 150
-        # v1.1.0: schema_version removed from Call (only at session level)
+        # v1.0.4: schema_version removed from Call (only at session level)
 
     def test_call_to_dict(self) -> None:
-        """Test Call to_dict conversion (v1.1.0 format)"""
+        """Test Call to_dict conversion (v1.0.4 format)"""
         from datetime import timezone
 
         timestamp = datetime(2025, 11, 24, 10, 30, 0, tzinfo=timezone.utc)
@@ -92,12 +92,12 @@ class TestDataStructures:
 
         data = call.to_dict()
 
-        # v1.1.0: uses "tool" instead of "tool_name"
+        # v1.0.4: uses "tool" instead of "tool_name"
         assert data["tool"] == "mcp__zen__chat"
         assert data["server"] == "zen"
         assert data["index"] == 1
         assert data["input_tokens"] == 100
-        # v1.1.0: ISO 8601 with timezone offset
+        # v1.0.4: ISO 8601 with timezone offset
         assert "2025-11-24T10:30:00" in data["timestamp"]
 
     def test_call_to_dict_v1_0(self) -> None:
@@ -119,16 +119,16 @@ class TestDataStructures:
         assert data["input_tokens"] == 100
 
     def test_tool_stats_creation(self) -> None:
-        """Test ToolStats dataclass creation (v1.1.0 - no schema_version)"""
+        """Test ToolStats dataclass creation (v1.0.4 - no schema_version)"""
         stats = ToolStats(calls=5, total_tokens=1000, avg_tokens=200.0)
 
         assert stats.calls == 5
         assert stats.total_tokens == 1000
         assert stats.avg_tokens == 200.0
-        # v1.1.0: schema_version removed from ToolStats
+        # v1.0.4: schema_version removed from ToolStats
 
     def test_tool_stats_to_dict(self) -> None:
-        """Test ToolStats to_dict with call history (v1.1.0)"""
+        """Test ToolStats to_dict with call history (v1.0.4)"""
         call = Call(tool_name="test", server="test-server", index=1, total_tokens=100)
         stats = ToolStats(calls=1, call_history=[call])
 
@@ -136,7 +136,7 @@ class TestDataStructures:
 
         assert data["calls"] == 1
         assert len(data["call_history"]) == 1
-        # v1.1.0: uses "tool" instead of "tool_name"
+        # v1.0.4: uses "tool" instead of "tool_name"
         assert data["call_history"][0]["tool"] == "test"
         assert data["call_history"][0]["server"] == "test-server"
 
@@ -525,10 +525,10 @@ class TestSessionFinalization:
 
 
 class TestPersistence:
-    """Tests for session persistence (v1.1.0 single-file format)"""
+    """Tests for session persistence (v1.0.4 single-file format)"""
 
     def test_save_session(self, tmp_path) -> None:
-        """Test saving session to disk (v1.1.0 format)"""
+        """Test saving session to disk (v1.0.4 format)"""
         tracker = ConcreteTestTracker()
 
         tracker.record_tool_call(tool_name="mcp__zen__chat", input_tokens=100, output_tokens=50)
@@ -536,16 +536,16 @@ class TestPersistence:
         tracker.finalize_session()
         tracker.save_session(tmp_path)
 
-        # v1.1.0: session_dir points to date subdirectory
+        # v1.0.4: session_dir points to date subdirectory
         assert tracker.session_dir is not None
         assert tracker.session_dir.exists()
 
-        # v1.1.0: single file per session, named <project>-<timestamp>.json
+        # v1.0.4: single file per session, named <project>-<timestamp>.json
         # File is in date subdirectory (session_dir)
         session_files = list(tracker.session_dir.glob("*.json"))
         assert len(session_files) == 1
 
-        # v1.1.0: no more separate mcp-*.json files
+        # v1.0.4: no more separate mcp-*.json files
         mcp_files = list(tracker.session_dir.glob("mcp-*.json"))
         assert len(mcp_files) == 0
 
@@ -555,17 +555,17 @@ class TestPersistence:
         with open(session_files[0]) as f:
             data = json.load(f)
 
-        # v1.1.0: has _file header
+        # v1.0.4: has _file header
         assert "_file" in data
         assert data["_file"]["schema_version"] == SCHEMA_VERSION
         assert data["_file"]["type"] == "token_audit_session"
 
-        # v1.1.0: has session block
+        # v1.0.4: has session block
         assert "session" in data
         assert data["session"]["project"] == "test-project"
         assert data["session"]["platform"] == "test-platform"
 
-        # v1.1.0: has flat tool_calls array
+        # v1.0.4: has flat tool_calls array
         assert "tool_calls" in data
         assert len(data["tool_calls"]) == 1
         assert data["tool_calls"][0]["tool"] == "mcp__zen__chat"
@@ -609,10 +609,10 @@ class TestUtilityMethods:
 
 
 class TestBaseTrackerIntegration:
-    """Integration tests for complete tracker workflow (v1.1.0)"""
+    """Integration tests for complete tracker workflow (v1.0.4)"""
 
     def test_complete_workflow(self, tmp_path) -> None:
-        """Test complete tracking workflow (v1.1.0 format)"""
+        """Test complete tracking workflow (v1.0.4 format)"""
         import json
 
         tracker = ConcreteTestTracker()
@@ -637,7 +637,7 @@ class TestBaseTrackerIntegration:
         assert session.mcp_tool_calls.unique_tools == 3
         assert len(tracker.server_sessions) == 2  # zen + brave-search
 
-        # v1.1.0: single session file in date subdirectory
+        # v1.0.4: single session file in date subdirectory
         session_files = list(tracker.session_dir.glob("*.json"))
         assert len(session_files) == 1
 
@@ -645,10 +645,10 @@ class TestBaseTrackerIntegration:
         with open(session_files[0]) as f:
             data = json.load(f)
 
-        # v1.1.0: verify _file header
+        # v1.0.4: verify _file header
         assert data["_file"]["schema_version"] == SCHEMA_VERSION
 
-        # v1.1.0: verify flat tool_calls array has all 3 calls
+        # v1.0.4: verify flat tool_calls array has all 3 calls
         assert len(data["tool_calls"]) == 3
 
         # Verify sequential indices
@@ -659,7 +659,7 @@ class TestBaseTrackerIntegration:
         servers = {c["server"] for c in data["tool_calls"]}
         assert servers == {"zen", "brave-search"}
 
-        # v1.1.0: verify mcp_summary
+        # v1.0.4: verify mcp_summary
         assert data["mcp_summary"]["total_calls"] == 3
         assert data["mcp_summary"]["unique_tools"] == 3
         assert data["mcp_summary"]["unique_servers"] == 2

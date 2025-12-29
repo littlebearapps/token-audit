@@ -12,12 +12,14 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, cast
 
 if TYPE_CHECKING:
     from .base_tracker import BaseTracker, Session
+    from .buckets import BucketResult
     from .display import DisplayAdapter, DisplaySnapshot
     from .smell_aggregator import SmellAggregationResult
+    from .tasks import TaskSummary
 
 from . import __version__
 
@@ -402,6 +404,22 @@ EXAMPLES:
         help="Minimum frequency %% to display (default: 0)",
     )
 
+    # ---- Bucket Analysis Options (v1.0.4 - task-247.17) ----
+    bucket_group = report_parser.add_argument_group(
+        "bucket analysis options",
+        "Options for --buckets mode",
+    )
+    bucket_group.add_argument(
+        "--buckets",
+        action="store_true",
+        help="Show bucket classification summary (state, redundant, drift, discovery)",
+    )
+    bucket_group.add_argument(
+        "--by-task",
+        action="store_true",
+        help="Group output by task markers (use with --buckets for per-task breakdown)",
+    )
+
     # ========================================================================
     # best-practices command (promoted from export best-practices)
     # ========================================================================
@@ -564,6 +582,11 @@ Examples:
         action="append",
         metavar="SERVER",
         help="Servers to analyze as pinned (can use multiple times)",
+    )
+    export_ai_parser.add_argument(
+        "--include-buckets",
+        action="store_true",
+        help="Include bucket classification (state, redundant, drift, discovery) in export (v1.0.4)",
     )
 
     # ========================================================================
@@ -729,7 +752,7 @@ Keyboard shortcuts:
 
     ui_parser.add_argument(
         "--view",
-        choices=["dashboard", "sessions", "recommendations", "live"],
+        choices=["dashboard", "sessions", "recommendations", "live", "config"],
         default="dashboard",
         help="Initial view to display (default: dashboard)",
     )
@@ -1131,6 +1154,273 @@ By default shows the last 3 months with data.
         help="Show per-model breakdown",
     )
 
+    # ========================================================================
+    # bucket command (v1.0.4 - task-247.4)
+    # ========================================================================
+    bucket_parser = subparsers.add_parser(
+        "bucket",
+        help="Analyze token distribution across efficiency buckets",
+        description="""
+Analyze MCP tool calls by efficiency bucket classification.
+
+Buckets (in priority order):
+  1. Redundant outputs  - Duplicate tool calls (same content_hash)
+  2. Tool discovery     - Schema/introspection calls (*_introspect*, *_schema*)
+  3. State serialization - Large content payloads (*_get_*, *_list_*, >5K tokens)
+  4. Conversation drift - Residual (reasoning, retries, errors)
+
+Use this to diagnose WHERE token bloat comes from in AI agent workflows.
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Analyze latest session
+  token-audit bucket
+
+  # Analyze specific session file
+  token-audit bucket --session ~/.token-audit/sessions/claude-code/2024-01-15/project-2024-01-15T10-30-00.json
+
+  # Output as JSON
+  token-audit bucket --format json
+
+  # Output as CSV
+  token-audit bucket --format csv --output buckets.csv
+        """,
+    )
+    bucket_parser.add_argument(
+        "--session",
+        type=Path,
+        default=None,
+        help="Session file or directory to analyze (default: latest session)",
+    )
+    bucket_parser.add_argument(
+        "--format",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Output format (default: table)",
+    )
+    bucket_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output file path (default: stdout)",
+    )
+    bucket_parser.add_argument(
+        "--platform",
+        choices=["claude-code", "codex-cli", "gemini-cli"],
+        default=None,
+        help="Filter to specific platform when finding latest session",
+    )
+    bucket_parser.add_argument(
+        "--by-task",
+        action="store_true",
+        help="Show bucket breakdown per task (requires task markers)",
+    )
+
+    # ========================================================================
+    # task command (v1.0.4 - task-247.7)
+    # ========================================================================
+    task_parser = subparsers.add_parser(
+        "task",
+        help="Manage task markers for per-task bucket analysis",
+        description="""
+Manage task markers to group tool calls into logical work units.
+
+Task markers create boundaries for per-task bucket analysis, helping you
+understand token distribution across different activities in a session.
+
+Commands:
+  start    Begin a new task (auto-ends previous if active)
+  end      End the current task
+  list     List all tasks in a session
+  show     Show detailed task info with bucket breakdown
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Start a new task
+  token-audit task start "Implement user login"
+
+  # End current task
+  token-audit task end
+
+  # List tasks in current session
+  token-audit task list
+
+  # Show task details with buckets
+  token-audit task show "Implement user login"
+
+  # Work with specific session
+  token-audit task list --session my-session-id
+        """,
+    )
+
+    task_subparsers = task_parser.add_subparsers(
+        title="task commands",
+        description="Available task management commands",
+        dest="task_command",
+        help="Task command to execute",
+    )
+
+    # task start subcommand
+    task_start_parser = task_subparsers.add_parser(
+        "start",
+        help="Start a new task",
+        description="Create a task start marker. Auto-ends previous task if active.",
+    )
+    task_start_parser.add_argument(
+        "name",
+        type=str,
+        help="Task name (e.g., 'Implement user login')",
+    )
+    task_start_parser.add_argument(
+        "--session",
+        type=str,
+        default=None,
+        help="Session ID (default: latest/active session)",
+    )
+    task_start_parser.add_argument(
+        "--platform",
+        choices=["claude-code", "codex-cli", "gemini-cli"],
+        default=None,
+        help="Platform for session detection",
+    )
+
+    # task end subcommand
+    task_end_parser = task_subparsers.add_parser(
+        "end",
+        help="End the current task",
+        description="Create a task end marker for the active task.",
+    )
+    task_end_parser.add_argument(
+        "--session",
+        type=str,
+        default=None,
+        help="Session ID (default: latest/active session)",
+    )
+    task_end_parser.add_argument(
+        "--platform",
+        choices=["claude-code", "codex-cli", "gemini-cli"],
+        default=None,
+        help="Platform for session detection",
+    )
+
+    # task list subcommand
+    task_list_parser = task_subparsers.add_parser(
+        "list",
+        help="List tasks in a session",
+        description="Show all tasks with token usage and duration.",
+    )
+    task_list_parser.add_argument(
+        "--session",
+        type=str,
+        default=None,
+        help="Session ID (default: latest session)",
+    )
+    task_list_parser.add_argument(
+        "--platform",
+        choices=["claude-code", "codex-cli", "gemini-cli"],
+        default=None,
+        help="Platform for session detection",
+    )
+    task_list_parser.add_argument(
+        "--format",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Output format (default: table)",
+    )
+
+    # task show subcommand
+    task_show_parser = task_subparsers.add_parser(
+        "show",
+        help="Show task details with bucket breakdown",
+        description="Display detailed task info including per-bucket analysis.",
+    )
+    task_show_parser.add_argument(
+        "name",
+        type=str,
+        help="Task name to show",
+    )
+    task_show_parser.add_argument(
+        "--session",
+        type=str,
+        default=None,
+        help="Session ID (default: latest session)",
+    )
+    task_show_parser.add_argument(
+        "--platform",
+        choices=["claude-code", "codex-cli", "gemini-cli"],
+        default=None,
+        help="Platform for session detection",
+    )
+    task_show_parser.add_argument(
+        "--format",
+        choices=["table", "json"],
+        default="table",
+        help="Output format (default: table)",
+    )
+
+    # ========================================================================
+    # compare command (v1.0.4 - task-247.16)
+    # ========================================================================
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Compare bucket classification across multiple sessions",
+        description="""
+Compare bucket classification across multiple sessions.
+
+Shows bucket distribution (State, Redundant, Drift, Discovery) for each session
+with an AVERAGE row for cross-session analysis.
+
+Use this to identify trends in token efficiency across work sessions.
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Compare specific session files
+  token-audit compare session1.json session2.json session3.json
+
+  # Compare last 5 sessions
+  token-audit compare --latest 5
+
+  # Compare last 10 sessions for Claude Code
+  token-audit compare --latest 10 --platform claude-code
+
+  # Export comparison as JSON
+  token-audit compare --latest 5 --format json --output comparison.json
+        """,
+    )
+    compare_parser.add_argument(
+        "sessions",
+        nargs="*",
+        type=Path,
+        help="Session files to compare",
+    )
+    compare_parser.add_argument(
+        "--latest",
+        type=int,
+        metavar="N",
+        help="Compare the last N sessions (mutually exclusive with positional sessions)",
+    )
+    compare_parser.add_argument(
+        "--format",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Output format (default: table)",
+    )
+    compare_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output file path (default: stdout)",
+    )
+    compare_parser.add_argument(
+        "--platform",
+        choices=["claude-code", "codex-cli", "gemini-cli"],
+        default=None,
+        help="Filter to specific platform when using --latest",
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -1159,6 +1449,12 @@ By default shows the last 3 months with data.
         return cmd_monthly(args)
     elif args.command == "export":
         return cmd_export_new(args)
+    elif args.command == "bucket":
+        return cmd_bucket(args)
+    elif args.command == "task":
+        return cmd_task(args)
+    elif args.command == "compare":
+        return cmd_compare(args)
     else:
         parser.print_help()
         return 1
@@ -1640,6 +1936,85 @@ def _cmd_report_smells(args: argparse.Namespace) -> int:
     return _output_smells_text(result, output_path)
 
 
+def _cmd_report_buckets(args: argparse.Namespace) -> int:
+    """Handle 'report --buckets' - bucket classification summary.
+
+    Added in v1.0.4 (task-247.17).
+
+    Supports:
+    - --buckets: Show bucket classification summary
+    - --buckets --by-task: Show per-task bucket breakdown
+    """
+    from .buckets import BucketClassifier
+    from .session_manager import SessionManager
+    from .storage import get_latest_session
+    from .tasks import TaskManager
+
+    session_path = args.session_dir
+    output_path = getattr(args, "output", None)
+    by_task = getattr(args, "by_task", False)
+
+    # Find session to analyze
+    if not session_path.exists():
+        # Find latest session
+        latest = get_latest_session()
+        if latest is None:
+            print("Error: No sessions found. Run 'token-audit collect' first.")
+            return 1
+        session_path = latest
+        print(f"Analyzing latest session: {session_path.name}")
+
+    # If it's a directory, find the session file
+    if session_path.is_dir():
+        summary_path = session_path / "summary.json"
+        if summary_path.exists():
+            session_path = summary_path
+        else:
+            json_files = list(session_path.glob("*.json"))
+            if json_files:
+                session_path = max(json_files, key=lambda p: p.stat().st_mtime)
+            else:
+                print(f"Error: No session files found in: {args.session_dir}")
+                return 1
+
+    # Load session
+    manager = SessionManager()
+    session = manager.load_session(session_path)
+
+    if not session:
+        print(f"Error: Failed to load session from: {session_path}")
+        return 1
+
+    # Check for --by-task flag
+    if by_task:
+        task_manager = TaskManager()
+        summaries = task_manager.get_tasks(session)
+
+        if not summaries:
+            print("No task markers found in session.")
+            print("Use 'token-audit task start <name>' to create task markers.")
+            print()
+            print("Showing overall bucket analysis instead:")
+            print()
+            # Fall back to overall analysis
+            classifier = BucketClassifier()
+            results = classifier.classify_session(session)
+            total_tokens = sum(r.tokens for r in results)
+            total_calls = sum(r.call_count for r in results)
+            return _bucket_output_table(results, total_tokens, total_calls, output_path)
+
+        # Output per-task breakdown (reuse existing function)
+        return _bucket_by_task_table(summaries, output_path)
+
+    # Standard bucket analysis
+    classifier = BucketClassifier()
+    results = classifier.classify_session(session)
+    total_tokens = sum(r.tokens for r in results)
+    total_calls = sum(r.call_count for r in results)
+
+    return _bucket_output_table(results, total_tokens, total_calls, output_path)
+
+
 def _cmd_report_ai(args: argparse.Namespace) -> int:
     """Handle 'report --format ai' - export session for AI analysis.
 
@@ -1828,6 +2203,7 @@ def _cmd_export_ai(args: argparse.Namespace) -> int:
     pinned_focus = getattr(args, "pinned_focus", False)
     full_mcp_breakdown = getattr(args, "full_mcp_breakdown", False)
     pinned_servers = getattr(args, "pinned_servers", None) or []
+    include_buckets = getattr(args, "include_buckets", False)
 
     # Get latest session
     session_path = get_latest_session()
@@ -1852,6 +2228,7 @@ def _cmd_export_ai(args: argparse.Namespace) -> int:
         pinned_focus=pinned_focus,
         full_mcp_breakdown=full_mcp_breakdown,
         pinned_servers=all_pinned,
+        include_buckets=include_buckets,
     )
 
     # Write output
@@ -1872,10 +2249,15 @@ def cmd_report(args: argparse.Namespace) -> int:
     - Standard reports: json, markdown, csv formats
     - AI analysis: --format ai (formerly export ai-prompt)
     - Smell analysis: --smells (formerly smells command)
+    - Bucket analysis: --buckets (v1.0.4 - task-247.17)
     """
     # v1.0.0: Check for --smells flag first (merged from smells command)
     if getattr(args, "smells", False):
         return _cmd_report_smells(args)
+
+    # v1.0.4: Check for --buckets flag (task-247.17)
+    if getattr(args, "buckets", False):
+        return _cmd_report_buckets(args)
 
     # v1.0.0: Check for --format ai (merged from export ai-prompt)
     if args.format == "ai":
@@ -1934,7 +2316,7 @@ def cmd_report(args: argparse.Namespace) -> int:
                 if session:
                     sessions.append(session)
 
-        # Also try direct JSON files in the current directory (v1.1.0 format)
+        # Also try direct JSON files in the current directory (v1.0.4 format)
         for json_file in session_dir.glob("*.json"):
             if json_file.name != "summary.json" and not json_file.name.startswith("."):
                 session = manager.load_session(json_file)
@@ -2531,6 +2913,7 @@ def generate_ai_prompt_markdown(
     pinned_focus: bool = False,
     full_mcp_breakdown: bool = False,
     pinned_servers: Optional[List[str]] = None,
+    include_buckets: bool = False,
 ) -> str:
     """Generate AI-optimized markdown prompt from session data.
 
@@ -2540,6 +2923,7 @@ def generate_ai_prompt_markdown(
         pinned_focus: Add dedicated analysis section for pinned servers (v0.8.0)
         full_mcp_breakdown: Include per-server and per-tool breakdown for ALL servers (v0.8.0)
         pinned_servers: List of servers to analyze as pinned (v0.8.0)
+        include_buckets: Include bucket classification data (v1.0.4 - task-247.18)
     """
     lines = []
     pinned_servers = pinned_servers or []
@@ -2612,6 +2996,10 @@ def generate_ai_prompt_markdown(
     lines.append("")
     lines.append(f"- **Estimated Cost**: ${cost:.4f}")
     lines.append("")
+
+    # v1.0.4: Bucket Classification (task-247.18)
+    if include_buckets:
+        lines.extend(_generate_bucket_classification_section(session_path, session_data))
 
     # MCP Tool Usage
     mcp_summary = session_data.get("mcp_summary", {})
@@ -2906,6 +3294,128 @@ def _generate_recommendations_section(smells: List[Dict[str, Any]]) -> List[str]
         lines.append("")
 
     return lines
+
+
+def _generate_bucket_classification_section(
+    session_path: Path, session_data: Dict[str, Any]
+) -> List[str]:
+    """Generate bucket classification section for AI export (v1.0.4 - task-247.18).
+
+    Args:
+        session_path: Path to the session file
+        session_data: Parsed session JSON data (for fallback context)
+
+    Returns:
+        List of markdown lines for the bucket classification section
+    """
+    from .buckets import BucketClassifier
+    from .session_manager import SessionManager
+
+    lines: List[str] = []
+
+    # Load session for classification
+    manager = SessionManager()
+    session = manager.load_session(session_path)
+
+    if not session:
+        lines.append("## Bucket Classification")
+        lines.append("")
+        lines.append("*Unable to load session for bucket classification*")
+        lines.append("")
+        return lines
+
+    # Classify session
+    classifier = BucketClassifier()
+    results = classifier.classify_session(session)
+
+    if not results:
+        lines.append("## Bucket Classification")
+        lines.append("")
+        lines.append("*No tool calls to classify*")
+        lines.append("")
+        return lines
+
+    # Calculate totals
+    total_tokens = sum(r.tokens for r in results)
+    total_calls = sum(r.call_count for r in results)
+
+    lines.append("## Bucket Classification")
+    lines.append("")
+    lines.append("Token usage classified into 4 efficiency buckets:")
+    lines.append("")
+    lines.append("| Bucket | Tokens | % | Calls | Description |")
+    lines.append("|--------|--------|---|-------|-------------|")
+
+    bucket_descriptions = {
+        "state_serialization": "Large content payloads (>5K tokens, *_get_*, *_list_*)",
+        "redundant": "Duplicate tool calls (same content_hash)",
+        "tool_discovery": "Schema introspection (*_introspect*, *_schema*)",
+        "drift": "Residual (reasoning, retries, errors)",
+    }
+
+    for result in results:
+        desc = bucket_descriptions.get(result.bucket, "Unknown")
+        lines.append(
+            f"| {result.bucket} | {result.tokens:,} | {result.percentage:.1f}% | "
+            f"{result.call_count} | {desc} |"
+        )
+
+    lines.append(f"| **TOTAL** | **{total_tokens:,}** | **100%** | **{total_calls}** | |")
+    lines.append("")
+
+    # Add decision guidance
+    guidance = _generate_bucket_guidance(results)
+    lines.append("### Decision Guidance")
+    lines.append("")
+    lines.append(guidance)
+    lines.append("")
+
+    return lines
+
+
+def _generate_bucket_guidance(results: List[Any]) -> str:
+    """Generate optimization guidance based on dominant bucket (v1.0.4 - task-247.18).
+
+    Args:
+        results: List of BucketResult objects from BucketClassifier
+
+    Returns:
+        String with actionable guidance based on dominant bucket percentages
+    """
+    if not results:
+        return "No data available for guidance."
+
+    # Sort by percentage descending to find dominant bucket
+    sorted_results = sorted(results, key=lambda r: r.percentage, reverse=True)
+    dominant = sorted_results[0]
+
+    # Guidance thresholds from plan
+    if dominant.bucket == "state_serialization" and dominant.percentage >= 60:
+        return (
+            f"**State serialization is {dominant.percentage:.0f}%** - "
+            "Focus on delta-sync or pagination strategies to reduce large payload transfers."
+        )
+    elif dominant.bucket == "redundant" and dominant.percentage >= 30:
+        return (
+            f"**Redundant calls are {dominant.percentage:.0f}%** - "
+            "Implement caching or request deduplication to avoid repeated identical calls."
+        )
+    elif dominant.bucket == "drift" and dominant.percentage >= 40:
+        return (
+            f"**Conversation drift is {dominant.percentage:.0f}%** - "
+            "Investigate error handling, retries, and conversation flow efficiency."
+        )
+    elif dominant.bucket == "tool_discovery" and dominant.percentage >= 20:
+        return (
+            f"**Tool discovery is {dominant.percentage:.0f}%** - "
+            "Consider caching introspection results or pre-loading tool schemas."
+        )
+
+    # Well-distributed case
+    return (
+        "Token usage is well-distributed across buckets. "
+        "No single category dominates - consider holistic optimization."
+    )
 
 
 def _generate_context_aware_questions(
@@ -3276,6 +3786,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
         "sessions": BrowserMode.LIST,
         "recommendations": BrowserMode.RECOMMENDATIONS,
         "live": BrowserMode.LIVE,
+        "config": BrowserMode.BUCKET_CONFIG,
     }
     initial_mode = view_modes.get(args.view, BrowserMode.DASHBOARD)
 
@@ -4074,10 +4585,11 @@ def _cmd_sessions_show(args: argparse.Namespace, storage: Any) -> int:
         # Parse session - could be JSON or JSONL format
         data = json.loads(content)
 
-        # Handle token-audit v1.0.0 JSON format: {"_file": {...}, "session": {...}}
+        # Handle token-audit v1.0.0+ JSON format: {"_file": {...}, "session": {...}}
         if isinstance(data, dict) and "session" in data:
             session = data["session"]
-            event_count = len(session.get("calls", []))
+            # v1.0.4 has tool_calls at top level, v1.0.0 inside session
+            event_count = len(data.get("tool_calls", session.get("calls", [])))
         else:
             # Legacy JSONL format - first line is header
             session = data
@@ -4103,22 +4615,29 @@ def _cmd_sessions_show(args: argparse.Namespace, storage: Any) -> int:
         print(f"  Model:    {session.get('model', 'unknown')}")
         print()
 
-        # Token usage
-        token_usage = session.get("token_usage", {})
+        # Token usage - v1.0.4 has token_usage at top level, v1.0.0 inside session
+        token_usage = data.get("token_usage", session.get("token_usage", {}))
         if isinstance(token_usage, dict):
             total = token_usage.get("total_tokens", 0)
-            cached = token_usage.get("cached_tokens", 0)
+            # v1.0.4 uses cache_read_tokens, v1.0.0 used cached_tokens
+            cached = token_usage.get("cache_read_tokens", token_usage.get("cached_tokens", 0))
             print(f"  Tokens:   {total:,} total, {cached:,} cached")
 
-        # MCP calls
-        mcp_calls = session.get("mcp_tool_calls", {})
-        if isinstance(mcp_calls, dict):
-            total_calls = mcp_calls.get("total_calls", 0)
+        # MCP calls - v1.0.4 has mcp_summary at top level, v1.0.0 had mcp_tool_calls
+        mcp_summary = data.get("mcp_summary", {})
+        if isinstance(mcp_summary, dict) and mcp_summary:
+            total_calls = mcp_summary.get("total_calls", 0)
             print(f"  MCP Calls: {total_calls:,}")
+        else:
+            # Fallback to v1.0.0 format
+            mcp_calls = session.get("mcp_tool_calls", {})
+            if isinstance(mcp_calls, dict):
+                total_calls = mcp_calls.get("total_calls", 0)
+                print(f"  MCP Calls: {total_calls:,}")
 
-        # Duration
-        start = session.get("start_time")
-        end = session.get("end_time")
+        # Duration - v1.0.4 uses started_at/ended_at, v1.0.0 used start_time/end_time
+        start = session.get("started_at", session.get("start_time"))
+        end = session.get("ended_at", session.get("end_time"))
         if start:
             print(f"  Start:    {start[:19]}")
         if end:
@@ -4571,6 +5090,1080 @@ def cmd_monthly(args: argparse.Namespace) -> int:
             show_breakdown=args.breakdown,
             show_instances=args.instances,
         )
+
+    return 0
+
+
+# ============================================================================
+# Bucket Command (v1.0.4 - task-247.4)
+# ============================================================================
+
+# Display names for bucket classification
+BUCKET_DISPLAY_NAMES = {
+    "state_serialization": "State serialization",
+    "redundant": "Redundant outputs",
+    "drift": "Conversation drift",
+    "tool_discovery": "Tool discovery",
+}
+
+
+def cmd_bucket(args: argparse.Namespace) -> int:
+    """Execute bucket command - analyze token distribution by efficiency bucket.
+
+    Classifies MCP tool calls into 4 buckets:
+    1. Redundant outputs - Duplicate tool calls (same content_hash)
+    2. Tool discovery - Schema introspection calls
+    3. State serialization - Large content payloads
+    4. Conversation drift - Residual (default bucket)
+    """
+
+    from .buckets import BucketClassifier
+    from .session_manager import SessionManager
+    from .storage import StorageManager
+
+    # Determine session to analyze
+    session_path = args.session
+    session = None
+
+    if session_path is None:
+        # Find latest session
+        storage = StorageManager()
+        platform = normalize_platform(args.platform)
+        sessions = storage.list_sessions(platform=platform, limit=1)
+
+        if not sessions:
+            print("Error: No sessions found. Run 'token-audit collect' first.")
+            return 1
+
+        session_path = sessions[0]
+        print(f"Analyzing latest session: {session_path.name}")
+
+    # Load session
+    manager = SessionManager()
+    if session_path.is_file() or session_path.is_dir():
+        session = manager.load_session(session_path)
+
+    if not session:
+        print(f"Error: Failed to load session from: {session_path}")
+        return 1
+
+    # Check for --by-task flag (v1.0.4 - task-247.9)
+    by_task = getattr(args, "by_task", False)
+    if by_task:
+        return _bucket_by_task(args, session)
+
+    # Classify session
+    classifier = BucketClassifier()
+    results = classifier.classify_session(session)
+
+    # Calculate total for the summary row
+    total_tokens = sum(r.tokens for r in results)
+    total_calls = sum(r.call_count for r in results)
+
+    # Output based on format
+    output_format = args.format
+    output_path = args.output
+
+    if output_format == "json":
+        return _bucket_output_json(results, total_tokens, total_calls, output_path)
+    elif output_format == "csv":
+        return _bucket_output_csv(results, total_tokens, total_calls, output_path)
+    else:  # table
+        return _bucket_output_table(results, total_tokens, total_calls, output_path)
+
+
+def _bucket_output_table(
+    results: List["BucketResult"],
+    total_tokens: int,
+    total_calls: int,
+    output_path: Optional[Path],
+) -> int:
+    """Output bucket results as formatted table."""
+    lines: List[str] = []
+
+    # Header
+    lines.append("")
+    lines.append("Bucket Classification Analysis")
+    lines.append("\u2550" * 70)  # ══════
+
+    # Column headers
+    lines.append(
+        f"{'Bucket':<20} \u2502 {'Tokens':>8} \u2502 {'%':>6} \u2502 {'Calls':>5} \u2502 {'Top Tool':<20}"
+    )
+    lines.append(
+        "\u2500" * 20
+        + "\u253c"
+        + "\u2500" * 10
+        + "\u253c"
+        + "\u2500" * 8
+        + "\u253c"
+        + "\u2500" * 7
+        + "\u253c"
+        + "\u2500" * 21
+    )
+
+    # Data rows (sorted by tokens descending - already sorted by classifier)
+    for result in results:
+        display_name = BUCKET_DISPLAY_NAMES.get(result.bucket, result.bucket)
+        top_tool = result.top_tools[0][0] if result.top_tools else "-"
+        # Truncate tool name if too long
+        if len(top_tool) > 20:
+            top_tool = top_tool[:17] + "..."
+
+        lines.append(
+            f"{display_name:<20} \u2502 {result.tokens:>8,} \u2502 {result.percentage:>5.1f}% \u2502 {result.call_count:>5} \u2502 {top_tool:<20}"
+        )
+
+    # Footer separator and total
+    lines.append(
+        "\u2500" * 20
+        + "\u2534"
+        + "\u2500" * 10
+        + "\u2534"
+        + "\u2500" * 8
+        + "\u2534"
+        + "\u2500" * 7
+        + "\u2534"
+        + "\u2500" * 21
+    )
+    lines.append(f"{'Total':<20}   {total_tokens:>8,}   {'100.0':>5}%   {total_calls:>5}  ")
+    lines.append("")
+
+    # Write output
+    output = "\n".join(lines)
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote bucket analysis to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+def _bucket_output_json(
+    results: List["BucketResult"],
+    total_tokens: int,
+    total_calls: int,
+    output_path: Optional[Path],
+) -> int:
+    """Output bucket results as JSON."""
+    import json as json_module
+
+    data = {
+        "buckets": [r.to_dict() for r in results],
+        "summary": {
+            "total_tokens": total_tokens,
+            "total_calls": total_calls,
+        },
+    }
+
+    output = json_module.dumps(data, indent=2)
+
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote bucket analysis to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+def _bucket_output_csv(
+    results: List["BucketResult"],
+    total_tokens: int,
+    total_calls: int,
+    output_path: Optional[Path],
+) -> int:
+    """Output bucket results as CSV."""
+    lines: List[str] = []
+
+    # Header
+    lines.append("bucket,display_name,tokens,percentage,call_count,top_tool,top_tool_tokens")
+
+    # Data rows
+    for result in results:
+        display_name = BUCKET_DISPLAY_NAMES.get(result.bucket, result.bucket)
+        top_tool = result.top_tools[0][0] if result.top_tools else ""
+        top_tool_tokens = result.top_tools[0][1] if result.top_tools else 0
+
+        lines.append(
+            f"{result.bucket},{display_name},{result.tokens},{result.percentage:.2f},{result.call_count},{top_tool},{top_tool_tokens}"
+        )
+
+    # Total row
+    lines.append(f"total,Total,{total_tokens},100.0,{total_calls},,")
+
+    output = "\n".join(lines)
+
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote bucket analysis to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+# ============================================================================
+# Task Command (v1.0.4 - task-247.7)
+# ============================================================================
+
+
+def _format_duration_task(seconds: float) -> str:
+    """Format duration as human-readable string for task display.
+
+    Note: Uses the same format as the existing _format_duration() above.
+    """
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    if minutes < 60:
+        return f"{minutes}m {secs}s"
+    hours = minutes // 60
+    mins = minutes % 60
+    return f"{hours}h {mins}m"
+
+
+def _resolve_session_for_task(
+    session_id: Optional[str],
+    platform: Optional[str],
+) -> Tuple[str, Optional[Path]]:
+    """Resolve session ID and path for task operations.
+
+    Priority:
+    1. Explicit --session argument
+    2. Environment variable (CLAUDE_CODE_SESSION, CODEX_SESSION, GEMINI_SESSION)
+    3. Latest session from StorageManager
+
+    Returns:
+        Tuple of (session_id, session_path or None)
+    """
+    import os
+
+    from .storage import StorageManager
+
+    # 1. Explicit session ID
+    if session_id:
+        storage = StorageManager()
+        # Try to find session file by ID
+        norm_platform = normalize_platform(platform) if platform else None
+        sessions = storage.list_sessions(platform=norm_platform, limit=100)
+        for session_path in sessions:
+            if session_id in session_path.stem:
+                return session_id, session_path
+        # Session ID provided but not found - return ID without path
+        return session_id, None
+
+    # 2. Environment variable
+    env_vars = ["CLAUDE_CODE_SESSION", "CODEX_SESSION", "GEMINI_SESSION"]
+    for var in env_vars:
+        if var in os.environ:
+            env_session_id = os.environ[var]
+            storage = StorageManager()
+            sessions = storage.list_sessions(limit=100)
+            for session_path in sessions:
+                if env_session_id in session_path.stem:
+                    return env_session_id, session_path
+            return env_session_id, None
+
+    # 3. Latest session
+    storage = StorageManager()
+    norm_platform = normalize_platform(platform) if platform else None
+    sessions = storage.list_sessions(platform=norm_platform, limit=1)
+
+    if sessions:
+        session_path = sessions[0]
+        # Extract session ID from path
+        resolved_session_id = session_path.stem
+        return resolved_session_id, session_path
+
+    return "", None
+
+
+def cmd_task(args: argparse.Namespace) -> int:
+    """Execute task command - manage task markers for per-task analysis."""
+    subcommand = getattr(args, "task_command", None)
+
+    if subcommand == "start":
+        return _cmd_task_start(args)
+    elif subcommand == "end":
+        return _cmd_task_end(args)
+    elif subcommand == "list":
+        return _cmd_task_list(args)
+    elif subcommand == "show":
+        return _cmd_task_show(args)
+    else:
+        print("Usage: token-audit task <command>")
+        print()
+        print("Commands:")
+        print("  start    Start a new task")
+        print("  end      End the current task")
+        print("  list     List tasks in a session")
+        print("  show     Show task details with bucket breakdown")
+        print()
+        print("Run 'token-audit task <command> --help' for more info.")
+        return 1
+
+
+def _cmd_task_start(args: argparse.Namespace) -> int:
+    """Start a new task."""
+    from .tasks import TaskManager
+
+    task_name = args.name
+    session_id, session_path = _resolve_session_for_task(
+        getattr(args, "session", None),
+        getattr(args, "platform", None),
+    )
+
+    if not session_id:
+        print("Error: No session found. Run 'token-audit collect' first or specify --session.")
+        return 1
+
+    manager = TaskManager()
+
+    # Check if there's an active task (for informational message)
+    is_active, current = manager.is_task_active(session_id)
+    if is_active and current:
+        print(f"Auto-ending previous task: {current}")
+
+    marker = manager.start_task(task_name, session_id)
+    print(f"Started task: {task_name}")
+    print(f"  Session: {session_id}")
+    print(f"  Time: {marker.timestamp.isoformat(timespec='seconds')}")
+
+    return 0
+
+
+def _cmd_task_end(args: argparse.Namespace) -> int:
+    """End the current task."""
+    from .tasks import TaskManager
+
+    session_id, session_path = _resolve_session_for_task(
+        getattr(args, "session", None),
+        getattr(args, "platform", None),
+    )
+
+    if not session_id:
+        print("Error: No session found. Run 'token-audit collect' first or specify --session.")
+        return 1
+
+    manager = TaskManager()
+
+    # Check if there's an active task
+    is_active, active_task = manager.is_task_active(session_id)
+
+    if not is_active or not active_task:
+        print("Error: No active task to end.")
+        print("Start a task first: token-audit task start <name>")
+        return 1
+
+    # Load existing markers and set state for end_task to work
+    markers = manager._load_markers(session_id)
+    manager._current_task = active_task
+    manager._current_session_id = session_id
+    manager.markers = markers
+
+    end_marker = manager.end_task(session_id)
+    if end_marker:
+        print(f"Ended task: {active_task}")
+        print(f"  Session: {session_id}")
+        print(f"  Time: {end_marker.timestamp.isoformat(timespec='seconds')}")
+        return 0
+    else:
+        print("Error: Failed to end task.")
+        return 1
+
+
+def _cmd_task_list(args: argparse.Namespace) -> int:
+    """List tasks in a session."""
+    import json as json_module
+
+    from .session_manager import SessionManager
+    from .tasks import TaskManager
+
+    session_id, session_path = _resolve_session_for_task(
+        getattr(args, "session", None),
+        getattr(args, "platform", None),
+    )
+
+    if not session_id:
+        print("Error: No session found.")
+        return 1
+
+    output_format = getattr(args, "format", "table")
+
+    # Load session for task analysis
+    session = None
+    if session_path:
+        sm = SessionManager()
+        session = sm.load_session(session_path)
+
+    manager = TaskManager()
+
+    if session:
+        # Get full task summaries with bucket analysis
+        summaries = manager.get_tasks(session)
+    else:
+        # No session file - just check if markers exist
+        markers = manager._load_markers(session_id)
+        if not markers:
+            print("No tasks found in session.")
+            print("Start a task: token-audit task start <name>")
+            return 0
+        # Can't compute full summaries without session data
+        print(f"Found {len(markers)} task markers, but session file not found.")
+        print("Cannot compute task summaries without session data.")
+        return 1
+
+    if not summaries:
+        print("No tasks found in session.")
+        print("Start a task: token-audit task start <name>")
+        return 0
+
+    if output_format == "json":
+        data = {
+            "session_id": session_id,
+            "tasks": [s.to_dict() for s in summaries],
+        }
+        print(json_module.dumps(data, indent=2))
+        return 0
+
+    if output_format == "csv":
+        print("name,total_tokens,call_count,duration_seconds,start_time,end_time")
+        for s in summaries:
+            print(
+                f'"{s.name}",{s.total_tokens},{s.call_count},{s.duration_seconds:.1f},'
+                f"{s.start_time.isoformat()},{s.end_time.isoformat()}"
+            )
+        return 0
+
+    # Table format
+    print(f"\nTasks in session: {session_id}")
+    print("=" * 80)
+    print(f"{'#':<3} {'Task':<30} | {'Tokens':>10} | {'Calls':>6} | {'Duration':>10}")
+    print("-" * 3 + " " + "-" * 30 + "-+-" + "-" * 10 + "-+-" + "-" * 6 + "-+-" + "-" * 10)
+
+    for i, s in enumerate(summaries, 1):
+        duration_str = _format_duration(s.duration_seconds)
+        task_name = s.name[:30] if len(s.name) > 30 else s.name
+        print(
+            f"{i:<3} {task_name:<30} | {s.total_tokens:>10,} | {s.call_count:>6} | {duration_str:>10}"
+        )
+
+    print("-" * 80)
+    total_tokens = sum(s.total_tokens for s in summaries)
+    total_calls = sum(s.call_count for s in summaries)
+    total_duration = sum(s.duration_seconds for s in summaries)
+    print(
+        f"{'':3} {'Total':<30} | {total_tokens:>10,} | {total_calls:>6} | {_format_duration(total_duration):>10}"
+    )
+    print()
+
+    return 0
+
+
+def _cmd_task_show(args: argparse.Namespace) -> int:
+    """Show task details with bucket breakdown."""
+    import json as json_module
+
+    from .session_manager import SessionManager
+    from .tasks import TaskManager
+
+    task_name = args.name
+    session_id, session_path = _resolve_session_for_task(
+        getattr(args, "session", None),
+        getattr(args, "platform", None),
+    )
+
+    if not session_id:
+        print("Error: No session found.")
+        return 1
+
+    if not session_path:
+        print(f"Error: Session file not found for: {session_id}")
+        return 1
+
+    output_format = getattr(args, "format", "table")
+
+    # Load session
+    sm = SessionManager()
+    session = sm.load_session(session_path)
+
+    if not session:
+        print(f"Error: Failed to load session: {session_path}")
+        return 1
+
+    manager = TaskManager()
+    summaries = manager.get_tasks(session)
+
+    # Find matching task
+    matching = [s for s in summaries if s.name == task_name]
+    if not matching:
+        # Try partial match
+        matching = [s for s in summaries if task_name.lower() in s.name.lower()]
+
+    if not matching:
+        print(f"Error: Task not found: {task_name}")
+        if summaries:
+            print("Available tasks:")
+            for s in summaries:
+                print(f"  - {s.name}")
+        return 1
+
+    if len(matching) > 1:
+        print(f"Multiple tasks match '{task_name}':")
+        for s in matching:
+            print(f"  - {s.name}")
+        return 1
+
+    summary = matching[0]
+
+    if output_format == "json":
+        print(json_module.dumps(summary.to_dict(), indent=2))
+        return 0
+
+    # Table format with bucket breakdown
+    print(f"\nTask: {summary.name}")
+    print("=" * 70)
+    print()
+    print(f"  Start:    {summary.start_time.isoformat(timespec='seconds')}")
+    print(f"  End:      {summary.end_time.isoformat(timespec='seconds')}")
+    print(f"  Duration: {_format_duration(summary.duration_seconds)}")
+    print(f"  Tokens:   {summary.total_tokens:,}")
+    print(f"  Calls:    {summary.call_count}")
+    print()
+    print("Bucket Breakdown:")
+    print("-" * 70)
+    print(f"{'Bucket':<20} | {'Tokens':>8} | {'%':>6} | {'Calls':>5} | {'Top Tool':<20}")
+    print("-" * 20 + "-+-" + "-" * 8 + "-+-" + "-" * 6 + "-+-" + "-" * 5 + "-+-" + "-" * 20)
+
+    for bucket_name in ["state_serialization", "redundant", "tool_discovery", "drift"]:
+        if bucket_name in summary.buckets:
+            result = summary.buckets[bucket_name]
+            display_name = BUCKET_DISPLAY_NAMES.get(bucket_name, bucket_name)
+            if result.top_tools:
+                top_tool = result.top_tools[0][0]
+                if len(top_tool) > 20:
+                    top_tool = top_tool[:17] + "..."
+            else:
+                top_tool = "-"
+            print(
+                f"{display_name:<20} | {result.tokens:>8,} | {result.percentage:>5.1f}% | "
+                f"{result.call_count:>5} | {top_tool:<20}"
+            )
+
+    print("-" * 70)
+    print()
+
+    return 0
+
+
+# ============================================================================
+# Bucket by Task (v1.0.4 - task-247.9)
+# ============================================================================
+
+
+def _bucket_by_task(args: argparse.Namespace, session: "Session") -> int:
+    """Output bucket analysis broken down by task."""
+
+    from .buckets import BucketClassifier
+    from .tasks import TaskManager
+
+    output_format = getattr(args, "format", "table")
+    output_path = getattr(args, "output", None)
+
+    task_manager = TaskManager()
+    summaries = task_manager.get_tasks(session)
+
+    if not summaries:
+        print("No task markers found in session.")
+        print("Use 'token-audit task start <name>' to create task markers.")
+        print()
+        print("Showing overall bucket analysis instead:")
+        print()
+        # Fall back to overall analysis
+        classifier = BucketClassifier()
+        results = classifier.classify_session(session)
+        total_tokens = sum(r.tokens for r in results)
+        total_calls = sum(r.call_count for r in results)
+        return _bucket_output_table(results, total_tokens, total_calls, output_path)
+
+    if output_format == "json":
+        return _bucket_by_task_json(summaries, output_path)
+    elif output_format == "csv":
+        return _bucket_by_task_csv(summaries, output_path)
+    else:
+        return _bucket_by_task_table(summaries, output_path)
+
+
+def _bucket_by_task_table(
+    summaries: List["TaskSummary"],
+    output_path: Optional[Path],
+) -> int:
+    """Output per-task bucket analysis as table."""
+    from .buckets import BucketResult
+
+    lines: List[str] = []
+
+    lines.append("")
+    lines.append("Per-Task Bucket Analysis")
+    lines.append("\u2550" * 85)
+
+    # Column headers
+    lines.append(
+        f"{'Task':<30} \u2502 {'Tokens':>8} \u2502 {'State':>6} \u2502 {'Redund':>6} \u2502 {'Drift':>6} \u2502 {'Disc':>5}"
+    )
+    lines.append(
+        "\u2500" * 30
+        + "\u253c"
+        + "\u2500" * 10
+        + "\u253c"
+        + "\u2500" * 8
+        + "\u253c"
+        + "\u2500" * 8
+        + "\u253c"
+        + "\u2500" * 8
+        + "\u253c"
+        + "\u2500" * 7
+    )
+
+    # Data rows
+    for summary in summaries:
+        task_name = summary.name[:30] if len(summary.name) > 30 else summary.name
+        state_pct = summary.buckets.get(
+            "state_serialization", BucketResult("state_serialization")
+        ).percentage
+        redund_pct = summary.buckets.get("redundant", BucketResult("redundant")).percentage
+        drift_pct = summary.buckets.get("drift", BucketResult("drift")).percentage
+        disc_pct = summary.buckets.get("tool_discovery", BucketResult("tool_discovery")).percentage
+
+        lines.append(
+            f"{task_name:<30} \u2502 {summary.total_tokens:>8,} \u2502 {state_pct:>5.1f}% \u2502 "
+            f"{redund_pct:>5.1f}% \u2502 {drift_pct:>5.1f}% \u2502 {disc_pct:>4.1f}%"
+        )
+
+    # Footer with averages
+    lines.append(
+        "\u2500" * 30
+        + "\u2534"
+        + "\u2500" * 10
+        + "\u2534"
+        + "\u2500" * 8
+        + "\u2534"
+        + "\u2500" * 8
+        + "\u2534"
+        + "\u2500" * 8
+        + "\u2534"
+        + "\u2500" * 7
+    )
+
+    # Calculate averages
+    if summaries:
+        avg_tokens = sum(s.total_tokens for s in summaries) // len(summaries)
+        avg_state = sum(
+            s.buckets.get("state_serialization", BucketResult("state_serialization")).percentage
+            for s in summaries
+        ) / len(summaries)
+        avg_redund = sum(
+            s.buckets.get("redundant", BucketResult("redundant")).percentage for s in summaries
+        ) / len(summaries)
+        avg_drift = sum(
+            s.buckets.get("drift", BucketResult("drift")).percentage for s in summaries
+        ) / len(summaries)
+        avg_disc = sum(
+            s.buckets.get("tool_discovery", BucketResult("tool_discovery")).percentage
+            for s in summaries
+        ) / len(summaries)
+
+        lines.append(
+            f"{'AVERAGE':<30}   {avg_tokens:>8,}   {avg_state:>5.1f}%   {avg_redund:>5.1f}%   "
+            f"{avg_drift:>5.1f}%   {avg_disc:>4.1f}%"
+        )
+
+    lines.append("")
+
+    output = "\n".join(lines)
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote per-task bucket analysis to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+def _bucket_by_task_json(
+    summaries: List["TaskSummary"],
+    output_path: Optional[Path],
+) -> int:
+    """Output per-task bucket analysis as JSON."""
+    import json as json_module
+
+    data = {
+        "tasks": [s.to_dict() for s in summaries],
+        "summary": {
+            "task_count": len(summaries),
+            "total_tokens": sum(s.total_tokens for s in summaries),
+        },
+    }
+
+    output = json_module.dumps(data, indent=2)
+
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote per-task bucket analysis to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+def _bucket_by_task_csv(
+    summaries: List["TaskSummary"],
+    output_path: Optional[Path],
+) -> int:
+    """Output per-task bucket analysis as CSV."""
+    from .buckets import BucketResult
+
+    lines: List[str] = []
+
+    # Header
+    lines.append(
+        "task,tokens,state_pct,redundant_pct,drift_pct,discovery_pct,calls,duration_seconds"
+    )
+
+    # Data rows
+    for s in summaries:
+        state_pct = s.buckets.get(
+            "state_serialization", BucketResult("state_serialization")
+        ).percentage
+        redund_pct = s.buckets.get("redundant", BucketResult("redundant")).percentage
+        drift_pct = s.buckets.get("drift", BucketResult("drift")).percentage
+        disc_pct = s.buckets.get("tool_discovery", BucketResult("tool_discovery")).percentage
+
+        lines.append(
+            f'"{s.name}",{s.total_tokens},{state_pct:.2f},{redund_pct:.2f},{drift_pct:.2f},'
+            f"{disc_pct:.2f},{s.call_count},{s.duration_seconds:.1f}"
+        )
+
+    output = "\n".join(lines)
+
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote per-task bucket analysis to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+# ============================================================================
+# Compare Command (v1.0.4 - task-247.16)
+# ============================================================================
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    """Execute compare command - compare bucket classification across sessions.
+
+    Compares multiple sessions showing bucket distribution for each with
+    an AVERAGE row for cross-session analysis.
+    """
+    from dataclasses import dataclass
+
+    from .buckets import BucketClassifier
+    from .session_manager import SessionManager
+    from .storage import StorageManager
+
+    @dataclass
+    class SessionComparison:
+        """Data for a single session in comparison."""
+
+        session_name: str
+        total_tokens: int
+        state_pct: float
+        redundant_pct: float
+        drift_pct: float
+        discovery_pct: float
+
+    # Validate arguments: either sessions or --latest, not both
+    sessions_provided = args.sessions and len(args.sessions) > 0
+    latest_provided = args.latest is not None
+
+    if sessions_provided and latest_provided:
+        print("Error: Cannot use both positional sessions and --latest flag.")
+        print("Use either: token-audit compare file1.json file2.json")
+        print("Or: token-audit compare --latest 5")
+        return 1
+
+    if not sessions_provided and not latest_provided:
+        print("Error: Must provide session files or use --latest flag.")
+        print("Examples:")
+        print("  token-audit compare session1.json session2.json")
+        print("  token-audit compare --latest 5")
+        return 1
+
+    # Get session paths
+    session_paths: List[Path] = []
+
+    if latest_provided:
+        storage = StorageManager()
+        platform = normalize_platform(args.platform)
+        session_paths = storage.list_sessions(platform=platform, limit=args.latest)
+
+        if not session_paths:
+            print("Error: No sessions found. Run 'token-audit collect' first.")
+            return 1
+
+        if len(session_paths) < 2:
+            print(f"Warning: Only {len(session_paths)} session(s) found. Need 2+ for comparison.")
+    else:
+        session_paths = args.sessions
+        # Validate files exist
+        for path in session_paths:
+            if not path.exists():
+                print(f"Error: Session file not found: {path}")
+                return 1
+
+    if len(session_paths) < 1:
+        print("Error: Need at least 1 session for analysis.")
+        return 1
+
+    # Load and classify each session
+    comparisons: List[SessionComparison] = []
+    manager = SessionManager()
+    classifier = BucketClassifier()
+
+    for session_path in session_paths:
+        session = manager.load_session(session_path)
+        if not session:
+            print(f"Warning: Could not load session: {session_path}")
+            continue
+
+        results = classifier.classify_session(session)
+
+        # Extract bucket percentages
+        state_pct = 0.0
+        redundant_pct = 0.0
+        drift_pct = 0.0
+        discovery_pct = 0.0
+
+        for result in results:
+            if result.bucket == "state_serialization":
+                state_pct = result.percentage
+            elif result.bucket == "redundant":
+                redundant_pct = result.percentage
+            elif result.bucket == "drift":
+                drift_pct = result.percentage
+            elif result.bucket == "tool_discovery":
+                discovery_pct = result.percentage
+
+        total_tokens = sum(r.tokens for r in results)
+
+        # Fallback to session token_usage when classifier has no data
+        # (older sessions may lack tool_calls detail for bucket classification)
+        if total_tokens == 0 and hasattr(session, "token_usage") and session.token_usage:
+            total_tokens = session.token_usage.total_tokens
+
+        # Use session timestamp as name, fallback to filename
+        session_name = session_path.stem
+        if hasattr(session, "timestamp") and session.timestamp:
+            session_name = session.timestamp.strftime("%Y-%m-%dT%H-%M-%S")
+
+        comparisons.append(
+            SessionComparison(
+                session_name=session_name,
+                total_tokens=total_tokens,
+                state_pct=state_pct,
+                redundant_pct=redundant_pct,
+                drift_pct=drift_pct,
+                discovery_pct=discovery_pct,
+            )
+        )
+
+    if not comparisons:
+        print("Error: No sessions could be loaded.")
+        return 1
+
+    # Sort by session name (timestamp)
+    comparisons.sort(key=lambda c: c.session_name)
+
+    # Output based on format
+    output_format = args.format
+    output_path = args.output
+
+    if output_format == "json":
+        return _compare_output_json(comparisons, output_path)
+    elif output_format == "csv":
+        return _compare_output_csv(comparisons, output_path)
+    else:  # table
+        return _compare_output_table(comparisons, output_path)
+
+
+def _compare_output_table(
+    comparisons: List[Any],
+    output_path: Optional[Path],
+) -> int:
+    """Output session comparison as formatted table."""
+    lines: List[str] = []
+
+    lines.append("")
+    lines.append("Session Comparison")
+    lines.append("\u2550" * 78)
+
+    # Column headers
+    lines.append(
+        f"{'Session':<30} \u2502 {'Tokens':>8} \u2502 {'State':>6} \u2502 {'Redund':>6} \u2502 {'Drift':>6} \u2502 {'Disc':>5}"
+    )
+    lines.append(
+        "\u2500" * 30
+        + "\u253c"
+        + "\u2500" * 10
+        + "\u253c"
+        + "\u2500" * 8
+        + "\u253c"
+        + "\u2500" * 8
+        + "\u253c"
+        + "\u2500" * 8
+        + "\u253c"
+        + "\u2500" * 7
+    )
+
+    # Data rows
+    for c in comparisons:
+        session_name = c.session_name[:30] if len(c.session_name) > 30 else c.session_name
+        lines.append(
+            f"{session_name:<30} \u2502 {c.total_tokens:>8,} \u2502 {c.state_pct:>5.1f}% \u2502 "
+            f"{c.redundant_pct:>5.1f}% \u2502 {c.drift_pct:>5.1f}% \u2502 {c.discovery_pct:>4.1f}%"
+        )
+
+    # Footer with averages
+    lines.append(
+        "\u2500" * 30
+        + "\u2534"
+        + "\u2500" * 10
+        + "\u2534"
+        + "\u2500" * 8
+        + "\u2534"
+        + "\u2500" * 8
+        + "\u2534"
+        + "\u2500" * 8
+        + "\u2534"
+        + "\u2500" * 7
+    )
+
+    if comparisons:
+        avg_tokens = sum(c.total_tokens for c in comparisons) // len(comparisons)
+        avg_state = sum(c.state_pct for c in comparisons) / len(comparisons)
+        avg_redundant = sum(c.redundant_pct for c in comparisons) / len(comparisons)
+        avg_drift = sum(c.drift_pct for c in comparisons) / len(comparisons)
+        avg_discovery = sum(c.discovery_pct for c in comparisons) / len(comparisons)
+
+        lines.append(
+            f"{'AVERAGE':<30}   {avg_tokens:>8,}   {avg_state:>5.1f}%   "
+            f"{avg_redundant:>5.1f}%   {avg_drift:>5.1f}%   {avg_discovery:>4.1f}%"
+        )
+
+    lines.append("")
+
+    output = "\n".join(lines)
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote session comparison to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+def _compare_output_json(
+    comparisons: List[Any],
+    output_path: Optional[Path],
+) -> int:
+    """Output session comparison as JSON."""
+    import json as json_module
+
+    # Calculate averages
+    avg_tokens = sum(c.total_tokens for c in comparisons) // len(comparisons) if comparisons else 0
+    avg_state = sum(c.state_pct for c in comparisons) / len(comparisons) if comparisons else 0
+    avg_redundant = (
+        sum(c.redundant_pct for c in comparisons) / len(comparisons) if comparisons else 0
+    )
+    avg_drift = sum(c.drift_pct for c in comparisons) / len(comparisons) if comparisons else 0
+    avg_discovery = (
+        sum(c.discovery_pct for c in comparisons) / len(comparisons) if comparisons else 0
+    )
+
+    data = {
+        "sessions": [
+            {
+                "session_name": c.session_name,
+                "total_tokens": c.total_tokens,
+                "state_serialization_pct": round(c.state_pct, 2),
+                "redundant_pct": round(c.redundant_pct, 2),
+                "drift_pct": round(c.drift_pct, 2),
+                "discovery_pct": round(c.discovery_pct, 2),
+            }
+            for c in comparisons
+        ],
+        "averages": {
+            "total_tokens": avg_tokens,
+            "state_serialization_pct": round(avg_state, 2),
+            "redundant_pct": round(avg_redundant, 2),
+            "drift_pct": round(avg_drift, 2),
+            "discovery_pct": round(avg_discovery, 2),
+        },
+        "session_count": len(comparisons),
+    }
+
+    output = json_module.dumps(data, indent=2)
+
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote session comparison to: {output_path}")
+    else:
+        print(output)
+
+    return 0
+
+
+def _compare_output_csv(
+    comparisons: List[Any],
+    output_path: Optional[Path],
+) -> int:
+    """Output session comparison as CSV."""
+    lines: List[str] = []
+
+    # Header
+    lines.append("session,tokens,state_pct,redundant_pct,drift_pct,discovery_pct")
+
+    # Data rows
+    for c in comparisons:
+        lines.append(
+            f'"{c.session_name}",{c.total_tokens},{c.state_pct:.2f},{c.redundant_pct:.2f},'
+            f"{c.drift_pct:.2f},{c.discovery_pct:.2f}"
+        )
+
+    # Average row
+    if comparisons:
+        avg_tokens = sum(c.total_tokens for c in comparisons) // len(comparisons)
+        avg_state = sum(c.state_pct for c in comparisons) / len(comparisons)
+        avg_redundant = sum(c.redundant_pct for c in comparisons) / len(comparisons)
+        avg_drift = sum(c.drift_pct for c in comparisons) / len(comparisons)
+        avg_discovery = sum(c.discovery_pct for c in comparisons) / len(comparisons)
+
+        lines.append(
+            f'"AVERAGE",{avg_tokens},{avg_state:.2f},{avg_redundant:.2f},'
+            f"{avg_drift:.2f},{avg_discovery:.2f}"
+        )
+
+    output = "\n".join(lines)
+
+    if output_path:
+        output_path.write_text(output)
+        print(f"Wrote session comparison to: {output_path}")
+    else:
+        print(output)
 
     return 0
 

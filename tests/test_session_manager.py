@@ -52,7 +52,7 @@ def sample_session():
     # Add server session
     server_session = ServerSession(server="zen", total_calls=10, total_tokens=6700)
 
-    # Add tool stats (v1.1.0: Call objects include server field)
+    # Add tool stats (v1.0.4: Call objects include server field)
     tool_stats = ToolStats(
         calls=5,
         total_tokens=3000,
@@ -60,8 +60,8 @@ def sample_session():
         call_history=[
             Call(
                 tool_name="mcp__zen__chat",
-                server="zen",  # v1.1.0: server field required
-                index=1,  # v1.1.0: sequential index
+                server="zen",  # v1.0.4: server field required
+                index=1,  # v1.0.4: sequential index
                 input_tokens=100,
                 output_tokens=50,
                 total_tokens=150,
@@ -106,26 +106,26 @@ class TestSessionPersistence:
     """Tests for session save/load functionality"""
 
     def test_save_session(self, temp_session_dir, sample_session) -> None:
-        """Test saving session to disk (v1.1.0 format)"""
+        """Test saving session to disk (v1.0.4 format)"""
         manager = SessionManager(base_dir=temp_session_dir)
         session_dir = manager.create_session_directory(sample_session.session_id)
 
         saved_files = manager.save_session(sample_session, session_dir)
 
-        # v1.1.0: Single file with "session" key
+        # v1.0.4: Single file with "session" key
         assert "session" in saved_files
         assert saved_files["session"].exists()
 
-        # Verify session file content (v1.1.0 format)
+        # Verify session file content (v1.0.4 format)
         with open(saved_files["session"], "r") as f:
             data = json.load(f)
 
-        # Check _file header exists (v1.1.0)
+        # Check _file header exists (v1.0.4)
         assert "_file" in data
         assert data["_file"]["type"] == "token_audit_session"
         assert data["_file"]["schema_version"].startswith("1.")  # v1.x compatible
 
-        # Check session block (v1.1.0)
+        # Check session block (v1.0.4)
         assert "session" in data
         assert data["session"]["project"] == "test-project"
         assert data["session"]["platform"] == "test-platform"
@@ -134,11 +134,11 @@ class TestSessionPersistence:
         assert data["token_usage"]["total_tokens"] == 6700
 
     def test_load_session(self, temp_session_dir, sample_session) -> None:
-        """Test loading session from disk (v1.1.0 format)"""
+        """Test loading session from disk (v1.0.4 format)"""
         manager = SessionManager(base_dir=temp_session_dir)
         session_dir = manager.create_session_directory(sample_session.session_id)
 
-        # Save then load - v1.1.0 saves to date subdirectory
+        # Save then load - v1.0.4 saves to date subdirectory
         saved_files = manager.save_session(sample_session, session_dir)
         # Load from the directory containing the session file
         date_dir = saved_files["session"].parent
@@ -160,17 +160,17 @@ class TestSessionPersistence:
         assert loaded_session is None
 
     def test_load_session_with_server_sessions(self, temp_session_dir, sample_session) -> None:
-        """Test loading session with server session data (v1.1.0 format)"""
+        """Test loading session with server session data (v1.0.4 format)"""
         manager = SessionManager(base_dir=temp_session_dir)
         session_dir = manager.create_session_directory(sample_session.session_id)
 
-        # Save then load - v1.1.0 saves to date subdirectory
+        # Save then load - v1.0.4 saves to date subdirectory
         saved_files = manager.save_session(sample_session, session_dir)
         date_dir = saved_files["session"].parent
         loaded_session = manager.load_session(date_dir)
 
         assert loaded_session is not None
-        # v1.1.0 reconstructs server_sessions from tool_calls
+        # v1.0.4 reconstructs server_sessions from tool_calls
         assert "zen" in loaded_session.server_sessions
         zen_session = loaded_session.server_sessions["zen"]
         assert zen_session.server == "zen"
@@ -236,10 +236,10 @@ class TestSessionListing:
         assert sessions == []
 
     def test_list_sessions(self, temp_session_dir, sample_session) -> None:
-        """Test listing multiple sessions (v1.1.0 format)"""
+        """Test listing multiple sessions (v1.0.4 format)"""
         manager = SessionManager(base_dir=temp_session_dir)
 
-        # Create 3 sessions - v1.1.0 saves to date subdirectory
+        # Create 3 sessions - v1.0.4 saves to date subdirectory
         for i in range(3):
             sample_session.session_id = f"test-session-{i:03d}"
             sample_session.project = f"project-{i:03d}"
@@ -250,7 +250,7 @@ class TestSessionListing:
         assert len(sessions) == 3
 
     def test_list_sessions_sorted(self, temp_session_dir, sample_session) -> None:
-        """Test sessions are sorted by timestamp (newest first, v1.1.0 format)"""
+        """Test sessions are sorted by timestamp (newest first, v1.0.4 format)"""
         from datetime import timedelta
 
         manager = SessionManager(base_dir=temp_session_dir)
@@ -273,10 +273,10 @@ class TestSessionListing:
         assert "project-3" in sessions[0].name
 
     def test_list_sessions_with_limit(self, temp_session_dir, sample_session) -> None:
-        """Test listing sessions with limit (v1.1.0 format)"""
+        """Test listing sessions with limit (v1.0.4 format)"""
         manager = SessionManager(base_dir=temp_session_dir)
 
-        # Create 5 sessions - v1.1.0 saves to date subdirectory
+        # Create 5 sessions - v1.0.4 saves to date subdirectory
         for i in range(5):
             sample_session.session_id = f"test-session-{i:03d}"
             sample_session.project = f"project-{i:03d}"
@@ -355,22 +355,22 @@ class TestConvenienceFunctions:
     """Tests for convenience functions"""
 
     def test_save_session_function(self, temp_session_dir, sample_session) -> None:
-        """Test save_session convenience function (v1.1.0 format)"""
+        """Test save_session convenience function (v1.0.4 format)"""
         session_dir = temp_session_dir / sample_session.session_id
         session_dir.mkdir(parents=True)
 
         saved_files = save_session(sample_session, session_dir)
 
-        # v1.1.0: Single file with "session" key
+        # v1.0.4: Single file with "session" key
         assert "session" in saved_files
         assert saved_files["session"].exists()
 
     def test_load_session_function(self, temp_session_dir, sample_session) -> None:
-        """Test load_session convenience function (v1.1.0 format)"""
+        """Test load_session convenience function (v1.0.4 format)"""
         session_dir = temp_session_dir / sample_session.session_id
         session_dir.mkdir(parents=True)
 
-        # Save then load - v1.1.0 saves to date subdirectory
+        # Save then load - v1.0.4 saves to date subdirectory
         saved_files = save_session(sample_session, session_dir)
         date_dir = saved_files["session"].parent
         loaded_session = load_session(date_dir)
@@ -416,16 +416,16 @@ class TestSessionManagerIntegration:
     """Integration tests for complete session lifecycle"""
 
     def test_complete_session_lifecycle(self, temp_session_dir, sample_session) -> None:
-        """Test complete save/load/list/cleanup lifecycle (v1.1.0 format)"""
+        """Test complete save/load/list/cleanup lifecycle (v1.0.4 format)"""
         manager = SessionManager(base_dir=temp_session_dir)
 
-        # 1. Save session directly to base_dir (v1.1.0 creates date subdir)
+        # 1. Save session directly to base_dir (v1.0.4 creates date subdir)
         saved_files = manager.save_session(sample_session, temp_session_dir)
-        # v1.1.0: Single file
+        # v1.0.4: Single file
         assert len(saved_files) == 1
         assert "session" in saved_files
 
-        # 2. Load session from file path (v1.1.0)
+        # 2. Load session from file path (v1.0.4)
         session_file = saved_files["session"]
         loaded_session = manager.load_session(session_file)
         assert loaded_session is not None
@@ -436,15 +436,15 @@ class TestSessionManagerIntegration:
         assert len(sessions) >= 1
 
         # 4. Verify incomplete session detection works
-        # Note: With v1.1.0 format, incomplete detection looks for summary.json
+        # Note: With v1.0.4 format, incomplete detection looks for summary.json
         # which won't exist since we use single file format now
         # This is expected behavior - the session IS complete (just different format)
 
     def test_multiple_server_sessions(self, temp_session_dir, sample_session) -> None:
-        """Test saving/loading session with multiple servers (v1.1.0 format)"""
+        """Test saving/loading session with multiple servers (v1.0.4 format)"""
         manager = SessionManager(base_dir=temp_session_dir)
 
-        # Add second server session with tool calls (v1.1.0 reconstructs from tool_calls)
+        # Add second server session with tool calls (v1.0.4 reconstructs from tool_calls)
         brave_session = ServerSession(server="brave-search", total_calls=5, total_tokens=2000)
         brave_tool_stats = ToolStats(
             calls=2,
@@ -453,8 +453,8 @@ class TestSessionManagerIntegration:
             call_history=[
                 Call(
                     tool_name="mcp__brave-search__web",
-                    server="brave-search",  # v1.1.0: server field required
-                    index=2,  # v1.1.0: sequential index
+                    server="brave-search",  # v1.0.4: server field required
+                    index=2,  # v1.0.4: sequential index
                     input_tokens=200,
                     output_tokens=100,
                     total_tokens=300,
@@ -468,7 +468,7 @@ class TestSessionManagerIntegration:
         # Save and load
         session_dir = manager.create_session_directory(sample_session.session_id)
         saved_files = manager.save_session(sample_session, session_dir)
-        # v1.1.0: Single file format
+        # v1.0.4: Single file format
         assert len(saved_files) == 1
 
         # Load from date subdirectory
