@@ -1499,7 +1499,7 @@ class BaseTracker(ABC):
     # Persistence (Shared implementation)
     # ========================================================================
 
-    def save_session(self, output_dir: Path) -> None:
+    def save_session(self, output_dir: Optional[Path] = None) -> None:
         """
         Save session data to disk using v1.0.4 format.
 
@@ -1512,6 +1512,13 @@ class BaseTracker(ABC):
         Args:
             output_dir: Base directory for sessions (default: ~/.token-audit/sessions)
         """
+        # Use default path if not specified
+        if output_dir is None:
+            output_dir = Path.home() / ".token-audit" / "sessions"
+
+        # Ensure base directory exists
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         # Create platform/date subdirectory structure
         # e.g., ~/.token-audit/sessions/codex-cli/2025-12-04/
         date_str = self.timestamp.strftime("%Y-%m-%d")

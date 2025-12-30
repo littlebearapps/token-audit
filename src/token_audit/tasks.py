@@ -398,18 +398,36 @@ class TaskManager:
     def _save_markers(self, session_id: str) -> None:
         """Persist markers to ~/.token-audit/tasks/<session-id>.json.
 
+        Loads existing markers from disk first, merges with new markers,
+        then writes the complete set. This prevents data loss across
+        separate CLI invocations.
+
         Args:
             session_id: Session ID for filename
         """
         self.storage_path.mkdir(parents=True, exist_ok=True)
         file_path = self.storage_path / f"{session_id}.json"
 
-        # Filter markers for this session
-        session_markers = [m for m in self.markers if m.session_id == session_id]
+        # Load existing markers from disk first to prevent data loss
+        existing_markers = self._load_markers(session_id)
+
+        # Get new markers for this session
+        new_markers = [m for m in self.markers if m.session_id == session_id]
+
+        # Merge: deduplicate by (timestamp, name, marker_type)
+        # Use _format_timestamp() for consistent seconds-precision comparison
+        # (in-memory markers have microseconds, loaded markers are truncated to seconds)
+        existing_keys = {
+            (_format_timestamp(m.timestamp), m.name, m.marker_type) for m in existing_markers
+        }
+        for marker in new_markers:
+            key = (_format_timestamp(marker.timestamp), marker.name, marker.marker_type)
+            if key not in existing_keys:
+                existing_markers.append(marker)
 
         data = {
             "session_id": session_id,
-            "markers": [m.to_dict() for m in session_markers],
+            "markers": [m.to_dict() for m in existing_markers],
         }
 
         with open(file_path, "w") as f:

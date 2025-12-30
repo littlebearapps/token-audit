@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "token-audit"
-version = "1.0.5"
+version = "1.0.6"
 description = "Token usage auditor for AI coding tools. Investigate context bloat across Claude Code, Codex CLI & Gemini CLI."
 readme = "README.md"
 license = "MIT"
@@ -78,11 +78,7 @@ Discussions = "https://github.com/littlebearapps/token-audit/discussions"
 where = ["src"]
 
 [tool.setuptools.package-data]
-token_audit = ["py.typed", "tokenizers/NOTICE", "guidance/best_practices/*.md", "guidance/best_practices/*.yaml"]
-
-# Include schema files in distribution (for token-audit validate command)
-[tool.setuptools.data-files]
-"share/token-audit/schema" = ["docs/schema/session-v1.7.0.json"]
+token_audit = ["py.typed", "tokenizers/NOTICE", "guidance/best_practices/*.md", "guidance/best_practices/*.yaml", "schema/session-v1.7.0.json"]
 
 [tool.setuptools.exclude-package-data]
 token_audit = ["tokenizers/*.model"]

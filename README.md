@@ -33,17 +33,17 @@ uv pip install token-audit
 
 ---
 
-## What's New (v1.0.4)
+## What's New (v1.0.6)
 
-**Bucket Classification** — Diagnose WHERE token bloat comes from with 4-bucket analysis:
+**Bug Fixes** — 7 stability improvements for CLI commands:
 
-- **4 efficiency buckets**: State serialization, Redundant outputs, Tool discovery, Conversation drift
-- **`token-audit bucket` command**: Analyze token distribution across buckets
-- **Task markers**: `token-audit task start/end` for per-task analysis
-- **Per-task breakdown**: `--by-task` flag shows bucket percentages per logical task
-- **Configurable patterns**: TOML config, TUI screen, or MCP tools
+- **Task markers persist correctly** — Fixed critical data loss where markers were overwritten ([#119](https://github.com/littlebearapps/token-audit/issues/119))
+- **Sessions list reliability** — `--json` and `--verbose` now show all sessions ([#120](https://github.com/littlebearapps/token-audit/issues/120), [#124](https://github.com/littlebearapps/token-audit/issues/124))
+- **Platform name handling** — Hyphenated names (e.g., `claude-code`) work correctly ([#121](https://github.com/littlebearapps/token-audit/issues/121))
+- **Collect command robustness** — No more `FileNotFoundError` without project dir ([#122](https://github.com/littlebearapps/token-audit/issues/122))
+- **Validate command fixed** — Schema path resolution works in all install modes ([#123](https://github.com/littlebearapps/token-audit/issues/123))
 
-See [Bucket Classification Guide](docs/bucket-classification.md) for full documentation.
+See [v1.0.5](https://github.com/littlebearapps/token-audit/releases/tag/v1.0.5) for task command targeting fix, [v1.0.4](https://github.com/littlebearapps/token-audit/releases/tag/v1.0.4) for Bucket Classification.
 
 ---
 
@@ -514,7 +514,7 @@ Token Audit focuses on **real-time tool profiling**. Where billing tools answer 
 
 ## Roadmap
 
-**Current:** v1.0.4 — Bucket Classification (4-bucket analysis, task markers, per-task breakdown)
+**Current:** v1.0.6 — 7 bug fixes for CLI stability (sessions list, task markers, validate, collect)
 
 **Upcoming:**
 - **v1.1.0** — Billing & Statusline: 5-hour billing block tracking, Claude Code statusline hook

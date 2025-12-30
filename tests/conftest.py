@@ -72,3 +72,21 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "requires_server" in item.keywords:
             item.add_marker(skip_server)
+
+
+@pytest.fixture
+def temp_active_dir(tmp_path: Path) -> Path:
+    """
+    Create a temporary active sessions directory for tests.
+
+    Use this fixture when tests need to create active sessions to avoid
+    polluting the production ~/.token-audit/sessions/active/ directory.
+
+    Example:
+        def test_active_session(temp_active_dir):
+            storage = StreamingStorage(base_dir=temp_active_dir.parent)
+            storage.create_active_session("test-session-id")
+    """
+    active_dir = tmp_path / "sessions" / "active"
+    active_dir.mkdir(parents=True, exist_ok=True)
+    return active_dir

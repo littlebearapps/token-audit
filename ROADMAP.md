@@ -4,10 +4,12 @@ This document outlines the planned development direction for Token Audit. For co
 
 ## Current Status
 
-**Version**: v1.0.4
-**Stage**: Released — Bucket Classification
+**Version**: v1.0.6
+**Stage**: Released — Bug fix release (7 stability fixes)
 
 Token Audit now provides 4-bucket token classification to diagnose WHERE token bloat comes from. Classify tool calls into state serialization (large payloads), redundant outputs (duplicate calls), tool discovery (schema introspection), or conversation drift (reasoning/retries). Use task markers for per-task analysis.
+
+**v1.0.6 Fixes**: Task marker persistence, sessions list reliability, platform name handling, collect/validate command robustness, test pollution prevention. See [CHANGELOG](CHANGELOG.md#106---2025-12-30) for details.
 
 **Next**: v1.1.0 "Billing & Statusline" — 5-hour billing block tracking, Claude Code statusline integration.
 

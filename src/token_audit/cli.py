@@ -4202,14 +4202,34 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 1
 
     # Schema file path - check multiple locations
-    # 1. Development: relative to source (../../../docs/schema/)
-    # 2. Installed package: same-level schema/ directory
+    # 1. Package resources (installed or editable install)
+    # 2. Development: relative to source (../../../docs/schema/)
+    # 3. Fallback: same-level schema/ directory
     schema_name = "session-v1.7.0.json"
-    possible_paths = [
-        Path(__file__).parent.parent.parent / "docs" / "schema" / schema_name,  # Development
-        Path(__file__).parent / "schema" / schema_name,  # Installed (src/token_audit/schema/)
-    ]
-    schema_path = next((p for p in possible_paths if p.exists()), possible_paths[0])
+    schema_path: Optional[Path] = None
+
+    # Try package resources first (works for both installed and editable installs)
+    try:
+        from importlib.resources import files
+
+        schema_resource = files("token_audit").joinpath("schema", schema_name)
+        # Check if resource exists and convert to path
+        if hasattr(schema_resource, "is_file") and schema_resource.is_file():
+            schema_path = Path(str(schema_resource))
+        elif hasattr(schema_resource, "__fspath__"):
+            candidate = Path(str(schema_resource))
+            if candidate.exists():
+                schema_path = candidate
+    except (ImportError, TypeError, AttributeError):
+        pass  # importlib.resources not available or failed
+
+    # Fallback paths for development
+    if schema_path is None or not schema_path.exists():
+        possible_paths = [
+            Path(__file__).parent / "schema" / schema_name,  # Package (src/token_audit/schema/)
+            Path(__file__).parent.parent.parent / "docs" / "schema" / schema_name,  # Development
+        ]
+        schema_path = next((p for p in possible_paths if p.exists()), possible_paths[0])
 
     # Handle --schema-only
     if args.schema_only:
@@ -4539,9 +4559,11 @@ def _cmd_sessions_list(args: argparse.Namespace, storage: Any) -> int:
                                     pass
 
             session_data.append(entry)
-        except Exception:
-            # Skip malformed sessions
-            continue
+        except Exception as e:
+            # Still include session with minimal info instead of skipping entirely
+            # This prevents verbose/JSON mode from showing 0 sessions on parse errors
+            entry["parse_error"] = str(e)
+            session_data.append(entry)
 
     if use_json:
         output = {"sessions": session_data, "total": len(session_data)}
@@ -4690,7 +4712,7 @@ def _cmd_sessions_delete(args: argparse.Namespace, storage: Any) -> int:
 
     session_id = getattr(args, "session_id", None)
     older_than = getattr(args, "older_than", None)
-    platform = getattr(args, "platform", None)
+    platform = normalize_platform(getattr(args, "platform", None))
     force = getattr(args, "force", False)
     dry_run = getattr(args, "dry_run", False)
 

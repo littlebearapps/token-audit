@@ -1146,7 +1146,15 @@ class StreamingStorage:
 
         Raises:
             FileExistsError: If session file already exists
+            ValueError: If session_id is invalid (e.g., MagicMock stringification)
         """
+        # Validate session_id format to prevent test pollution
+        # MagicMock objects stringify as "<MagicMock id='...'>" or similar
+        if not isinstance(session_id, str) or not session_id:
+            raise ValueError(f"session_id must be a non-empty string, got: {type(session_id)}")
+        if "<" in session_id or ">" in session_id:
+            raise ValueError(f"Invalid session_id (contains angle brackets): {session_id}")
+
         session_path = self.get_active_session_path(session_id)
 
         if session_path.exists():
