@@ -1335,6 +1335,36 @@ class StreamingStorage:
         """Get the active sessions directory path."""
         return self._active_dir
 
+    def get_active_session_metadata(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata from an active session's session_start event.
+
+        This is used to retrieve platform/project info for task command resolution
+        when a collector is running but hasn't yet created the final session file.
+
+        Args:
+            session_id: Active session identifier
+
+        Returns:
+            Dictionary with session_id, platform, project, timestamp if found,
+            None otherwise
+
+        Note:
+            Added in #117 to support task commands targeting active collector sessions.
+        """
+        try:
+            for event in self.read_events(session_id):
+                if event.get("type") == "session_start":
+                    return {
+                        "session_id": event.get("session_id", session_id),
+                        "platform": event.get("platform"),
+                        "project": event.get("project"),
+                        "timestamp": event.get("timestamp"),
+                    }
+        except FileNotFoundError:
+            pass
+        return None
+
 
 # =============================================================================
 # Migration Helpers

@@ -1244,3 +1244,91 @@ class TestIndexFileLockingConcurrency:
         """FILE_LOCK_TIMEOUT should be a reasonable value."""
         assert FILE_LOCK_TIMEOUT > 0
         assert FILE_LOCK_TIMEOUT <= 60  # Not too long
+
+
+# =============================================================================
+# Active Session Metadata Tests (#117)
+# =============================================================================
+
+
+class TestGetActiveSessionMetadata:
+    """Tests for StreamingStorage.get_active_session_metadata() method."""
+
+    def test_get_metadata_with_session_start_event(self, temp_storage_dir: Path) -> None:
+        """Should return metadata from session_start event."""
+        storage = StreamingStorage(temp_storage_dir)
+        session_id = "test-session-123"
+
+        # Create active session with session_start event
+        storage.create_active_session(session_id)
+        start_event = {
+            "type": "session_start",
+            "session_id": session_id,
+            "platform": "claude-code",
+            "project": "my-project",
+            "timestamp": "2025-01-01T10:00:00",
+        }
+        storage.append_event(session_id, start_event)
+
+        # Should retrieve the metadata
+        metadata = storage.get_active_session_metadata(session_id)
+        assert metadata is not None
+        assert metadata["session_id"] == session_id
+        assert metadata["platform"] == "claude-code"
+        assert metadata["project"] == "my-project"
+        assert metadata["timestamp"] == "2025-01-01T10:00:00"
+
+    def test_get_metadata_nonexistent_session(self, temp_storage_dir: Path) -> None:
+        """Should return None for nonexistent session."""
+        storage = StreamingStorage(temp_storage_dir)
+
+        metadata = storage.get_active_session_metadata("nonexistent-session")
+        assert metadata is None
+
+    def test_get_metadata_no_session_start_event(self, temp_storage_dir: Path) -> None:
+        """Should return None if session has no session_start event."""
+        storage = StreamingStorage(temp_storage_dir)
+        session_id = "test-session-456"
+
+        # Create active session with only a regular event
+        storage.create_active_session(session_id)
+        storage.append_event(session_id, {"type": "tool_call", "name": "test"})
+
+        # Should return None since no session_start event
+        metadata = storage.get_active_session_metadata(session_id)
+        assert metadata is None
+
+    def test_get_metadata_first_session_start_wins(self, temp_storage_dir: Path) -> None:
+        """Should return first session_start event if multiple exist."""
+        storage = StreamingStorage(temp_storage_dir)
+        session_id = "test-session-789"
+
+        # Create active session with multiple events including two session_starts
+        storage.create_active_session(session_id)
+        storage.append_event(
+            session_id,
+            {
+                "type": "session_start",
+                "session_id": session_id,
+                "platform": "first-platform",
+                "project": "first-project",
+                "timestamp": "2025-01-01T09:00:00",
+            },
+        )
+        storage.append_event(session_id, {"type": "tool_call", "name": "test"})
+        storage.append_event(
+            session_id,
+            {
+                "type": "session_start",
+                "session_id": session_id,
+                "platform": "second-platform",
+                "project": "second-project",
+                "timestamp": "2025-01-01T10:00:00",
+            },
+        )
+
+        # Should return first session_start
+        metadata = storage.get_active_session_metadata(session_id)
+        assert metadata is not None
+        assert metadata["platform"] == "first-platform"
+        assert metadata["project"] == "first-project"

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from .buckets import BucketResult
     from .display import DisplayAdapter, DisplaySnapshot
     from .smell_aggregator import SmellAggregationResult
+    from .storage import StreamingStorage
     from .tasks import TaskSummary
 
 from . import __version__
@@ -120,6 +121,16 @@ def _cleanup_session() -> None:
             _active_display.stop(snapshot)
         except Exception:
             pass  # Display cleanup is best-effort
+
+    # Clean up active session marker (#117)
+    if _active_tracker is not None:
+        try:
+            from .storage import StreamingStorage
+
+            streaming = StreamingStorage()
+            streaming.cleanup_active_session(_active_tracker.session_id)
+        except Exception:
+            pass  # Best effort cleanup
 
 
 def _signal_handler(signum: int, _frame: object) -> None:
@@ -1664,6 +1675,23 @@ def cmd_collect(args: argparse.Namespace) -> int:
 
         # Start tracking
         tracker.start()
+
+        # Register this session as active for task command resolution (#117)
+        from .storage import StreamingStorage
+
+        _streaming_storage = StreamingStorage()
+        try:
+            _streaming_storage.create_active_session(tracker.session_id)
+            start_event = {
+                "type": "session_start",
+                "session_id": tracker.session_id,
+                "platform": platform,
+                "project": project,
+                "timestamp": start_time.isoformat(),
+            }
+            _streaming_storage.append_event(tracker.session_id, start_event)
+        except FileExistsError:
+            pass  # Session already registered (restart without cleanup)
 
         # Monitor until interrupted (signal handler will save session)
         # NOTE: We intentionally don't use contextlib.suppress here because
@@ -5325,6 +5353,39 @@ def _format_duration_task(seconds: float) -> str:
     return f"{hours}h {mins}m"
 
 
+def _active_session_matches_platform(
+    streaming: "StreamingStorage",
+    session_id: str,
+    platform: Optional[str],
+) -> bool:
+    """
+    Check if an active session matches the specified platform filter.
+
+    Args:
+        streaming: StreamingStorage instance
+        session_id: Active session ID to check
+        platform: Platform filter (normalized form, e.g. "claude_code")
+
+    Returns:
+        True if session matches platform or no platform filter specified
+    """
+    if platform is None:
+        return True  # No filter, accept any active session
+
+    try:
+        # Read the session_start event to get platform metadata
+        for event in streaming.read_events(session_id):
+            if event.get("type") == "session_start":
+                session_platform: str = event.get("platform", "")
+                # Normalize both for comparison (hyphen -> underscore)
+                session_platform_normalized = session_platform.replace("-", "_")
+                platform_normalized = platform.replace("-", "_")
+                return bool(session_platform_normalized == platform_normalized)
+    except Exception:
+        pass
+    return False
+
+
 def _resolve_session_for_task(
     session_id: Optional[str],
     platform: Optional[str],
@@ -5334,20 +5395,22 @@ def _resolve_session_for_task(
     Priority:
     1. Explicit --session argument
     2. Environment variable (CLAUDE_CODE_SESSION, CODEX_SESSION, GEMINI_SESSION)
-    3. Latest session from StorageManager
+    3. Active collector session (if running) - added in #117
+    4. Latest completed session from StorageManager
 
     Returns:
         Tuple of (session_id, session_path or None)
     """
     import os
 
-    from .storage import StorageManager
+    from .storage import StorageManager, StreamingStorage
+
+    norm_platform = normalize_platform(platform) if platform else None
 
     # 1. Explicit session ID
     if session_id:
         storage = StorageManager()
         # Try to find session file by ID
-        norm_platform = normalize_platform(platform) if platform else None
         sessions = storage.list_sessions(platform=norm_platform, limit=100)
         for session_path in sessions:
             if session_id in session_path.stem:
@@ -5367,9 +5430,18 @@ def _resolve_session_for_task(
                     return env_session_id, session_path
             return env_session_id, None
 
-    # 3. Latest session
+    # 3. Active collector session (#117)
+    streaming = StreamingStorage()
+    active_sessions = streaming.get_active_sessions()
+
+    if active_sessions:
+        # Find first active session matching platform filter
+        for active_session_id in active_sessions:
+            if _active_session_matches_platform(streaming, active_session_id, norm_platform):
+                return active_session_id, streaming.get_active_session_path(active_session_id)
+
+    # 4. Latest completed session
     storage = StorageManager()
-    norm_platform = normalize_platform(platform) if platform else None
     sessions = storage.list_sessions(platform=norm_platform, limit=1)
 
     if sessions:
